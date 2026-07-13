@@ -45,11 +45,7 @@ constexpr SocketHandle kInvalidSocket = -1;
 #endif
 
 uint16_t host_to_be16(uint16_t value) noexcept {
-#if defined(_WIN32)
     return htons(value);
-#else
-    return htons(value);
-#endif
 }
 
 bool is_little_endian() noexcept {
