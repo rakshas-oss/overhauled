@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
-# CUDA sources are regular C++ translation units that link against the toolkit,
-# so the project only needs the CXX language enabled here.
+# The project uses only .cpp sources, so CUDA device-language compilation is not
+# required here, but CUDA runtime and cuBLAS toolkit libraries are still linked.
 project(nvlink_placement VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
