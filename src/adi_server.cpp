@@ -240,7 +240,7 @@ public:
         : topology_(topology),
           config_(config),
           placer_(topology_, config.backlog_threshold),
-          compute_fn_(config.gpu_compute_fn ? std::move(config.gpu_compute_fn) : GpuComputeFn(default_gpu_compute)) {
+          compute_fn_(config.gpu_compute_fn ? config.gpu_compute_fn : GpuComputeFn(default_gpu_compute)) {
         if (topology_.num_gpus() <= 0) {
             throw NVLinkError("ADI server requires at least one GPU in the provided topology.");
         }
@@ -257,7 +257,7 @@ public:
 
     void run() {
 #if defined(_WIN32)
-        throw NVLinkError("ADI server networking is not implemented on Windows in this build.");
+        throw NVLinkError("ADI server networking is not supported on Windows.");
 #else
         bool expected = false;
         if (!running_.compare_exchange_strong(expected, true)) {
