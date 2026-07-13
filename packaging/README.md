@@ -21,7 +21,7 @@ This directory contains configuration for publishing `nvlink_placement` to packa
 - `nvlink-placement.rb` - Homebrew formula
   - CMake package consumer test
   - CUDA toolkit dependency
-  - Tagged release archive checksum
+  - Immutable source archive checksum
 
 ## Publishing Steps
 

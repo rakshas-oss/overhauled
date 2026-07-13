@@ -66,7 +66,11 @@ class NVLinkPlacementConan(ConanFile):
     
     def set_version(self):
         content = load(self, os.path.join(self.recipe_folder, "CMakeLists.txt"))
-        match = re.search(r"project\(nvlink_placement VERSION ([^ )]+)", content)
+        match = re.search(
+            r"project\(\s*nvlink_placement\s+VERSION\s+([^\s)]+)",
+            content,
+            re.IGNORECASE | re.MULTILINE,
+        )
         if not match:
             raise ValueError("Unable to determine project version from CMakeLists.txt")
         self.version = match.group(1)

@@ -209,7 +209,7 @@ Before each release:
 - [ ] Update version in `nvlink-placement.rb`
 - [ ] Refresh release archive hashes in `vcpkg-portfile.cmake` and `nvlink-placement.rb`
 - [ ] Update `README.md` with latest features
-- [ ] Create or update the source release tag used by package managers
+- [ ] Update the immutable source ref used by package managers
 - [ ] GitHub release automatically created
 - [ ] Submit PRs to Conan Center Index
 - [ ] Submit PRs to vcpkg
