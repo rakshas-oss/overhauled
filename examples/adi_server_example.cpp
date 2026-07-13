@@ -3,6 +3,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <iostream>
+#include <stdexcept>
 
 using namespace nvlink;
 
@@ -30,7 +31,13 @@ int main(int argc, char** argv) {
     }
 
     try {
-        int port = (argc > 1) ? std::atoi(argv[1]) : 8080;
+        int port = 8080;
+        if (argc > 1) {
+            port = std::stoi(argv[1]);
+            if (port < 1 || port > 65535) {
+                throw std::out_of_range("port");
+            }
+        }
         std::size_t backlog_threshold = (argc > 2) ? static_cast<std::size_t>(std::strtoul(argv[2], nullptr, 10)) : 32;
 
         GpuTopology topology = GpuTopology::detect();

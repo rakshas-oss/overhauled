@@ -6,6 +6,7 @@
 #include <condition_variable>
 #include <cstring>
 #include <deque>
+#include <limits>
 #include <iostream>
 #include <mutex>
 #include <stdexcept>
@@ -257,7 +258,7 @@ public:
 
     void run() {
 #if defined(_WIN32)
-        throw NVLinkError("ADI server networking is not supported on Windows.");
+        throw NVLinkError("ADI server is not yet implemented for Windows.");
 #else
         bool expected = false;
         if (!running_.compare_exchange_strong(expected, true)) {
@@ -341,7 +342,12 @@ private:
         }
 
         const int reuse = 1;
-        ::setsockopt(listener_socket_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+        if (::setsockopt(listener_socket_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) != 0) {
+            const int saved_errno = errno;
+            close_socket(listener_socket_);
+            listener_socket_ = kInvalidSocket;
+            throw NVLinkError(std::string("Failed to configure ADI server socket: ") + std::strerror(saved_errno));
+        }
 
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
@@ -367,6 +373,7 @@ private:
 
     void accept_loop() {
         while (running_.load()) {
+            reap_finished_sessions(false);
             sockaddr_in client_addr{};
             socklen_t client_len = sizeof(client_addr);
             SocketHandle client_socket = ::accept(listener_socket_, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
@@ -380,12 +387,25 @@ private:
                 throw NVLinkError(std::string("accept failed: ") + std::strerror(errno));
             }
 
-            const int client_id = next_client_id_.fetch_add(1, std::memory_order_relaxed);
+            const uint64_t raw_client_id = next_client_id_.fetch_add(1, std::memory_order_relaxed);
+            if (raw_client_id > static_cast<uint64_t>(std::numeric_limits<int>::max())) {
+                shutdown_socket(client_socket);
+                close_socket(client_socket);
+                throw NVLinkError("ADI server exhausted client identifier space.");
+            }
+            const int client_id = static_cast<int>(raw_client_id);
+            auto done = std::make_shared<std::atomic<bool>>(false);
             {
                 std::lock_guard<std::mutex> lock(client_mutex_);
                 client_sockets_.insert(client_socket);
             }
-            session_threads_.emplace_back([this, client_socket, client_id] { session_loop(client_socket, client_id); });
+            session_threads_.push_back(SessionState{
+                std::thread([this, client_socket, client_id, done] {
+                    session_loop(client_socket, client_id);
+                    done->store(true, std::memory_order_release);
+                }),
+                done,
+            });
         }
     }
 
@@ -428,6 +448,9 @@ private:
                     break;
                 }
                 uint32_t length = be32_to_host(length_be);
+                if (length > EXPECTED_LENGTH) {
+                    throw NVLinkError("ADI payload length exceeds protocol maximum: " + std::to_string(length));
+                }
                 if (length != EXPECTED_LENGTH) {
                     throw NVLinkError("Invalid ADI payload length: " + std::to_string(length));
                 }
@@ -510,6 +533,26 @@ private:
         }
     }
 
+    struct SessionState {
+        std::thread thread;
+        std::shared_ptr<std::atomic<bool>> done;
+    };
+
+    void reap_finished_sessions(bool join_all) {
+        auto it = session_threads_.begin();
+        while (it != session_threads_.end()) {
+            const bool finished = it->done != nullptr && it->done->load(std::memory_order_acquire);
+            if (join_all || finished) {
+                if (it->thread.joinable()) {
+                    it->thread.join();
+                }
+                it = session_threads_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
     void join_all() noexcept {
         shutdown_socket(listener_socket_);
         close_socket(listener_socket_);
@@ -523,12 +566,7 @@ private:
             state->cv.notify_all();
         }
 
-        for (std::thread& thread : session_threads_) {
-            if (thread.joinable()) {
-                thread.join();
-            }
-        }
-        session_threads_.clear();
+        reap_finished_sessions(true);
 
         for (std::thread& thread : worker_threads_) {
             if (thread.joinable()) {
@@ -543,11 +581,11 @@ private:
     Placer placer_;
     GpuComputeFn compute_fn_;
     std::atomic<bool> running_{false};
-    std::atomic<int> next_client_id_{1};
+    std::atomic<uint64_t> next_client_id_{1};
     SocketHandle listener_socket_ = kInvalidSocket;
     std::vector<std::unique_ptr<WorkerState>> worker_states_;
     std::vector<std::thread> worker_threads_;
-    std::vector<std::thread> session_threads_;
+    std::vector<SessionState> session_threads_;
     mutable std::mutex client_mutex_;
     std::unordered_set<SocketHandle> client_sockets_;
 };

@@ -31,7 +31,7 @@ if(CUDAToolkit_FOUND)
         target_compile_definitions(nvlink_placement PRIVATE NVLINK_ADI_HAS_CUBLAS=0)
     endif()
 else()
-    message(STATUS "CUDA toolkit not found; building CPU-only fallbacks for discovery/examples.")
+    message(STATUS "CUDA toolkit not found; building CPU-only fallbacks for GPU discovery and examples.")
     target_compile_definitions(nvlink_placement PRIVATE NVLINK_PLACEMENT_HAS_CUDA=0 NVLINK_ADI_HAS_CUBLAS=0)
 endif()
 
