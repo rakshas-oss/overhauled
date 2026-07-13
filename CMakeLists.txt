@@ -1,15 +1,17 @@
 cmake_minimum_required(VERSION 3.18)
-project(nvlink_placement VERSION 1.0.0 LANGUAGES CXX CUDA)
+project(nvlink_placement VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Find CUDA
-find_package(CUDA REQUIRED)
+# Find CUDA toolkit libraries used by the C++ sources
+find_package(CUDAToolkit REQUIRED)
+find_package(Threads REQUIRED)
 
 # Main Library
 add_library(nvlink_placement
     src/nvlink_placement.cpp
+    src/adi_server.cpp
 )
 
 target_include_directories(nvlink_placement
@@ -21,6 +23,8 @@ target_include_directories(nvlink_placement
 target_link_libraries(nvlink_placement
     PUBLIC
         CUDA::cudart
+        CUDA::cublas
+        Threads::Threads
 )
 
 target_compile_options(nvlink_placement
@@ -42,6 +46,11 @@ if(BUILD_EXAMPLES)
         examples/multi_client.cpp
     )
     target_link_libraries(example_multi_client PRIVATE nvlink_placement)
+
+    add_executable(example_adi_server
+        examples/adi_server_example.cpp
+    )
+    target_link_libraries(example_adi_server PRIVATE nvlink_placement)
 endif()
 
 # Installation

@@ -3,6 +3,7 @@
 // Public API for topology detection and NVLink-aware task placement.
 
 #include <cstdint>
+#include <cstddef>
 #include <vector>
 #include <functional>
 #include <stdexcept>
@@ -127,5 +128,3 @@ int Placer::place(int client_id, QueueDepthFn queue_depth) const {
 }
 
 } // namespace nvlink
-
-#endif // NVLINK_PLACEMENT_H

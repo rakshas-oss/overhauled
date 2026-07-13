@@ -90,6 +90,29 @@ int main() {
 **`size_t num_clients() const noexcept`**
 - Returns: Current tracked client count
 
+### ADI Protocol Server
+
+Include `adi_server.h` to expose the reusable ADI server module:
+
+```cpp
+#include "adi_server.h"
+
+nvlink::GpuTopology topo = nvlink::GpuTopology::detect();
+nvlink::adi::AdiServerConfig config;
+config.port = 8080;
+config.verbose = true;
+
+nvlink::adi::AdiServer server(topo, config);
+server.run();
+```
+
+Key behaviors:
+
+- Accepts requests as `4-byte big-endian length (40) + 5 big-endian doubles`
+- Sends one `Primary` response on the first exchange, then `Primary + Delta` responses afterwards
+- Uses `Placer::place()` to preserve sticky client affinity while preferring NVLink peers for overflow work
+- Supports custom GPU compute callbacks via `AdiServerConfig::gpu_compute_fn`
+
 ## Examples
 
 See `examples/` directory for complete examples.

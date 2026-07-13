@@ -71,6 +71,16 @@ int main() {
 - [BENCHMARKING.md](docs/BENCHMARKING.md) - Performance benchmarking
 - [NVLINK_PLACEMENT.md](docs/NVLINK_PLACEMENT.md) - Placement policy details
 
+## 🌐 ADI Binary Protocol Server
+
+The library now includes an `nvlink::adi::AdiServer` module for the ADI binary protocol used by the installer prototype:
+
+- **Request format**: 4-byte big-endian length prefix (`40`) followed by 5 big-endian doubles
+- **Response format**: 13-byte header (`timestamp_ns`, `sequence_id`, `packet_type`) followed by 5 big-endian doubles
+- **Scheduling**: each client gets a sticky home GPU, and `Placer::place()` offloads to NVLink peers or the lowest-backlog GPU when needed
+
+See `examples/adi_server_example.cpp` for a complete server example with graceful shutdown and customizable GPU compute callbacks.
+
 ## 🔧 Build
 
 ```bash

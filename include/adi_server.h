@@ -5,9 +5,11 @@
 
 #include "nvlink_placement.h"
 #include <cstdint>
+#include <cstddef>
 #include <vector>
 #include <memory>
 #include <functional>
+#include <future>
 #include <thread>
 #include <queue>
 
@@ -29,9 +31,14 @@ constexpr uint32_t EXPECTED_LENGTH = PAYLOAD_BYTES;
 struct ResponseHeader {
     uint64_t timestamp_ns;  ///< Nanosecond timestamp (big-endian)
     uint32_t sequence_id;   ///< Packet sequence number (big-endian)
-    uint8_t packet_type;    ///< 0=Primary, 1=Delta
+    uint8_t packet_type;    ///< See PacketType values below
 };
 #pragma pack(pop)
+
+enum class PacketType : uint8_t {
+    Primary = 0,
+    Delta = 1
+};
 
 // ============================================================================
 // GPU Task and Processing
@@ -125,5 +132,3 @@ uint64_t be64_to_host(uint64_t n) noexcept;
 GpuPayload default_gpu_compute(const GpuPayload& input, int gpu_idx);
 
 } // namespace nvlink::adi
-
-#endif // ADI_SERVER_H
