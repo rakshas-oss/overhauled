@@ -3,6 +3,9 @@ cmake_minimum_required(VERSION 3.18)
 # required here, but CUDA runtime and cuBLAS toolkit libraries are still linked.
 project(nvlink_placement VERSION 1.0.0 LANGUAGES CXX)
 
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -14,6 +17,13 @@ find_package(Threads REQUIRED)
 add_library(nvlink_placement
     src/nvlink_placement.cpp
     src/adi_server.cpp
+)
+add_library(nvlink_placement::nvlink_placement ALIAS nvlink_placement)
+
+set_target_properties(nvlink_placement PROPERTIES
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
+    EXPORT_NAME nvlink_placement
 )
 
 target_include_directories(nvlink_placement
@@ -57,9 +67,39 @@ endif()
 
 # Installation
 install(TARGETS nvlink_placement
-    LIBRARY DESTINATION lib
-    ARCHIVE DESTINATION lib
-    RUNTIME DESTINATION bin
+    EXPORT nvlink_placementTargets
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-install(DIRECTORY include/ DESTINATION include)
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+set(nvlink_placement_INSTALL_CMAKEDIR
+    "${CMAKE_INSTALL_LIBDIR}/cmake/nvlink_placement"
+)
+
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/nvlink_placementConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/nvlink_placementConfig.cmake"
+    INSTALL_DESTINATION "${nvlink_placement_INSTALL_CMAKEDIR}"
+)
+
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/nvlink_placementConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+install(EXPORT nvlink_placementTargets
+    FILE nvlink_placementTargets.cmake
+    NAMESPACE nvlink_placement::
+    DESTINATION "${nvlink_placement_INSTALL_CMAKEDIR}"
+)
+
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/nvlink_placementConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/nvlink_placementConfigVersion.cmake"
+    DESTINATION "${nvlink_placement_INSTALL_CMAKEDIR}"
+)

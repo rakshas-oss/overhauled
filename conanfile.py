@@ -1,16 +1,19 @@
+import os
+import re
+
 from conan import ConanFile
 from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout
-from conan.tools.files import copy
+from conan.tools.files import copy, load
 
 
 class NVLinkPlacementConan(ConanFile):
     name = "nvlink_placement"
-    version = "1.0.0"
     description = "NVLink-aware GPU task placement library"
     author = "rakshas-oss"
     license = "MIT"
     url = "https://github.com/rakshas-oss/overhauled"
     homepage = "https://github.com/rakshas-oss/overhauled"
+    package_type = "library"
     
     settings = "os", "compiler", "build_type", "arch"
     options = {
@@ -23,7 +26,7 @@ class NVLinkPlacementConan(ConanFile):
     }
     
     generators = "CMakeDeps"
-    exports_sources = "CMakeLists.txt", "src/*", "include/*", "LICENSE", "README.md"
+    exports_sources = "CMakeLists.txt", "cmake/*", "src/*", "include/*", "LICENSE", "README.md"
     
     requires = ()
     
@@ -40,6 +43,7 @@ class NVLinkPlacementConan(ConanFile):
     
     def generate(self):
         tc = CMakeToolchain(self)
+        tc.variables["BUILD_EXAMPLES"] = False
         tc.generate()
     
     def build(self):
@@ -56,8 +60,13 @@ class NVLinkPlacementConan(ConanFile):
     def package_info(self):
         self.cpp_info.libs = ["nvlink_placement"]
         self.cpp_info.includedirs = ["include"]
-        # CUDA dependency
-        self.cpp_info.system_libs = ["cudart"]
+        self.cpp_info.set_property("cmake_file_name", "nvlink_placement")
+        self.cpp_info.set_property("cmake_target_name", "nvlink_placement::nvlink_placement")
+        self.cpp_info.system_libs = ["cudart", "cublas"]
     
     def set_version(self):
-        self.version = "1.0.0"
+        content = load(self, os.path.join(self.recipe_folder, "CMakeLists.txt"))
+        match = re.search(r"project\(nvlink_placement VERSION ([^ )]+)", content)
+        if not match:
+            raise ValueError("Unable to determine project version from CMakeLists.txt")
+        self.version = match.group(1)

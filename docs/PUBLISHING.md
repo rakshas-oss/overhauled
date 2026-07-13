@@ -4,11 +4,11 @@ Complete guide for publishing `nvlink_placement` to major C++ package managers.
 
 ## Quick Summary
 
-This library is ready to be published to:
+This repository now includes package metadata for:
 
 ✅ **Conan** - Primary recommendation
-✅ **vcpkg** - Microsoft's package manager
-✅ **Homebrew** - macOS/Linux
+✅ **vcpkg** - Port files for upstream submission
+✅ **Homebrew** - Formula for a tap or upstream submission
 ⏳ **apt/dnf** - Linux distributions
 
 ---
@@ -19,6 +19,7 @@ This library is ready to be published to:
 - ✅ `conanfile.py` - Complete Conan recipe
 - ✅ CMakeDeps integration
 - ✅ CUDA dependency handling
+- ✅ Installed CMake package config for consumers
 
 ### Publish to Conan Center Index
 
@@ -51,20 +52,15 @@ git push origin nvlink_placement
 
 ### Usage After Publishing
 
-```cpp
-// conanfile.txt
-[requires]
-nvlink_placement/1.0.0
-
-[generators]
-CMakeDeps
-CMakeToolchain
-```
-
 ```bash
 conan install . --build=missing
 cmake --preset conan-default
 cmake --build --preset conan-release
+```
+
+```cmake
+find_package(nvlink_placement CONFIG REQUIRED)
+target_link_libraries(myapp PRIVATE nvlink_placement::nvlink_placement)
 ```
 
 ---
@@ -74,6 +70,7 @@ cmake --build --preset conan-release
 ### What's Included
 - ✅ `vcpkg.json` - Manifest format
 - ✅ `vcpkg-portfile.cmake` - CMake-based port
+- ✅ Exported CMake package config for `find_package`
 
 ### Publish to vcpkg
 
@@ -115,8 +112,8 @@ git push origin nvlink-placement
 vcpkg install nvlink-placement
 
 # Use in CMake
-find_package(nvlink_placement REQUIRED)
-target_link_libraries(myapp nvlink_placement)
+find_package(nvlink_placement CONFIG REQUIRED)
+target_link_libraries(myapp PRIVATE nvlink_placement::nvlink_placement)
 ```
 
 ---
@@ -156,8 +153,8 @@ git push origin nvlink-placement
 ```bash
 brew install nvlink-placement
 
-# Find installation location
-brew --prefix nvlink-placement
+# Use the installed CMake package
+cmake -S . -B build -DCMAKE_PREFIX_PATH="$(brew --prefix nvlink-placement)"
 ```
 
 ---
@@ -208,12 +205,11 @@ sudo dnf install nvlink-placement-devel
 Before each release:
 
 - [ ] Update version in `CMakeLists.txt`
-- [ ] Update version in `conanfile.py`
 - [ ] Update version in `vcpkg.json`
 - [ ] Update version in `nvlink-placement.rb`
+- [ ] Refresh release archive hashes in `vcpkg-portfile.cmake` and `nvlink-placement.rb`
 - [ ] Update `README.md` with latest features
-- [ ] Create git tag: `git tag -a v1.0.0 -m "Release 1.0.0"`
-- [ ] Push tag: `git push origin v1.0.0`
+- [ ] Create or update the source release tag used by package managers
 - [ ] GitHub release automatically created
 - [ ] Submit PRs to Conan Center Index
 - [ ] Submit PRs to vcpkg

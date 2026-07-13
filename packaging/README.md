@@ -9,18 +9,19 @@ This directory contains configuration for publishing `nvlink_placement` to packa
   - Handles CUDA dependency
   - CMake integration
   - Build and install rules
+  - Exposes `nvlink_placement::nvlink_placement`
 
 ### vcpkg
 - `vcpkg.json` - Package manifest
 - `vcpkg-portfile.cmake` - CMake build rules
   - GitHub source integration
-  - Header and library installation
+  - CMake config fixup for `find_package`
 
 ### Homebrew
 - `nvlink-placement.rb` - Homebrew formula
-  - macOS and Linux support
+  - CMake package consumer test
   - CUDA toolkit dependency
-  - Test suite
+  - Tagged release archive checksum
 
 ## Publishing Steps
 
@@ -47,8 +48,8 @@ brew install nvlink-placement
 
 | Manager | Status | Version |
 |---------|--------|----------|
-| Conan | Ready | 1.0.0 |
-| vcpkg | Ready | 1.0.0 |
-| Homebrew | Ready | 1.0.0 |
+| Conan | Repository metadata ready | 1.0.0 |
+| vcpkg | Repository metadata ready | 1.0.0 |
+| Homebrew | Repository metadata ready | 1.0.0 |
 | apt (Ubuntu) | In Progress | 1.0.0 |
 | dnf (Fedora) | In Progress | 1.0.0 |

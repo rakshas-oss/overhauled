@@ -27,6 +27,8 @@ make
 sudo make install
 ```
 
+Package manager metadata is also included for Conan, vcpkg, and Homebrew. See `docs/PUBLISHING.md` for the publish and consumer flows.
+
 ### Minimal Example
 
 ```cpp
@@ -87,6 +89,13 @@ See `examples/adi_server_example.cpp` for a complete server example with gracefu
 mkdir build && cd build
 cmake ..
 make
+```
+
+Installed packages expose a CMake package:
+
+```cmake
+find_package(nvlink_placement CONFIG REQUIRED)
+target_link_libraries(myapp PRIVATE nvlink_placement::nvlink_placement)
 ```
 
 ## 📈 Performance
