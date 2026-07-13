@@ -128,5 +128,3 @@ int Placer::place(int client_id, QueueDepthFn queue_depth) const {
 }
 
 } // namespace nvlink
-
-#endif // NVLINK_PLACEMENT_H
