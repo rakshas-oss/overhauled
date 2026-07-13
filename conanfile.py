@@ -60,4 +60,5 @@ class NVLinkPlacementConan(ConanFile):
         self.cpp_info.includedirs = ["include"]
         self.cpp_info.set_property("cmake_file_name", "nvlink_placement")
         self.cpp_info.set_property("cmake_target_name", "nvlink_placement::nvlink_placement")
+        # Consumers must provide CUDA runtime and cuBLAS from a system toolkit.
         self.cpp_info.system_libs = ["cudart", "cublas"]
