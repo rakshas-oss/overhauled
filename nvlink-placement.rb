@@ -1,6 +1,7 @@
 class NvlinkPlacement < Formula
   desc "NVLink-aware GPU task placement library"
   homepage "https://github.com/rakshas-oss/overhauled"
+  # Immutable archive for the repository state published as version 1.0.0 metadata.
   url "https://github.com/rakshas-oss/overhauled/archive/c5178615521009d3f57eb7beeda80138d95687ee.tar.gz"
   version "1.0.0"
   sha256 "3e23ddf3b89915dbdf9a6605f72c4e1a1de3aa0370bf315cc0d6f11f755ab6bc"

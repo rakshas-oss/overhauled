@@ -205,6 +205,7 @@ sudo dnf install nvlink-placement-devel
 Before each release:
 
 - [ ] Update version in `CMakeLists.txt`
+- [ ] Update version in `conanfile.py`
 - [ ] Update version in `vcpkg.json`
 - [ ] Update version in `nvlink-placement.rb`
 - [ ] Refresh release archive hashes in `vcpkg-portfile.cmake` and `nvlink-placement.rb`

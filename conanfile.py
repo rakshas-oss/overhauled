@@ -1,13 +1,11 @@
-import os
-import re
-
 from conan import ConanFile
 from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout
-from conan.tools.files import copy, load
+from conan.tools.files import copy
 
 
 class NVLinkPlacementConan(ConanFile):
     name = "nvlink_placement"
+    version = "1.0.0"
     description = "NVLink-aware GPU task placement library"
     author = "rakshas-oss"
     license = "MIT"
@@ -63,14 +61,3 @@ class NVLinkPlacementConan(ConanFile):
         self.cpp_info.set_property("cmake_file_name", "nvlink_placement")
         self.cpp_info.set_property("cmake_target_name", "nvlink_placement::nvlink_placement")
         self.cpp_info.system_libs = ["cudart", "cublas"]
-    
-    def set_version(self):
-        content = load(self, os.path.join(self.recipe_folder, "CMakeLists.txt"))
-        match = re.search(
-            r"project\(\s*nvlink_placement\s+VERSION\s+([^\s)]+)",
-            content,
-            re.IGNORECASE | re.MULTILINE,
-        )
-        if not match:
-            raise ValueError("Unable to determine project version from CMakeLists.txt")
-        self.version = match.group(1)
