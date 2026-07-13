@@ -448,9 +448,6 @@ private:
                     break;
                 }
                 uint32_t length = be32_to_host(length_be);
-                if (length > EXPECTED_LENGTH) {
-                    throw NVLinkError("ADI payload length exceeds protocol maximum: " + std::to_string(length));
-                }
                 if (length != EXPECTED_LENGTH) {
                     throw NVLinkError("Invalid ADI payload length: " + std::to_string(length));
                 }
