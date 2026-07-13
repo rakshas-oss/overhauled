@@ -205,8 +205,8 @@ bool write_exact(int fd, const void* buffer, size_t bytes) {
 }
 
 GpuPayload decode_payload(const uint8_t* bytes) {
-    GpuPayload payload(PAYLOAD_DOUBLES, 0.0);
-    for (size_t i = 0; i < PAYLOAD_DOUBLES; ++i) {
+    GpuPayload payload(::nvlink::adi::PAYLOAD_DOUBLES, 0.0);
+    for (size_t i = 0; i < ::nvlink::adi::PAYLOAD_DOUBLES; ++i) {
         uint64_t bits = 0;
         std::memcpy(&bits, bytes + (i * sizeof(double)), sizeof(bits));
         payload[i] = u64_to_double(be64_to_host(bits));
@@ -214,13 +214,13 @@ GpuPayload decode_payload(const uint8_t* bytes) {
     return payload;
 }
 
-std::array<uint8_t, PAYLOAD_BYTES> encode_payload(const GpuPayload& payload) {
-    if (payload.size() != PAYLOAD_DOUBLES) {
+std::array<uint8_t, ::nvlink::adi::PAYLOAD_BYTES> encode_payload(const GpuPayload& payload) {
+    if (payload.size() != ::nvlink::adi::PAYLOAD_DOUBLES) {
         throw NVLinkError("ADI payload must contain exactly 5 doubles.");
     }
 
-    std::array<uint8_t, PAYLOAD_BYTES> bytes{};
-    for (size_t i = 0; i < PAYLOAD_DOUBLES; ++i) {
+    std::array<uint8_t, ::nvlink::adi::PAYLOAD_BYTES> bytes{};
+    for (size_t i = 0; i < ::nvlink::adi::PAYLOAD_DOUBLES; ++i) {
         const uint64_t encoded = host_to_be64(double_to_u64(payload[i]));
         std::memcpy(bytes.data() + (i * sizeof(double)), &encoded, sizeof(encoded));
     }
@@ -280,7 +280,7 @@ uint64_t be64_to_host(uint64_t n) noexcept {
 }
 
 GpuPayload default_gpu_compute(const GpuPayload& input, int gpu_idx) {
-    if (input.size() != PAYLOAD_DOUBLES) {
+    if (input.size() != ::nvlink::adi::PAYLOAD_DOUBLES) {
         throw NVLinkError("ADI payload must contain exactly 5 doubles.");
     }
 
@@ -485,11 +485,11 @@ private:
                 }
 
                 const uint32_t payload_length = be32_to_host(length_be);
-                if (payload_length != EXPECTED_LENGTH) {
+                if (payload_length != ::nvlink::adi::EXPECTED_LENGTH) {
                     throw NVLinkError("Invalid ADI payload length: " + std::to_string(payload_length));
                 }
 
-                std::array<uint8_t, PAYLOAD_BYTES> request_bytes{};
+                std::array<uint8_t, ::nvlink::adi::PAYLOAD_BYTES> request_bytes{};
                 if (!read_exact(client_fd, request_bytes.data(), request_bytes.size())) {
                     break;
                 }

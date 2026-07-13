@@ -1,4 +1,6 @@
 #pragma once
+#ifndef ADI_SERVER_H
+#define ADI_SERVER_H
 // ADI Protocol Server - GPU-Accelerated Binary Protocol Handler
 // Integrates NVLink-aware task placement with the ADI binary protocol.
 // Builds on top of nvlink_placement library for intelligent GPU scheduling.
@@ -20,11 +22,11 @@ namespace nvlink::adi {
 // ============================================================================
 
 /// ADI payload is always 5 doubles (40 bytes)
-constexpr size_t PAYLOAD_DOUBLES = 5;
-constexpr size_t PAYLOAD_BYTES = PAYLOAD_DOUBLES * sizeof(double);
+inline constexpr size_t PAYLOAD_DOUBLES = 5;
+inline constexpr size_t PAYLOAD_BYTES = PAYLOAD_DOUBLES * sizeof(double);
 
 /// Length prefix is always 40 (big-endian uint32_t)
-constexpr uint32_t EXPECTED_LENGTH = PAYLOAD_BYTES;
+inline constexpr uint32_t EXPECTED_LENGTH = PAYLOAD_BYTES;
 
 /// Response packet header: 13 bytes
 #pragma pack(push, 1)
@@ -132,3 +134,5 @@ uint64_t be64_to_host(uint64_t n) noexcept;
 GpuPayload default_gpu_compute(const GpuPayload& input, int gpu_idx);
 
 } // namespace nvlink::adi
+
+#endif // ADI_SERVER_H
