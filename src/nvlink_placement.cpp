@@ -1,15 +1,23 @@
 #include "nvlink_placement.h"
-#include <cuda_runtime.h>
+
 #include <algorithm>
-#include <sstream>
 #include <cstdio>
+#include <sstream>
+
+#if defined(NVLINK_PLACEMENT_HAS_CUDA) && NVLINK_PLACEMENT_HAS_CUDA
+#include <cuda_runtime.h>
+#endif
 
 namespace nvlink {
 
 int get_gpu_count() noexcept {
+#if defined(NVLINK_PLACEMENT_HAS_CUDA) && NVLINK_PLACEMENT_HAS_CUDA
     int count = 0;
     cudaError_t err = cudaGetDeviceCount(&count);
     return (err == cudaSuccess) ? count : 0;
+#else
+    return 0;
+#endif
 }
 
 bool is_valid_gpu(int gpu_idx) noexcept {
@@ -18,11 +26,20 @@ bool is_valid_gpu(int gpu_idx) noexcept {
 }
 
 std::string get_gpu_name(int gpu_idx) noexcept {
-    if (!is_valid_gpu(gpu_idx)) return "";
+#if defined(NVLINK_PLACEMENT_HAS_CUDA) && NVLINK_PLACEMENT_HAS_CUDA
+    if (!is_valid_gpu(gpu_idx)) {
+        return "";
+    }
     cudaDeviceProp prop;
     cudaError_t err = cudaGetDeviceProperties(&prop, gpu_idx);
-    if (err != cudaSuccess) return "";
+    if (err != cudaSuccess) {
+        return "";
+    }
     return std::string(prop.name);
+#else
+    (void)gpu_idx;
+    return "";
+#endif
 }
 
 GpuTopology GpuTopology::detect() {
@@ -41,9 +58,12 @@ GpuTopology GpuTopology::detect() {
         topo.link_bandwidth_[i][i] = 1000;
     }
 
+#if defined(NVLINK_PLACEMENT_HAS_CUDA) && NVLINK_PLACEMENT_HAS_CUDA
     for (int i = 0; i < num_gpus; ++i) {
         for (int j = 0; j < num_gpus; ++j) {
-            if (i == j) continue;
+            if (i == j) {
+                continue;
+            }
 
             int can_access = 0;
             cudaError_t err = cudaDeviceCanAccessPeer(&can_access, i, j);
@@ -76,6 +96,7 @@ GpuTopology GpuTopology::detect() {
             }
         }
     }
+#endif
 
     return topo;
 }
@@ -97,12 +118,18 @@ int GpuTopology::bandwidth_hint(int from_gpu, int to_gpu) const {
 }
 
 int GpuTopology::best_nvlink_peer(int gpu) const {
-    if (gpu < 0 || gpu >= num_gpus_) return -1;
+    if (gpu < 0 || gpu >= num_gpus_) {
+        return -1;
+    }
     int best = -1;
     int best_score = -1;
     for (int j = 0; j < num_gpus_; ++j) {
-        if (j == gpu) continue;
-        if (link_kind_[gpu][j] != LinkType::NVLINK) continue;
+        if (j == gpu) {
+            continue;
+        }
+        if (link_kind_[gpu][j] != LinkType::NVLINK) {
+            continue;
+        }
         if (link_bandwidth_[gpu][j] > best_score) {
             best_score = link_bandwidth_[gpu][j];
             best = j;
@@ -121,32 +148,38 @@ bool GpuTopology::can_access(int from_gpu, int to_gpu) const {
 }
 
 void GpuTopology::enable_peer_access() const {
+#if defined(NVLINK_PLACEMENT_HAS_CUDA) && NVLINK_PLACEMENT_HAS_CUDA
     for (int i = 0; i < num_gpus_; ++i) {
         cudaError_t err = cudaSetDevice(i);
         if (err != cudaSuccess) {
             throw NVLinkError("Failed to set device " + std::to_string(i));
         }
         for (int j = 0; j < num_gpus_; ++j) {
-            if (i == j) continue;
+            if (i == j) {
+                continue;
+            }
             LinkType lt = link_kind_[i][j];
             if (lt == LinkType::NVLINK || lt == LinkType::PCIE) {
                 cudaError_t e = cudaDeviceEnablePeerAccess(j, 0);
                 if (e != cudaSuccess && e != cudaErrorPeerAccessAlreadyEnabled) {
-                    fprintf(stderr, "[NVLink] Warning: peer access %d->%d failed\n", i, j);
+                    std::fprintf(stderr, "[NVLink] Warning: peer access %d->%d failed\n", i, j);
                 }
             }
         }
     }
+#endif
 }
 
 void GpuTopology::print_info() const {
-    printf("[NVLink] %d GPU(s) detected.\n", num_gpus_);
+    std::printf("[NVLink] %d GPU(s) detected.\n", num_gpus_);
     for (int i = 0; i < num_gpus_; ++i) {
-        printf("[NVLink] GPU%d (%s)\n", i, get_gpu_name(i).c_str());
+        std::printf("[NVLink] GPU%d (%s)\n", i, get_gpu_name(i).c_str());
         for (int j = 0; j < num_gpus_; ++j) {
-            if (i == j) continue;
-            printf("[NVLink]   -> GPU%d : %s (bandwidth_hint=%d)\n",
-                   j, link_type_name(link_kind_[i][j]), link_bandwidth_[i][j]);
+            if (i == j) {
+                continue;
+            }
+            std::printf("[NVLink]   -> GPU%d : %s (bandwidth_hint=%d)\n",
+                        j, link_type_name(link_kind_[i][j]), link_bandwidth_[i][j]);
         }
     }
 }
@@ -156,7 +189,9 @@ std::string GpuTopology::to_string() const {
     oss << num_gpus_ << " GPU(s): ";
     for (int i = 0; i < num_gpus_; ++i) {
         oss << get_gpu_name(i);
-        if (i < num_gpus_ - 1) oss << ", ";
+        if (i < num_gpus_ - 1) {
+            oss << ", ";
+        }
     }
     return oss.str();
 }

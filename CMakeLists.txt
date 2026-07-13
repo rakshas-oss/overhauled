@@ -1,15 +1,14 @@
 cmake_minimum_required(VERSION 3.18)
-project(nvlink_placement VERSION 1.0.0 LANGUAGES CXX CUDA)
+project(nvlink_placement VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Find CUDA
-find_package(CUDA REQUIRED)
+find_package(CUDAToolkit QUIET)
 
-# Main Library
 add_library(nvlink_placement
     src/nvlink_placement.cpp
+    src/adi_server.cpp
 )
 
 target_include_directories(nvlink_placement
@@ -18,10 +17,23 @@ target_include_directories(nvlink_placement
         $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(nvlink_placement
-    PUBLIC
-        CUDA::cudart
-)
+if(CUDAToolkit_FOUND)
+    target_link_libraries(nvlink_placement
+        PUBLIC
+            CUDA::cudart
+    )
+    target_compile_definitions(nvlink_placement PRIVATE NVLINK_PLACEMENT_HAS_CUDA=1)
+
+    if(TARGET CUDA::cublas)
+        target_link_libraries(nvlink_placement PUBLIC CUDA::cublas)
+        target_compile_definitions(nvlink_placement PRIVATE NVLINK_ADI_HAS_CUBLAS=1)
+    else()
+        target_compile_definitions(nvlink_placement PRIVATE NVLINK_ADI_HAS_CUBLAS=0)
+    endif()
+else()
+    message(STATUS "CUDA toolkit not found; building CPU-only fallbacks for discovery/examples.")
+    target_compile_definitions(nvlink_placement PRIVATE NVLINK_PLACEMENT_HAS_CUDA=0 NVLINK_ADI_HAS_CUBLAS=0)
+endif()
 
 target_compile_options(nvlink_placement
     PRIVATE
@@ -29,7 +41,6 @@ target_compile_options(nvlink_placement
         $<$<CONFIG:Debug>:-g -Wall -Wextra>
 )
 
-# Examples
 option(BUILD_EXAMPLES "Build example programs" ON)
 
 if(BUILD_EXAMPLES)
@@ -42,9 +53,13 @@ if(BUILD_EXAMPLES)
         examples/multi_client.cpp
     )
     target_link_libraries(example_multi_client PRIVATE nvlink_placement)
+
+    add_executable(example_adi_server
+        examples/adi_server_example.cpp
+    )
+    target_link_libraries(example_adi_server PRIVATE nvlink_placement)
 endif()
 
-# Installation
 install(TARGETS nvlink_placement
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib

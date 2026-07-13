@@ -2,14 +2,14 @@
 // NVLink-Aware GPU Task Placement Library
 // Public API for topology detection and NVLink-aware task placement.
 
+#include <atomic>
 #include <cstdint>
-#include <vector>
 #include <functional>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
-#include <mutex>
-#include <atomic>
+#include <vector>
 
 namespace nvlink {
 
@@ -55,7 +55,7 @@ public:
 
 private:
     friend class Placer;
-    int num_gpus_;
+    int num_gpus_ = 0;
     std::vector<std::vector<LinkType>> link_kind_;
     std::vector<std::vector<int>> link_bandwidth_;
     GpuTopology() = default;
@@ -73,7 +73,7 @@ public:
 
     int assign_home(int client_id);
     int home_of(int client_id) const;
-    
+
     template <typename QueueDepthFn>
     int place(int client_id, QueueDepthFn queue_depth) const;
 
@@ -127,5 +127,3 @@ int Placer::place(int client_id, QueueDepthFn queue_depth) const {
 }
 
 } // namespace nvlink
-
-#endif // NVLINK_PLACEMENT_H
