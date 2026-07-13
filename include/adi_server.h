@@ -1,6 +1,6 @@
 #pragma once
-#ifndef ADI_SERVER_H
-#define ADI_SERVER_H
+#ifndef OVERHAULED_ADI_SERVER_H
+#define OVERHAULED_ADI_SERVER_H
 // ADI Protocol Server - GPU-Accelerated Binary Protocol Handler
 // Integrates NVLink-aware task placement with the ADI binary protocol.
 // Builds on top of nvlink_placement library for intelligent GPU scheduling.
@@ -135,4 +135,4 @@ GpuPayload default_gpu_compute(const GpuPayload& input, int gpu_idx);
 
 } // namespace nvlink::adi
 
-#endif // ADI_SERVER_H
+#endif // OVERHAULED_ADI_SERVER_H

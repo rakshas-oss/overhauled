@@ -333,7 +333,7 @@ public:
           placer_(topology_, config.backlog_threshold),
           compute_fn_(config.gpu_compute_fn ? config.gpu_compute_fn : default_gpu_compute),
           queues_(static_cast<size_t>(topology_.num_gpus())) {
-        if (topology_.num_gpus() <= 0) {
+        if (topology_.num_gpus() == 0) {
             throw NVLinkError("ADI server requires at least one GPU.");
         }
     }
@@ -474,7 +474,7 @@ private:
                 std::cerr << "[ADI] client " << client_id << " assigned home GPU " << home_gpu << "\n";
             }
 
-            GpuPayload previous_payload;
+            GpuPayload last_sent_payload;
             bool have_previous = false;
             uint32_t sequence_id = 0;
 
@@ -486,7 +486,11 @@ private:
 
                 const uint32_t payload_length = be32_to_host(length_be);
                 if (payload_length != ::nvlink::adi::EXPECTED_LENGTH) {
-                    throw NVLinkError("Invalid ADI payload length: " + std::to_string(payload_length));
+                    throw NVLinkError(
+                        "Invalid ADI payload length: expected " +
+                        std::to_string(::nvlink::adi::EXPECTED_LENGTH) +
+                        ", got " + std::to_string(payload_length)
+                    );
                 }
 
                 std::array<uint8_t, ::nvlink::adi::PAYLOAD_BYTES> request_bytes{};
@@ -513,11 +517,11 @@ private:
                         client_fd,
                         sequence_id,
                         PacketType::Delta,
-                        diff_payload(primary_payload, previous_payload)
+                        diff_payload(primary_payload, last_sent_payload)
                     );
                 }
 
-                previous_payload = std::move(primary_payload);
+                last_sent_payload = std::move(primary_payload);
                 have_previous = true;
                 ++sequence_id;
             }

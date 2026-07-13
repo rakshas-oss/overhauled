@@ -1,6 +1,6 @@
 #pragma once
-#ifndef NVLINK_PLACEMENT_H
-#define NVLINK_PLACEMENT_H
+#ifndef OVERHAULED_NVLINK_PLACEMENT_H
+#define OVERHAULED_NVLINK_PLACEMENT_H
 // NVLink-Aware GPU Task Placement Library
 // Public API for topology detection and NVLink-aware task placement.
 
@@ -131,4 +131,4 @@ int Placer::place(int client_id, QueueDepthFn queue_depth) const {
 
 } // namespace nvlink
 
-#endif // NVLINK_PLACEMENT_H
+#endif // OVERHAULED_NVLINK_PLACEMENT_H
