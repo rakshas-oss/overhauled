@@ -8,6 +8,7 @@
 #include <vector>
 #include <memory>
 #include <functional>
+#include <future>
 #include <thread>
 #include <queue>
 
@@ -125,5 +126,3 @@ uint64_t be64_to_host(uint64_t n) noexcept;
 GpuPayload default_gpu_compute(const GpuPayload& input, int gpu_idx);
 
 } // namespace nvlink::adi
-
-#endif // ADI_SERVER_H
