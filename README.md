@@ -66,10 +66,12 @@ int main() {
 
 ## 📚 Documentation
 
+- [RELEASE NOTES](docs/RELEASE_NOTES.md) - What changed in recent releases
 - [LIBRARY.md](docs/LIBRARY.md) - API reference and integration guide
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System design
-- [BENCHMARKING.md](docs/BENCHMARKING.md) - Performance benchmarking
-- [NVLINK_PLACEMENT.md](docs/NVLINK_PLACEMENT.md) - Placement policy details
+- [BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) - Performance benchmarking
+- [PUBLISHING.md](docs/PUBLISHING.md) - Packaging and publishing instructions
+- [WHITEPAPER.md](docs/WHITEPAPER.md) - Design rationale and background
 
 ## 🔧 Build
 
