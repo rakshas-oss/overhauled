@@ -6,16 +6,22 @@
 
 ```bash
 # 1. Provision hardware
-# See DEPLOYMENT_GUIDE.md: Hardware Requirements section
-
 # 2. Install NVIDIA stack
 bash scripts/install_nvidia_stack.sh
 
-# 3. Build the server
+# 3. Build
+# See DEPLOYMENT_GUIDE.md: Hardware Requirements section
+
+# 4. Install NVIDIA stack
+bash scripts/install_nvidia_stack.sh
+
+# 5. Build the server
 mkdir build && cd build
 cmake -DTENSORRT_ROOT=/usr/local/tensorrt -DCMAKE_BUILD_TYPE=Release ..
 make -j$(nproc)
 
+# 4. Validate
+python3 ../tests/test_protocol.py
 # 4. Run validation tests
 python3 ../tests/test_protocol.py
 python3 ../tests/test_model_loading.py
