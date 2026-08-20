@@ -231,7 +231,7 @@ make install
 
 ```bash
 ./gpu_runtime_server --version
-# Output: Overhauled GPU Runtime Server v1.0.0
+# Output: Overhauled GPU Runtime Server v0.3
 
 # Test server startup
 ./gpu_runtime_server 8080 &
@@ -1141,7 +1141,7 @@ gpg --symmetric model.onnx
 
 ---
 
-**Version**: 1.0.0
+**Version**: 0.3
 **Last Updated**: August 20, 2024
 - [ ] Hardware meets minimum requirements (16 cores, 32GB RAM, 4+ GPUs)
 - [ ] CUDA 11.8+ and TensorRT 8.5+ installed and tested
