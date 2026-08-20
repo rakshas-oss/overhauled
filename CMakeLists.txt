@@ -1,54 +1,42 @@
 cmake_minimum_required(VERSION 3.18)
-project(nvlink_placement VERSION 1.0.0 LANGUAGES CXX CUDA)
+project(OverhauledTensorRuntime LANGUAGES CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
-# Find CUDA
 find_package(CUDA REQUIRED)
 
-# Main Library
-add_library(nvlink_placement
-    src/nvlink_placement.cpp
-)
+# TensorRT configuration
+set(TENSORRT_ROOT /usr/local/tensorrt CACHE PATH "Path to TensorRT root")
+find_path(TENSORRT_INCLUDE_DIR NvInfer.h HINTS ${TENSORRT_ROOT}/include /usr/include /usr/local/cuda/include)
+find_library(NVINFER_LIB nvinfer HINTS ${TENSORRT_ROOT}/lib /usr/lib/x86_64-linux-gnu /usr/local/cuda/lib64)
+find_library(NVONNXPARSER_LIB nvonnxparser HINTS ${TENSORRT_ROOT}/lib /usr/lib/x86_64-linux-gnu /usr/local/cuda/lib64)
 
-target_include_directories(nvlink_placement
-    PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include>
-)
-
-target_link_libraries(nvlink_placement
-    PUBLIC
-        CUDA::cudart
-)
-
-target_compile_options(nvlink_placement
-    PRIVATE
-        $<$<CONFIG:Release>:-O3>
-        $<$<CONFIG:Debug>:-g -Wall -Wextra>
-)
-
-# Examples
-option(BUILD_EXAMPLES "Build example programs" ON)
-
-if(BUILD_EXAMPLES)
-    add_executable(example_minimal
-        examples/minimal.cpp
-    )
-    target_link_libraries(example_minimal PRIVATE nvlink_placement)
-
-    add_executable(example_multi_client
-        examples/multi_client.cpp
-    )
-    target_link_libraries(example_multi_client PRIVATE nvlink_placement)
+if(NOT TENSORRT_INCLUDE_DIR OR NOT NVINFER_LIB OR NOT NVONNXPARSER_LIB)
+    message(FATAL_ERROR "TensorRT not found. Please set TENSORRT_ROOT or install TensorRT.")
 endif()
 
-# Installation
-install(TARGETS nvlink_placement
-    LIBRARY DESTINATION lib
-    ARCHIVE DESTINATION lib
-    RUNTIME DESTINATION bin
+include_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CUDA_INCLUDE_DIRS}
+    ${TENSORRT_INCLUDE_DIR}
 )
 
+# GPU Runtime Server
+add_executable(gpu_runtime_server src/gpu_runtime_server.cpp)
+target_link_libraries(gpu_runtime_server
+    PRIVATE
+    ${CUDA_LIBRARIES}
+    ${NVINFER_LIB}
+    ${NVONNXPARSER_LIB}
+    cuda
+    cudart
+    pthread
+)
+
+# Installation targets
+install(TARGETS gpu_runtime_server DESTINATION bin)
 install(DIRECTORY include/ DESTINATION include)
+install(DIRECTORY examples/ DESTINATION examples)
