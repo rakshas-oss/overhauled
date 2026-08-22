@@ -11,6 +11,8 @@
 #include <future>
 #include <memory>
 #include <vector>
+#include <thread>
+#include <queue>
 
 namespace nvlink::adi {
 

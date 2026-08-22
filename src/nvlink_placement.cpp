@@ -138,6 +138,21 @@ int GpuTopology::best_nvlink_peer(int gpu) const {
     return best;
 }
 
+int GpuTopology::best_peer(int gpu) const {
+    if (gpu < 0 || gpu >= num_gpus_) return -1;
+    int best = -1;
+    int best_score = -1;
+    for (int j = 0; j < num_gpus_; ++j) {
+        if (j == gpu) continue;
+        if (link_kind_[gpu][j] == LinkType::NONE) continue;
+        if (link_bandwidth_[gpu][j] > best_score) {
+            best_score = link_bandwidth_[gpu][j];
+            best = j;
+        }
+    }
+    return best;
+}
+
 bool GpuTopology::has_nvlink(int from_gpu, int to_gpu) const {
     return link(from_gpu, to_gpu) == LinkType::NVLINK;
 }

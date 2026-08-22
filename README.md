@@ -11,7 +11,7 @@ This library provides **NVLink-aware task placement** for GPU task schedulers. I
 
 1. **Detects GPU topology** - Queries NVIDIA driver to identify NVLink, PCIe, and peer access links
 2. **Maintains sticky affinity** - Each client pinned to a home GPU for memory reuse
-3. **Rebalances intelligently** - Offloads backed-up work to NVLink peers (600+ GB/s) instead of PCIe neighbors (16 GB/s)
+3. **Rebalances intelligently** - Offloads backed-up work to NVLink peers (600+ GB/s) instead of PCIe neighbors (16 GB/s), but gracefully falls back to PCIe on older pre-NVLink devices.
 4. **Scales efficiently** - Thread-safe, zero external dependencies, production-proven
 5. **Serves ADI binary protocol traffic** - Optional multi-threaded server built on `nvlink::Placer`
 
@@ -66,16 +66,18 @@ The ADI server accepts a 4-byte big-endian length prefix followed by a 40-byte p
 ## 📊 Key Features
 
 - **Sticky Affinity**: Each client pinned to home GPU
-- **NVLink-Aware Rebalancing**: Prefers fast NVLink links over PCIe
-- **ADI Binary Protocol Support**: Reusable server module with worker threads per GPU
+- **NVLink-Aware Rebalancing**: Prefers fast NVLink links over PCIe (gracefully falls back to PCIe on pre-NVLink devices)
 - **Thread-Safe**: Safe for concurrent task dispatch
 - **Customizable Compute**: Supply your own GPU callback or use the default scaling implementation
 
 ## 📚 Documentation
 
+- [RELEASE NOTES](docs/RELEASE_NOTES.md) - What changed in recent releases
 - [LIBRARY.md](docs/LIBRARY.md) - API reference and integration guide
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System design
-- [BENCHMARKING.md](docs/BENCHMARKING.md) - Performance benchmarking
+- [BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) - Performance benchmarking
+- [PUBLISHING.md](docs/PUBLISHING.md) - Packaging and publishing instructions
+- [WHITEPAPER.md](docs/WHITEPAPER.md) - Design rationale and background
 
 ## 🔧 Build
 
