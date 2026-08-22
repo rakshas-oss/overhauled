@@ -9,6 +9,8 @@ include(CMakePackageConfigHelpers)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 # Find CUDA toolkit libraries used by the C++ sources
 find_package(CUDAToolkit REQUIRED)
@@ -27,11 +29,9 @@ set_target_properties(nvlink_placement PROPERTIES
     EXPORT_NAME nvlink_placement
 )
 
-target_include_directories(nvlink_placement
-    PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include>
-)
+if(NOT TENSORRT_INCLUDE_DIR OR NOT NVINFER_LIB OR NOT NVONNXPARSER_LIB)
+    message(FATAL_ERROR "TensorRT not found. Please set TENSORRT_ROOT or install TensorRT.")
+endif()
 
 target_link_libraries(nvlink_placement
     PUBLIC
@@ -40,7 +40,9 @@ target_link_libraries(nvlink_placement
         Threads::Threads
 )
 
-target_compile_options(nvlink_placement
+# GPU Runtime Server
+add_executable(gpu_runtime_server src/gpu_runtime_server.cpp)
+target_link_libraries(gpu_runtime_server
     PRIVATE
         $<$<CONFIG:Release>:-O3>
         $<$<CONFIG:Debug>:-g -Wall -Wextra>

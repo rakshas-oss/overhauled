@@ -45,6 +45,7 @@ public:
     LinkType link(int from_gpu, int to_gpu) const;
     int bandwidth_hint(int from_gpu, int to_gpu) const;
     int best_nvlink_peer(int gpu) const;
+    int best_peer(int gpu) const;
     bool has_nvlink(int from_gpu, int to_gpu) const;
     bool can_access(int from_gpu, int to_gpu) const;
     void enable_peer_access() const;
@@ -112,9 +113,9 @@ int Placer::place(int client_id, QueueDepthFn queue_depth) const {
         return home;
     }
 
-    int nvlink_peer = topo_.best_nvlink_peer(home);
-    if (nvlink_peer >= 0 && queue_depth(nvlink_peer) < backlog_threshold_) {
-        return nvlink_peer;
+    int best_peer = topo_.best_peer(home);
+    if (best_peer >= 0 && queue_depth(best_peer) < backlog_threshold_) {
+        return best_peer;
     }
 
     int best = home;
