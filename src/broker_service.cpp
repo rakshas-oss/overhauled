@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstring>
 #include <exception>
+#include <thread>
 
 namespace nvlink::broker {
 namespace {
@@ -54,6 +55,10 @@ BrokerResponse BrokerService::handle_request(const BrokerRequest& request) {
     bool incremented_inflight = false;
 
     try {
+        if (config_.simulated_latency_ms > 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(config_.simulated_latency_ms));
+        }
+
         if (use_gpu_placement_) {
             const int client_id = get_or_assign_client_id(request.source);
             selected_gpu = placer_->place(client_id, [this](int gpu) {

@@ -176,6 +176,8 @@ Current repository behavior to account for:
 - malformed or oversized frames receive a structured `Rejected` response when possible
 - the default compute path used by repository tests expects a payload that decodes as a packed `double[]` and returns doubled values
 - payload semantics above framing/validation are workload-specific and should be versioned between YuKKi-OS and the service using the broker
+- YuKKi-OS async clients may pipeline requests over one TCP connection and correlate responses by `task_id`; broker enforces a bounded per-connection in-flight limit (`max_inflight_per_client`, default `32`).
+- If a YuKKi-OS client still emits JSON `BrokerTask` / `BrokerResult` request bodies, add a versioned adapter before the broker because `broker_server` accepts BRK1/v1 binary frames only.
 
 ## 10. Verification, health, and logging
 
@@ -200,7 +202,7 @@ cd /home/runner/work/overhauled/overhauled
 
 ```bash
 cd /home/runner/work/overhauled/overhauled/build
-ctest --output-on-failure -R 'broker_(protocol|service|server_e2e)_test'
+ctest --output-on-failure -R 'broker_(protocol|service|server_e2e|async_latency_benchmark)_test'
 ```
 
 3. Confirm a listener exists on the chosen port (illustrative port `9090`):

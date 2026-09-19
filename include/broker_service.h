@@ -4,6 +4,7 @@
 #include "nvlink_placement.h"
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -16,6 +17,7 @@ struct BrokerServiceConfig {
     std::size_t backlog_threshold = 32;
     std::size_t max_inflight_per_gpu = 1024;
     bool force_cpu_fallback = false;
+    uint32_t simulated_latency_ms = 0;
     ProtocolLimits protocol_limits{};
 };
 
