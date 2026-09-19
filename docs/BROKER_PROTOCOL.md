@@ -54,6 +54,13 @@ All variable fields are length-prefixed and bounded by configured limits.
 - socket send/receive timeouts
 - graceful shutdown of listener and active client sockets
 
+## Async caller compatibility
+
+- Broker transport framing remains `uint32_be frame_length` + BRK1/v1 binary frame body.
+- YuKKi-OS Tokio/Wasmtime async callers can pipeline multiple requests on one TCP connection and match responses by `task_id`.
+- Server enforces a bounded per-connection in-flight cap (`max_inflight_per_client`, default `32`) and returns a structured rejection when exceeded.
+- If an upstream client still sends JSON `BrokerTask` / `BrokerResult` bodies, it is incompatible with this wire contract and must be adapted before traffic reaches `broker_server`.
+
 ## Execution Routing
 
 - If GPUs are available, broker uses `nvlink::GpuTopology` + `nvlink::Placer`

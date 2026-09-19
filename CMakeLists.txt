@@ -125,6 +125,10 @@ if(BUILD_TESTING AND BUILD_BROKER)
     add_executable(broker_server_e2e_test tests/broker_server_e2e_test.cpp)
     target_link_libraries(broker_server_e2e_test PRIVATE broker_service Threads::Threads)
     add_test(NAME broker_server_e2e_test COMMAND broker_server_e2e_test)
+
+    add_executable(broker_async_latency_benchmark_test tests/broker_async_latency_benchmark_test.cpp)
+    target_link_libraries(broker_async_latency_benchmark_test PRIVATE broker_service Threads::Threads)
+    add_test(NAME broker_async_latency_benchmark_test COMMAND broker_async_latency_benchmark_test)
 endif()
 
 install(TARGETS nvlink_placement adi_server DESTINATION lib)

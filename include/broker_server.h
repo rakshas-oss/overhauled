@@ -11,6 +11,7 @@ struct BrokerServerConfig {
     int port = 9090;
     int socket_timeout_ms = 5000;
     std::size_t max_clients = 128;
+    std::size_t max_inflight_per_client = 32;
     bool verbose = false;
     BrokerServiceConfig service_config{};
 };

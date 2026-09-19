@@ -115,6 +115,9 @@ public:
         if (config_.port < 1 || config_.port > 65535) {
             throw std::invalid_argument("broker server port must be in range 1..65535");
         }
+        if (config_.max_inflight_per_client == 0) {
+            throw std::invalid_argument("max_inflight_per_client must be greater than zero");
+        }
     }
 
     ~Impl() {
@@ -255,8 +258,60 @@ private:
     }
 
     void session_loop(SocketHandle client_socket) {
+        struct PendingResponse {
+            std::thread thread;
+            std::shared_ptr<std::atomic<bool>> done;
+        };
+
+        auto reap_finished = [](std::deque<PendingResponse>* pending, bool join_all) {
+            auto it = pending->begin();
+            while (it != pending->end()) {
+                const bool finished = it->done != nullptr && it->done->load(std::memory_order_acquire);
+                if (join_all || finished) {
+                    if (it->thread.joinable()) {
+                        it->thread.join();
+                    }
+                    it = pending->erase(it);
+                } else {
+                    ++it;
+                }
+            }
+        };
+
+        std::deque<PendingResponse> pending_responses;
+        std::mutex write_mutex;
+        auto writes_enabled = std::make_shared<std::atomic<bool>>(true);
+
+        auto write_response = [&](const BrokerResponse& response) {
+            if (!writes_enabled->load(std::memory_order_acquire)) {
+                return false;
+            }
+            const std::vector<uint8_t> response_frame = encode_response_frame(
+                response,
+                config_.service_config.protocol_limits);
+            const uint32_t response_len_be = htonl(static_cast<uint32_t>(response_frame.size()));
+            std::lock_guard<std::mutex> write_lock(write_mutex);
+            if (!writes_enabled->load(std::memory_order_acquire)) {
+                return false;
+            }
+            return write_exact(client_socket, &response_len_be, sizeof(response_len_be)) &&
+                   write_exact(client_socket, response_frame.data(), response_frame.size());
+        };
+
+        auto send_protocol_error_locked = [&](const std::string& task_id, const std::string& error) {
+            if (!writes_enabled->load(std::memory_order_acquire)) {
+                return;
+            }
+            std::lock_guard<std::mutex> write_lock(write_mutex);
+            if (!writes_enabled->load(std::memory_order_acquire)) {
+                return;
+            }
+            send_protocol_error(client_socket, task_id, error, config_.service_config.protocol_limits);
+        };
+
         try {
             while (running_.load(std::memory_order_acquire)) {
+                reap_finished(&pending_responses, false);
                 uint32_t frame_len_be = 0;
                 if (!read_exact(client_socket, &frame_len_be, sizeof(frame_len_be))) {
                     break;
@@ -264,10 +319,7 @@ private:
 
                 const std::size_t frame_len = ntohl(frame_len_be);
                 if (frame_len == 0 || frame_len > config_.service_config.protocol_limits.max_frame_bytes) {
-                    send_protocol_error(client_socket,
-                                        "",
-                                        "frame length violates protocol limits",
-                                        config_.service_config.protocol_limits);
+                    send_protocol_error_locked("", "frame length violates protocol limits");
                     break;
                 }
 
@@ -282,32 +334,38 @@ private:
                                           &request,
                                           &decode_error,
                                           config_.service_config.protocol_limits)) {
-                    send_protocol_error(client_socket,
-                                        request.task_id,
-                                        decode_error,
-                                        config_.service_config.protocol_limits);
+                    send_protocol_error_locked(request.task_id, decode_error);
                     continue;
                 }
 
-                BrokerResponse response = service_.handle_request(request);
-                const std::vector<uint8_t> response_frame = encode_response_frame(
-                    response,
-                    config_.service_config.protocol_limits);
-
-                const uint32_t response_len_be = htonl(static_cast<uint32_t>(response_frame.size()));
-                if (!write_exact(client_socket, &response_len_be, sizeof(response_len_be)) ||
-                    !write_exact(client_socket, response_frame.data(), response_frame.size())) {
-                    break;
+                if (pending_responses.size() >= config_.max_inflight_per_client) {
+                    send_protocol_error_locked(request.task_id, "too many inflight requests for client");
+                    continue;
                 }
+
+                auto done = std::make_shared<std::atomic<bool>>(false);
+                pending_responses.push_back(PendingResponse{
+                    std::thread([this, request, write_response, done] {
+                        try {
+                            BrokerResponse response = service_.handle_request(request);
+                            (void)write_response(response);
+                        } catch (const std::exception&) {
+                        }
+                        done->store(true, std::memory_order_release);
+                    }),
+                    done,
+                });
             }
         } catch (const std::exception&) {
         }
 
+        writes_enabled->store(false, std::memory_order_release);
         {
             std::lock_guard<std::mutex> lock(client_mutex_);
             client_sockets_.erase(client_socket);
         }
         shutdown_socket(client_socket);
+        reap_finished(&pending_responses, true);
         close_socket(client_socket);
     }
 

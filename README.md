@@ -140,6 +140,13 @@ Default protocol limits are bounded and enforced before routing:
 
 Validation rejects invalid magic, unsupported versions, wrong message types, trailing bytes, truncated frames, oversized strings/payloads, empty `task_id` / `source` / `destination` / `kind`, and `timeout_ms == 0`. Malformed requests receive structured broker rejections instead of being parsed opportunistically. See [docs/BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md) for the protocol reference.
 
+### Async Tokio/Wasmtime interoperability notes
+
+- YuKKi-OS async clients should keep using the same socket framing model they already use (4-byte big-endian frame length), but the frame body must be BRK1/v1 binary fields documented above.
+- If a YuKKi-OS client still emits JSON `BrokerTask` / `BrokerResult` payloads, that is a protocol mismatch with `broker_server`; those frames will be rejected because `broker_server` expects BRK1/v1 binary request/response bodies, not JSON.
+- `broker_server` now supports bounded in-flight requests per TCP client connection (`max_inflight_per_client`, default `32`) so an async caller can pipeline request frames and correlate responses by `task_id`.
+- For latency benchmarking in CI/CPU-only mode, broker service config includes an optional `simulated_latency_ms` delay path that waits via normal blocking sleep (no busy polling).
+
 ### Placement and execution behavior
 
 - `broker_server` is the broker-facing executable built in this repository.
@@ -157,6 +164,26 @@ Validation rejects invalid magic, unsupported versions, wrong message types, tra
 - Overhauled does not vendor YuKKi-OS code; the contract between the repositories is the BRK1/version 1 protocol and shared operational expectations only.
 
 For deployment-oriented steps, see [docs/SYSADMIN_HOWTO.md](docs/SYSADMIN_HOWTO.md).
+
+### CPU-only broker build/run/test commands
+
+```bash
+cd /home/runner/work/overhauled/overhauled
+cmake -S . -B build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DENABLE_CUDA=OFF \
+  -DENABLE_TENSORRT=OFF \
+  -DBUILD_BROKER=ON
+cmake --build build -j"$(nproc)"
+./build/broker_server 9090 --cpu-only
+```
+
+In another shell after build:
+
+```bash
+cd /home/runner/work/overhauled/overhauled/build
+ctest --output-on-failure -R 'broker_(protocol|service|server_e2e|async_latency_benchmark)_test'
+```
 
 ## 📈 Performance
 
