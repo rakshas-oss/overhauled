@@ -44,6 +44,16 @@ The library also exposes `#include "adi_server.h"` for embedding a reusable ADI 
 - Execution model: one TCP accept loop, one worker per GPU, one session thread per client
 - Compute path: custom callback or the default scaling implementation
 
+## Broker Interoperability Service
+
+The library also exposes:
+
+- `#include "broker_protocol.h"` for versioned request/response codec
+- `#include "broker_service.h"` for reusable broker task handling API
+- `#include "broker_server.h"` for robust length-prefixed TCP server
+
+Execution remains in overhauled through `nvlink::GpuTopology`, `nvlink::Placer`, and the ADI compute path.
+
 ### ADI Server Example
 
 ```cpp

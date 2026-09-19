@@ -75,6 +75,7 @@ The ADI server accepts a 4-byte big-endian length prefix followed by a 40-byte p
 - [RELEASE NOTES](docs/RELEASE_NOTES.md) - What changed in recent releases
 - [LIBRARY.md](docs/LIBRARY.md) - API reference and integration guide
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System design
+- [BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md) - Broker interoperability contract and protocol v1
 - [BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) - Performance benchmarking
 - [PUBLISHING.md](docs/PUBLISHING.md) - Packaging and publishing instructions
 - [WHITEPAPER.md](docs/WHITEPAPER.md) - Design rationale and background
@@ -83,9 +84,54 @@ The ADI server accepts a 4-byte big-endian length prefix followed by a 40-byte p
 
 ```bash
 mkdir build && cd build
-cmake ..
-make
+cmake -DENABLE_CUDA=OFF -DENABLE_TENSORRT=OFF ..
+cmake --build .
+ctest --output-on-failure
 ```
+
+### Build Modes
+
+- **CPU-first default (CI-friendly)**: `-DENABLE_CUDA=OFF -DENABLE_TENSORRT=OFF`
+- **Auto CUDA detection**: `-DENABLE_CUDA=ON -DENABLE_TENSORRT=OFF`
+- **TensorRT runtime server**: `-DENABLE_CUDA=ON -DENABLE_TENSORRT=ON -DTENSORRT_ROOT=/path/to/tensorrt`
+
+## 🔌 Broker Interoperability Boundary
+
+Overhauled remains the GPU topology/placement/execution plane. YuKKi-OS remains the secure control plane.  
+Integration boundary:
+
+`YuKKi-OS control plane <-> broker protocol <-> overhauled placement/execution`
+
+### Broker Protocol (Versioned)
+
+- Magic/versioned frame: `BRK1`, protocol version `1`
+- Length-prefixed request/response framing (4-byte big-endian length + bounded frame)
+- Required request fields:
+  - `task_id`, `source`, `destination`, `kind`, `priority`, `timeout_ms`, `payload`
+- Response fields:
+  - `task_id`, `status`, `selected_gpu`, `latency_ms`, `result`, `error`
+- Validation:
+  - bounded frame/payload/string sizes
+  - non-empty routing fields
+  - `timeout_ms > 0`
+
+### Broker Server
+
+Build target: `broker_server`
+
+```bash
+./build/broker_server 9090 --cpu-only
+```
+
+- `--cpu-only` provides deterministic fallback execution for tests and CPU nodes.
+- Without `--cpu-only`, broker uses detected GPU topology and NVLink-aware placement when available.
+
+### Security and Deployment Assumptions
+
+- Broker transport is a bounded binary protocol with strict framing and validation.
+- Oversized/malformed frames return structured protocol errors and are not blindly parsed.
+- This repository does not embed YuKKi-OS code or create direct source dependencies across repositories.
+- Deploy broker behind authenticated/authorized control-plane channels (mTLS/service mesh/proxy) for production.
 
 ## 📈 Performance
 
