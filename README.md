@@ -76,6 +76,7 @@ The ADI server accepts a 4-byte big-endian length prefix followed by a 40-byte p
 - [LIBRARY.md](docs/LIBRARY.md) - API reference and integration guide
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System design
 - [BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md) - Broker interoperability contract and protocol v1
+- [SYSADMIN_HOWTO.md](docs/SYSADMIN_HOWTO.md) - Linux sysadmin guide for broker deployment and YuKKi-OS interoperability
 - [BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) - Performance benchmarking
 - [PUBLISHING.md](docs/PUBLISHING.md) - Packaging and publishing instructions
 - [WHITEPAPER.md](docs/WHITEPAPER.md) - Design rationale and background
@@ -97,41 +98,65 @@ ctest --output-on-failure
 
 ## 🔌 Broker Interoperability Boundary
 
-Overhauled remains the GPU topology/placement/execution plane. YuKKi-OS remains the secure control plane.  
-Integration boundary:
+Overhauled is the GPU topology, placement, and execution plane. `rakshas-oss/YuKKi-OS` is an external authenticated control plane. The interoperability boundary is the versioned broker protocol over TCP, not a direct source dependency or embedded runtime integration.
 
-`YuKKi-OS control plane <-> broker protocol <-> overhauled placement/execution`
+`YuKKi-OS control plane <-> authenticated proxy / mTLS boundary <-> BRK1 broker protocol <-> overhauled placement/execution`
 
-### Broker Protocol (Versioned)
+### Broker Protocol (BRK1 / version 1)
 
-- Magic/versioned frame: `BRK1`, protocol version `1`
-- Length-prefixed request/response framing (4-byte big-endian length + bounded frame)
-- Required request fields:
-  - `task_id`, `source`, `destination`, `kind`, `priority`, `timeout_ms`, `payload`
-- Response fields:
-  - `task_id`, `status`, `selected_gpu`, `latency_ms`, `result`, `error`
-- Validation:
-  - bounded frame/payload/string sizes
-  - non-empty routing fields
-  - `timeout_ms > 0`
+Every broker message is sent as:
 
-### Broker Server
+1. a 4-byte big-endian frame length
+2. a bounded frame body beginning with:
+   - 4-byte magic `BRK1`
+   - 2-byte big-endian protocol version `1`
+   - 1-byte message type (`1=request`, `2=response`)
+   - 1 reserved byte (`0`)
 
-Build target: `broker_server`
+Request body fields, in order:
 
-```bash
-./build/broker_server 9090 --cpu-only
-```
+- `task_id` (`uint16` length-prefixed string)
+- `source` (`uint16` length-prefixed string)
+- `destination` (`uint16` length-prefixed string)
+- `kind` (`uint16` length-prefixed string)
+- `priority` (`uint8`)
+- `timeout_ms` (`uint32`, big-endian, must be `> 0`)
+- `payload` (`uint32` length-prefixed binary blob)
 
-- `--cpu-only` provides deterministic fallback execution for tests and CPU nodes.
-- Without `--cpu-only`, broker uses detected GPU topology and NVLink-aware placement when available.
+Response body fields, in order:
 
-### Security and Deployment Assumptions
+- `task_id` (`uint16` length-prefixed string)
+- `status` (`0=ok`, `1=rejected`, `2=error`, `3=timeout`)
+- `selected_gpu` (`int32`; `-1` means CPU fallback)
+- `latency_ms` (`uint64`)
+- `result` (`uint32` length-prefixed binary blob)
+- `error` (`uint16` length-prefixed string)
 
-- Broker transport is a bounded binary protocol with strict framing and validation.
-- Oversized/malformed frames return structured protocol errors and are not blindly parsed.
-- This repository does not embed YuKKi-OS code or create direct source dependencies across repositories.
-- Deploy broker behind authenticated/authorized control-plane channels (mTLS/service mesh/proxy) for production.
+Default protocol limits are bounded and enforced before routing:
+
+- max frame body: 1 MiB
+- max payload/result blob: 512 KiB
+- max string field: 1024 bytes
+
+Validation rejects invalid magic, unsupported versions, wrong message types, trailing bytes, truncated frames, oversized strings/payloads, empty `task_id` / `source` / `destination` / `kind`, and `timeout_ms == 0`. Malformed requests receive structured broker rejections instead of being parsed opportunistically. See [docs/BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md) for the protocol reference.
+
+### Placement and execution behavior
+
+- `broker_server` is the broker-facing executable built in this repository.
+- `--cpu-only` disables GPU topology detection and always returns `selected_gpu = -1`, which is useful for CI, non-GPU nodes, and deterministic smoke tests.
+- Without `--cpu-only`, the broker detects GPU topology once at startup and uses sticky affinity keyed by `source`, then queue-aware placement: home GPU first, then an NVLink-connected peer when beneficial, then least-loaded fallback.
+- On systems without NVLink, placement still works and falls back to PCIe / least-loaded choices rather than requiring NVLink hardware.
+- The default compute path used by current tests/examples expects the request payload to decode as a packed array of `double` values; the higher-level payload contract is otherwise application-specific and must be agreed between YuKKi-OS and the backend workload.
+
+### Security assumptions and current limitations
+
+- The broker transport is bounded and validated, but it does **not** provide authentication, authorization, or TLS on its own.
+- Production deployments should place it behind an authenticated TCP proxy, mTLS sidecar, or service mesh, and should restrict listener access with normal host/network firewall policy.
+- The server binds on all interfaces (`0.0.0.0`) for the configured port and exposes stdout/stderr logging only.
+- There is no built-in HTTP health endpoint, metrics endpoint, audit log, or native service manager integration in this repository.
+- Overhauled does not vendor YuKKi-OS code; the contract between the repositories is the BRK1/version 1 protocol and shared operational expectations only.
+
+For deployment-oriented steps, see [docs/SYSADMIN_HOWTO.md](docs/SYSADMIN_HOWTO.md).
 
 ## 📈 Performance
 
