@@ -2,6 +2,11 @@
 
 ## Components
 
+### Broker Boundary (Interoperability Layer)
+- Accepts versioned broker requests from external control planes
+- Validates bounded protocol frames and routes tasks to placement/execution
+- Returns structured response status, selected GPU, latency, result, and error fields
+
 ### GpuTopology
 Queries CUDA runtime to determine GPU interconnect:
 - NVLink (fast, 600+ GB/s)
