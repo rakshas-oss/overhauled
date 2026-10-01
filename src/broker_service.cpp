@@ -1,6 +1,7 @@
 #include "broker_service.h"
 
 #include "adi_server.h"
+#include "geospatial_frame.h"
 
 #include <chrono>
 #include <cstring>
@@ -48,6 +49,14 @@ BrokerResponse BrokerService::handle_request(const BrokerRequest& request) {
     if (!validate_request(request, &validation_error, config_.protocol_limits)) {
         response.status = TaskStatus::Rejected;
         response.error = validation_error;
+        return response;
+    }
+
+    if (request.kind == nvlink::geospatial::kGeospatialFrameKind) {
+        response = handle_geospatial_frame_request(request);
+        const auto ended = std::chrono::steady_clock::now();
+        response.latency_ms = static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(ended - started).count());
         return response;
     }
 
@@ -118,6 +127,35 @@ int BrokerService::gpu_count() const noexcept {
         return 0;
     }
     return topology_->num_gpus();
+}
+
+BrokerResponse BrokerService::handle_geospatial_frame_request(const BrokerRequest& request) const {
+    BrokerResponse response;
+    response.task_id = request.task_id;
+
+    nvlink::geospatial::GeospatialFrame frame;
+    std::string decode_error;
+    if (!nvlink::geospatial::decode_nxr1_frame(
+            request.payload, &frame, &decode_error, config_.protocol_limits.max_payload_bytes)) {
+        response.status = TaskStatus::Rejected;
+        response.error = decode_error;
+        return response;
+    }
+
+    // Acknowledge the validated frame by echoing it back, letting callers
+    // confirm an end-to-end round trip without additional side effects.
+    std::string encode_error;
+    std::vector<uint8_t> encoded;
+    if (!nvlink::geospatial::encode_nxr1_frame(
+            frame, &encoded, &encode_error, config_.protocol_limits.max_payload_bytes)) {
+        response.status = TaskStatus::Error;
+        response.error = encode_error;
+        return response;
+    }
+
+    response.status = TaskStatus::Ok;
+    response.result = std::move(encoded);
+    return response;
 }
 
 int BrokerService::get_or_assign_client_id(const std::string& source) {

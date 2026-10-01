@@ -154,6 +154,7 @@ Validation rejects invalid magic, unsupported versions, wrong message types, tra
 - Without `--cpu-only`, the broker detects GPU topology once at startup and uses sticky affinity keyed by `source`, then queue-aware placement: home GPU first, then an NVLink-connected peer when beneficial, then least-loaded fallback.
 - On systems without NVLink, placement still works and falls back to PCIe / least-loaded choices rather than requiring NVLink hardware.
 - The default compute path used by current tests/examples expects the request payload to decode as a packed array of `double` values; the higher-level payload contract is otherwise application-specific and must be agreed between YuKKi-OS and the backend workload.
+- `kind = "geospatial.frame.v1"` is a dedicated message kind carrying an NXR1-encoded geospatial frame (big-endian magic/version/geospatial/velocity/flow doubles + length-prefixed opaque payload). See [docs/BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md#geospatial-frame-interoperability-geospatialframev1) for the wire contract, limits, and rejection behavior.
 
 ### Security assumptions and current limitations
 
@@ -182,7 +183,7 @@ In another shell after build:
 
 ```bash
 cd /home/runner/work/overhauled/overhauled/build
-ctest --output-on-failure -R 'broker_(protocol|service|server_e2e|async_latency_benchmark)_test'
+ctest --output-on-failure -R 'broker_(protocol|service|server_e2e|async_latency_benchmark)_test|geospatial_frame_test'
 ```
 
 ## 📈 Performance

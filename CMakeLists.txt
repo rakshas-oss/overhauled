@@ -82,7 +82,8 @@ if(BUILD_BROKER)
     add_library(broker_service
         src/broker_protocol.cpp
         src/broker_service.cpp
-        src/broker_server.cpp)
+        src/broker_server.cpp
+        src/geospatial_frame.cpp)
     target_include_directories(broker_service PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
     target_link_libraries(broker_service PUBLIC adi_server nvlink_placement Threads::Threads)
 
@@ -129,6 +130,10 @@ if(BUILD_TESTING AND BUILD_BROKER)
     add_executable(broker_async_latency_benchmark_test tests/broker_async_latency_benchmark_test.cpp)
     target_link_libraries(broker_async_latency_benchmark_test PRIVATE broker_service Threads::Threads)
     add_test(NAME broker_async_latency_benchmark_test COMMAND broker_async_latency_benchmark_test)
+
+    add_executable(geospatial_frame_test tests/geospatial_frame_test.cpp)
+    target_link_libraries(geospatial_frame_test PRIVATE broker_service)
+    add_test(NAME geospatial_frame_test COMMAND geospatial_frame_test)
 endif()
 
 install(TARGETS nvlink_placement adi_server DESTINATION lib)

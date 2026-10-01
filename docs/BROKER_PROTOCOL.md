@@ -67,3 +67,74 @@ All variable fields are length-prefixed and bounded by configured limits.
 - Requests are routed with sticky source affinity and queue-aware placement
 - Compute path uses existing ADI compute entrypoint (`default_gpu_compute`)
 - CPU-only deterministic mode is available (`--cpu-only`) for testing and non-GPU nodes
+
+## Geospatial Frame Interoperability (`geospatial.frame.v1`)
+
+When `BrokerRequest::kind == "geospatial.frame.v1"`, `request.payload` must be
+an NXR1-encoded geospatial frame (see `include/geospatial_frame.h` /
+`src/geospatial_frame.cpp`). This is a dedicated message kind handled inside
+`BrokerService::handle_request`, independent of the default packed-`double`
+compute path used for other kinds (e.g. `inference`).
+
+### NXR1 wire format
+
+All multi-byte fields are big-endian. The frame body is:
+
+1. `magic` (`uint32`, `0x4E585231`, ASCII `NXR1`)
+2. `version` (`uint16`, currently `1`)
+3. `latitude` (`double`)
+4. `longitude` (`double`)
+5. `altitude` (`double`)
+6. `velocity_x` (`double`)
+7. `velocity_y` (`double`)
+8. `velocity_z` (`double`)
+9. `fluidity` (`double`)
+10. `drag` (`double`)
+11. `divergence` (`double`)
+12. `payload_length` (`uint32`)
+13. `payload` (opaque bytes, `payload_length` bytes)
+
+This NXR1 frame is carried as the `payload` blob of a normal BRK1 request
+(`kind = "geospatial.frame.v1"`); it is not a replacement for the BRK1
+request/response transport.
+
+### Validation and limits
+
+- Exact magic (`0x4E585231`) and version (`1`) are required; mismatches are
+  rejected with a descriptive error instead of being parsed opportunistically.
+- All nine numeric fields must be finite (`NaN`/`Inf` are rejected on both
+  encode and decode).
+- `payload_length` is bounds-checked against the frame's remaining bytes
+  (rejecting truncated frames) and against a configurable
+  `max_payload_bytes` limit (defaults to the broker's
+  `ProtocolLimits::max_payload_bytes`, 512 KiB).
+- Any bytes remaining after the declared payload are rejected as trailing
+  data; a conformant encoder never produces them.
+
+### Broker handling
+
+- A well-formed NXR1 payload is accepted (`TaskStatus::Ok`) and echoed back
+  as the response `result`, letting a caller confirm a verified end-to-end
+  round trip through the broker without side effects.
+- A malformed NXR1 payload (bad magic/version, truncation, trailing bytes,
+  oversized payload, or non-finite numbers) is rejected with
+  `TaskStatus::Rejected` and a structured `error` message; it never falls
+  through to the double-array compute path used by other `kind` values.
+
+### Build/test
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DENABLE_CUDA=OFF -DENABLE_TENSORRT=OFF -DBUILD_BROKER=ON
+cmake --build build -j"$(nproc)"
+ctest --test-dir build --output-on-failure -R 'geospatial_frame_test|broker_service_test'
+```
+
+### Coordination with YuKKi-OS
+
+This repository only owns the NXR1 payload contract and the `overhauled`-side
+broker handling of `geospatial.frame.v1`. Any YuKKi-OS-side NXR1 encoder/
+decoder or client integration must be validated against this exact wire
+format (and against the real YuKKi-OS broker client code) before being
+treated as interoperable; this document is the source of truth for the byte
+layout on the `overhauled` side.
+
