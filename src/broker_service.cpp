@@ -2,6 +2,7 @@
 
 #include "adi_server.h"
 #include "geospatial_frame.h"
+#include "wasm_sandbox.h"
 
 #include <chrono>
 #include <cstring>
@@ -38,6 +39,26 @@ BrokerService::BrokerService(const BrokerServiceConfig& config)
         use_gpu_placement_ = true;
         gpu_inflight_.assign(static_cast<std::size_t>(topology_->num_gpus()), 0);
     }
+
+    if (config_.wasm_manager != nullptr) {
+        wasm_manager_ = config_.wasm_manager;
+    } else {
+        nvlink::wasm::WasmSandboxManager::GpuSelectorFn selector = nullptr;
+        if (use_gpu_placement_) {
+            selector = [this](const std::string& source, int32_t target_gpu) -> int32_t {
+                if (target_gpu >= 0) {
+                    return target_gpu;
+                }
+                const int client_id = get_or_assign_client_id(source);
+                return placer_->place(client_id, [this](int gpu) {
+                    std::lock_guard<std::mutex> lock(inflight_mutex_);
+                    return gpu_inflight_[static_cast<std::size_t>(gpu)];
+                });
+            };
+        }
+        wasm_manager_ = std::make_shared<nvlink::wasm::WasmSandboxManager>(
+            config_.force_cpu_fallback || !use_gpu_placement_, selector);
+    }
 }
 
 BrokerResponse BrokerService::handle_request(const BrokerRequest& request) {
@@ -54,6 +75,26 @@ BrokerResponse BrokerService::handle_request(const BrokerRequest& request) {
 
     if (request.kind == nvlink::geospatial::kGeospatialFrameKind) {
         response = handle_geospatial_frame_request(request);
+        const auto ended = std::chrono::steady_clock::now();
+        response.latency_ms = static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(ended - started).count());
+        return response;
+    }
+
+    if (request.kind == nvlink::wasm::kWasmTaskKind) {
+        response = handle_wasm_task_request(request);
+        const auto ended = std::chrono::steady_clock::now();
+        response.latency_ms = static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(ended - started).count());
+        return response;
+    }
+
+    if (request.kind == nvlink::wasm::kWasmLifecycleKind ||
+        request.kind == nvlink::wasm::kWasmLifecyclePrepareKind ||
+        request.kind == nvlink::wasm::kWasmLifecycleDrainKind ||
+        request.kind == nvlink::wasm::kWasmLifecycleReleaseKind ||
+        request.kind == nvlink::wasm::kWasmLifecycleQueryKind) {
+        response = handle_wasm_lifecycle_request(request);
         const auto ended = std::chrono::steady_clock::now();
         response.latency_ms = static_cast<uint64_t>(
             std::chrono::duration_cast<std::chrono::milliseconds>(ended - started).count());
@@ -156,6 +197,122 @@ BrokerResponse BrokerService::handle_geospatial_frame_request(const BrokerReques
     response.status = TaskStatus::Ok;
     response.result = std::move(encoded);
     return response;
+}
+
+BrokerResponse BrokerService::handle_wasm_task_request(const BrokerRequest& request) {
+    BrokerResponse response;
+    response.task_id = request.task_id;
+
+    nvlink::wasm::WasmTaskRequest wasm_req;
+    std::string decode_error;
+    nvlink::wasm::WasmLimits limits;
+    limits.max_payload_bytes = config_.protocol_limits.max_payload_bytes;
+    limits.max_frame_bytes = config_.protocol_limits.max_frame_bytes;
+    limits.max_string_bytes = config_.protocol_limits.max_string_bytes;
+
+    if (!nvlink::wasm::decode_wasm_task_request(request.payload, &wasm_req, &decode_error, limits)) {
+        response.status = TaskStatus::Rejected;
+        response.error = "failed to decode WASM task request: " + decode_error;
+        return response;
+    }
+
+    if (config_.simulated_latency_ms > 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(config_.simulated_latency_ms));
+    }
+
+    const nvlink::wasm::WasmTaskResponse wasm_resp = wasm_manager_->handle_task(wasm_req);
+
+    std::string encode_error;
+    std::vector<uint8_t> encoded_resp;
+    if (!nvlink::wasm::encode_wasm_task_response(wasm_resp, &encoded_resp, &encode_error, limits)) {
+        response.status = TaskStatus::Error;
+        response.error = "failed to encode WASM task response: " + encode_error;
+        return response;
+    }
+
+    switch (wasm_resp.status) {
+        case nvlink::wasm::WasmTaskStatus::Ok:
+            response.status = TaskStatus::Ok;
+            break;
+        case nvlink::wasm::WasmTaskStatus::Timeout:
+            response.status = TaskStatus::Timeout;
+            break;
+        case nvlink::wasm::WasmTaskStatus::Rejected:
+        case nvlink::wasm::WasmTaskStatus::ModuleDraining:
+        case nvlink::wasm::WasmTaskStatus::ModuleNotFound:
+        case nvlink::wasm::WasmTaskStatus::VersionMismatch:
+            response.status = TaskStatus::Rejected;
+            break;
+        default:
+            response.status = TaskStatus::Error;
+            break;
+    }
+
+    response.selected_gpu = wasm_resp.selected_gpu;
+    response.result = std::move(encoded_resp);
+    response.error = wasm_resp.error;
+    return response;
+}
+
+BrokerResponse BrokerService::handle_wasm_lifecycle_request(const BrokerRequest& request) {
+    BrokerResponse response;
+    response.task_id = request.task_id;
+
+    nvlink::wasm::WasmLifecycleRequest wasm_req;
+    std::string decode_error;
+    nvlink::wasm::WasmLimits limits;
+    limits.max_payload_bytes = config_.protocol_limits.max_payload_bytes;
+    limits.max_frame_bytes = config_.protocol_limits.max_frame_bytes;
+    limits.max_string_bytes = config_.protocol_limits.max_string_bytes;
+
+    if (!nvlink::wasm::decode_wasm_lifecycle_request(request.payload, &wasm_req, &decode_error, limits)) {
+        response.status = TaskStatus::Rejected;
+        response.error = "failed to decode WASM lifecycle request: " + decode_error;
+        return response;
+    }
+
+    if (request.kind == nvlink::wasm::kWasmLifecyclePrepareKind) {
+        wasm_req.action = nvlink::wasm::WasmLifecycleAction::Prepare;
+    } else if (request.kind == nvlink::wasm::kWasmLifecycleDrainKind) {
+        wasm_req.action = nvlink::wasm::WasmLifecycleAction::Drain;
+    } else if (request.kind == nvlink::wasm::kWasmLifecycleReleaseKind) {
+        wasm_req.action = nvlink::wasm::WasmLifecycleAction::Release;
+    } else if (request.kind == nvlink::wasm::kWasmLifecycleQueryKind) {
+        wasm_req.action = nvlink::wasm::WasmLifecycleAction::Query;
+    }
+
+    const nvlink::wasm::WasmLifecycleResponse wasm_resp = wasm_manager_->handle_lifecycle(wasm_req);
+
+    std::string encode_error;
+    std::vector<uint8_t> encoded_resp;
+    if (!nvlink::wasm::encode_wasm_lifecycle_response(wasm_resp, &encoded_resp, &encode_error, limits)) {
+        response.status = TaskStatus::Error;
+        response.error = "failed to encode WASM lifecycle response: " + encode_error;
+        return response;
+    }
+
+    switch (wasm_resp.status) {
+        case nvlink::wasm::WasmLifecycleStatus::Ok:
+            response.status = TaskStatus::Ok;
+            break;
+        case nvlink::wasm::WasmLifecycleStatus::Rejected:
+        case nvlink::wasm::WasmLifecycleStatus::NotFound:
+        case nvlink::wasm::WasmLifecycleStatus::Busy:
+            response.status = TaskStatus::Rejected;
+            break;
+        default:
+            response.status = TaskStatus::Error;
+            break;
+    }
+
+    response.selected_gpu = wasm_resp.assigned_gpu;
+    response.result = std::move(encoded_resp);
+    response.error = wasm_resp.error;
+    return response;
+}
+
+std::shared_ptr<nvlink::wasm::WasmSandboxManager> BrokerService::wasm_manager() const noexcept {
+    return wasm_manager_;
 }
 
 int BrokerService::get_or_assign_client_id(const std::string& source) {
