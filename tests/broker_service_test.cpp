@@ -1,5 +1,6 @@
 #include "broker_service.h"
 #include "geospatial_frame.h"
+#include "media_stream.h"
 
 #include <array>
 #include <cassert>
@@ -104,6 +105,50 @@ int main() {
         BrokerResponse geo_rejected = service.handle_request(geo_bad);
         assert(geo_rejected.status == TaskStatus::Rejected);
         assert(!geo_rejected.error.empty());
+    }
+
+    {
+        nvlink::media::MediaStreamFrame frame;
+        frame.media_type = nvlink::media::MediaType::Video;
+        frame.codec = "h264";
+        frame.stream_id = "camera-1";
+        frame.sequence_number = 7;
+        frame.timestamp_ns = 1234;
+        frame.width = 640;
+        frame.height = 480;
+        frame.is_keyframe = true;
+        frame.payload = {0x01, 0x02, 0x03};
+
+        std::vector<uint8_t> encoded;
+        std::string error;
+        const bool encode_ok = nvlink::media::encode_media_stream_frame(frame, &encoded, &error);
+        assert(encode_ok);
+
+        BrokerRequest media_req;
+        media_req.task_id = "task-media";
+        media_req.source = "yukki";
+        media_req.destination = "overhauled";
+        media_req.kind = nvlink::media::kMediaStreamKind;
+        media_req.priority = 1;
+        media_req.timeout_ms = 3000;
+        media_req.payload = encoded;
+
+        const BrokerResponse media_ok = service.handle_request(media_req);
+        assert(media_ok.status == TaskStatus::Ok);
+        assert(media_ok.error.empty());
+        nvlink::media::MediaStreamFrame decoded;
+        const bool decode_ok = nvlink::media::decode_media_stream_frame(
+            media_ok.result, &decoded, &error);
+        assert(decode_ok);
+        assert(decoded.stream_id == frame.stream_id);
+        assert(decoded.sequence_number == frame.sequence_number);
+        assert(decoded.payload == frame.payload);
+
+        BrokerRequest media_bad = media_req;
+        media_bad.payload[0] ^= 0xFF;
+        const BrokerResponse media_rejected = service.handle_request(media_bad);
+        assert(media_rejected.status == TaskStatus::Rejected);
+        assert(!media_rejected.error.empty());
     }
 
     std::cout << "broker_service_test passed\n";

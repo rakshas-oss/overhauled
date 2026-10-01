@@ -156,6 +156,7 @@ Validation rejects invalid magic, unsupported versions, wrong message types, tra
 - On systems without NVLink, placement still works and falls back to PCIe / least-loaded choices rather than requiring NVLink hardware.
 - The default compute path used by current tests/examples expects the request payload to decode as a packed array of `double` values; the higher-level payload contract is otherwise application-specific and must be agreed between YuKKi-OS and the backend workload.
 - `kind = "geospatial.frame.v1"` is a dedicated message kind carrying an NXR1-encoded geospatial frame (big-endian magic/version/geospatial/velocity/flow doubles + length-prefixed opaque payload). See [docs/BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md#geospatial-frame-interoperability-geospatialframev1) for the wire contract, limits, and rejection behavior.
+- `kind = "media.stream.v1"` carries MED1-encoded video, audio, or generic data chunks for bounded broker validation and acknowledgment. See [docs/BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md#videoaudiodata-broadcast-interoperability-mediastreamv1) for the wire layout and handling.
 - `kind = "wasm.task.v1"` and `kind = "wasm.lifecycle.*"` carry WSM1-encoded WASM sandbox tasks and module lifecycle management frames (prepare/register, drain/stop, release/acknowledge) for safe hotswapping. See [docs/WASM_INTEROP.md](docs/WASM_INTEROP.md) for full contract details.
 
 ### Security assumptions and current limitations

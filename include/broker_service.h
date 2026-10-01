@@ -40,6 +40,7 @@ public:
 private:
     int get_or_assign_client_id(const std::string& source);
     BrokerResponse handle_geospatial_frame_request(const BrokerRequest& request) const;
+    BrokerResponse handle_media_stream_request(const BrokerRequest& request) const;
     BrokerResponse handle_wasm_task_request(const BrokerRequest& request);
     BrokerResponse handle_wasm_lifecycle_request(const BrokerRequest& request);
 
