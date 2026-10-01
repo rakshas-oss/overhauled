@@ -121,7 +121,7 @@ Request body fields, in order:
 - `destination` (`uint16` length-prefixed string)
 - `kind` (`uint16` length-prefixed string)
 - `priority` (`uint8`)
-- `timeout_ms` (`uint32`, big-endian, must be `> 0`)
+- `timeout_ms` (`uint32`, big-endian, must be in the range `1..300000` ms)
 - `payload` (`uint32` length-prefixed binary blob)
 
 Response body fields, in order:
@@ -139,7 +139,7 @@ Default protocol limits are bounded and enforced before routing:
 - max payload/result blob: 512 KiB
 - max string field: 1024 bytes
 
-Validation rejects invalid magic, unsupported versions, wrong message types, trailing bytes, truncated frames, oversized strings/payloads, empty `task_id` / `source` / `destination` / `kind`, and `timeout_ms == 0`. Malformed requests receive structured broker rejections instead of being parsed opportunistically. See [docs/BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md) for the protocol reference.
+Validation rejects invalid magic, unsupported versions, wrong message types, trailing bytes, truncated frames, oversized strings/payloads, empty `task_id` / `source` / `destination` / `kind`, zero timeouts, and timeouts above the five-minute maximum. Out-of-range timeouts are rejected rather than clamped, and the broker does not derive a default from request characteristics. Malformed requests receive structured broker rejections instead of being parsed opportunistically. See [docs/BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md) for the protocol reference.
 
 ### Async Tokio/Wasmtime interoperability notes
 

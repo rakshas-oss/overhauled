@@ -32,8 +32,15 @@ All variable fields are length-prefixed and bounded by configured limits.
 - `destination` (string)
 - `kind` (string)
 - `priority` (`uint8`)
-- `timeout_ms` (`uint32`)
+- `timeout_ms` (`uint32`, from `1` through `300000` milliseconds)
 - `payload` (binary)
+
+`timeout_ms` is the caller-selected request processing deadline. Zero and
+values above the five-minute maximum are rejected with a structured protocol
+rejection; values are not silently clamped and the broker does not infer a
+default from payload size or task kind. The fixed ceiling avoids trusting
+unbounded client deadlines when request characteristics do not reliably
+predict execution cost.
 
 ## Response Fields
 
@@ -69,7 +76,7 @@ All variable fields are length-prefixed and bounded by configured limits.
 - CPU-only deterministic mode is available (`--cpu-only`) for testing and non-GPU nodes
 - `media.stream.v1` carries bounded MED1 video, audio, or generic data chunks; validated chunks are echoed as acknowledgments and are not sent through the inference compute path.
 - For the default inference/compute path, `payload` is a packed array of IEEE-754 binary64 values in big-endian byte order. The response `result` uses the same representation.
-- `timeout_ms` is the request processing deadline. If processing reaches the deadline, the broker returns `timeout` and discards any result. Work already executing cannot be preempted and may finish before the timeout response is sent.
+- `timeout_ms` must be between 1 and 300000 milliseconds. If processing reaches the deadline, the broker returns `timeout` and discards any result. Work already executing cannot be preempted and may finish before the timeout response is sent.
 
 ## Geospatial Frame Interoperability (`geospatial.frame.v1`)
 

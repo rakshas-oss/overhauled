@@ -9,6 +9,7 @@ namespace nvlink::broker {
 
 constexpr uint32_t BROKER_MAGIC = 0x42524b31U; // BRK1
 constexpr uint16_t BROKER_PROTOCOL_VERSION = 1;
+constexpr uint32_t BROKER_MAX_TIMEOUT_MS = 300000;
 
 enum class MessageType : uint8_t {
     Request = 1,

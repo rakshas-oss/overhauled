@@ -1,10 +1,13 @@
 #include "broker_protocol.h"
 
+#include <arpa/inet.h>
+
 #include <array>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <stdexcept>
 #include <vector>
 
 namespace {
@@ -45,6 +48,39 @@ int main() {
     assert(decoded_request.timeout_ms == request.timeout_ms);
     assert(decoded_request.payload == request.payload);
 
+    std::string timeout_error;
+    BrokerRequest invalid_timeout_request = request;
+    invalid_timeout_request.timeout_ms = 0;
+    assert(!validate_request(invalid_timeout_request, &timeout_error, limits));
+    assert(timeout_error == "timeout_ms must be greater than zero");
+
+    request.timeout_ms = BROKER_MAX_TIMEOUT_MS;
+    assert(validate_request(request, &timeout_error, limits));
+    const std::vector<uint8_t> max_timeout_frame = encode_request_frame(request, limits);
+
+    invalid_timeout_request = request;
+    invalid_timeout_request.timeout_ms = BROKER_MAX_TIMEOUT_MS + 1;
+    assert(!validate_request(invalid_timeout_request, &timeout_error, limits));
+    assert(timeout_error == "timeout_ms exceeds maximum of 300000 ms");
+    bool oversized_encode_rejected = false;
+    try {
+        (void)encode_request_frame(invalid_timeout_request, limits);
+    } catch (const std::runtime_error&) {
+        oversized_encode_rejected = true;
+    }
+    assert(oversized_encode_rejected);
+
+    std::vector<uint8_t> oversized_timeout_frame = max_timeout_frame;
+    const std::size_t timeout_offset =
+        oversized_timeout_frame.size() - request.payload.size() - 2 * sizeof(uint32_t);
+    const uint32_t oversized_timeout_be = htonl(BROKER_MAX_TIMEOUT_MS + 1);
+    std::memcpy(oversized_timeout_frame.data() + timeout_offset,
+                &oversized_timeout_be,
+                sizeof(oversized_timeout_be));
+    assert(!decode_request_frame(oversized_timeout_frame, &decoded_request, &timeout_error, limits));
+    assert(timeout_error == "timeout_ms exceeds maximum of 300000 ms");
+
+    request.timeout_ms = 3000;
     BrokerResponse response;
     response.task_id = request.task_id;
     response.status = TaskStatus::Ok;

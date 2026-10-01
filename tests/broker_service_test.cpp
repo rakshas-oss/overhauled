@@ -71,6 +71,17 @@ int main() {
     assert(output[1] == 4.0);
     assert(output[2] == 6.0);
 
+    BrokerRequest invalid_timeout_req = req;
+    invalid_timeout_req.timeout_ms = 0;
+    BrokerResponse zero_timeout = service.handle_request(invalid_timeout_req);
+    assert(zero_timeout.status == TaskStatus::Rejected);
+    assert(zero_timeout.error == "timeout_ms must be greater than zero");
+
+    invalid_timeout_req.timeout_ms = BROKER_MAX_TIMEOUT_MS + 1;
+    BrokerResponse oversized_timeout = service.handle_request(invalid_timeout_req);
+    assert(oversized_timeout.status == TaskStatus::Rejected);
+    assert(oversized_timeout.error == "timeout_ms exceeds maximum of 300000 ms");
+
     req.payload = {0x01, 0x02, 0x03};
     BrokerResponse bad = service.handle_request(req);
     assert(bad.status == TaskStatus::Error);
