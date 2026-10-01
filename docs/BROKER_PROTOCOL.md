@@ -138,3 +138,18 @@ format (and against the real YuKKi-OS broker client code) before being
 treated as interoperable; this document is the source of truth for the byte
 layout on the `overhauled` side.
 
+## GPU-Backed WASM Sandbox Interoperability (`wasm.task.v1`, `wasm.lifecycle.*`)
+
+When `BrokerRequest::kind` is `wasm.task.v1` or starts with `wasm.lifecycle.`, `request.payload` carries a `WSM1`-encoded binary frame for WebAssembly sandbox execution and safe hotswap management.
+
+### Supported kinds
+- `wasm.task.v1`: Submits a GPU acceleration task from a WASM sandbox.
+- `wasm.lifecycle.prepare.v1`: Registers/prepares a new module version for hotswap.
+- `wasm.lifecycle.drain.v1`: Initiates graceful draining of an old module version (rejects new tasks with `ModuleDraining`).
+- `wasm.lifecycle.release.v1`: Releases GPU placement records once in-flight tasks have drained to 0.
+- `wasm.lifecycle.query.v1`: Queries version status and active task counts.
+- `wasm.lifecycle.v1`: Generic lifecycle message (action specified in WSM1 payload).
+
+For the full wire specification, byte layout, Rust client contract, and safe hotswap sequence, see [docs/WASM_INTEROP.md](WASM_INTEROP.md).
+
+

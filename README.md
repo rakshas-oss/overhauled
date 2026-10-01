@@ -76,6 +76,7 @@ The ADI server accepts a 4-byte big-endian length prefix followed by a 40-byte p
 - [LIBRARY.md](docs/LIBRARY.md) - API reference and integration guide
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System design
 - [BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md) - Broker interoperability contract and protocol v1
+- [WASM_INTEROP.md](docs/WASM_INTEROP.md) - GPU-backed WASM sandbox interoperability & safe hotswap contract
 - [SYSADMIN_HOWTO.md](docs/SYSADMIN_HOWTO.md) - Linux sysadmin guide for broker deployment and YuKKi-OS interoperability
 - [BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) - Performance benchmarking
 - [PUBLISHING.md](docs/PUBLISHING.md) - Packaging and publishing instructions
@@ -155,6 +156,7 @@ Validation rejects invalid magic, unsupported versions, wrong message types, tra
 - On systems without NVLink, placement still works and falls back to PCIe / least-loaded choices rather than requiring NVLink hardware.
 - The default compute path used by current tests/examples expects the request payload to decode as a packed array of `double` values; the higher-level payload contract is otherwise application-specific and must be agreed between YuKKi-OS and the backend workload.
 - `kind = "geospatial.frame.v1"` is a dedicated message kind carrying an NXR1-encoded geospatial frame (big-endian magic/version/geospatial/velocity/flow doubles + length-prefixed opaque payload). See [docs/BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md#geospatial-frame-interoperability-geospatialframev1) for the wire contract, limits, and rejection behavior.
+- `kind = "wasm.task.v1"` and `kind = "wasm.lifecycle.*"` carry WSM1-encoded WASM sandbox tasks and module lifecycle management frames (prepare/register, drain/stop, release/acknowledge) for safe hotswapping. See [docs/WASM_INTEROP.md](docs/WASM_INTEROP.md) for full contract details.
 
 ### Security assumptions and current limitations
 
@@ -163,6 +165,9 @@ Validation rejects invalid magic, unsupported versions, wrong message types, tra
 - The server binds on all interfaces (`0.0.0.0`) for the configured port and exposes stdout/stderr logging only.
 - There is no built-in HTTP health endpoint, metrics endpoint, audit log, or native service manager integration in this repository.
 - Overhauled does not vendor YuKKi-OS code; the contract between the repositories is the BRK1/version 1 protocol and shared operational expectations only.
+- **WASM execution boundary**: Overhauled is not a WebAssembly runtime and does not parse or execute WASM bytecode. WASM execution remains solely in the YuKKi-OS host plane (Wasmtime).
+- **Sandbox isolation**: Overhauled does not enforce WASM linear memory boundaries or capability limits; host adapters must validate memory safety before passing buffer descriptors to overhauled.
+- **Hotswap state migration**: Overhauled coordinates GPU placement and safe task drainage across module versions, but does **not** attempt unsafe live GPU memory migration (raw pointers/textures/context) between module versions. State restoration must be handled by the sandbox/host.
 
 For deployment-oriented steps, see [docs/SYSADMIN_HOWTO.md](docs/SYSADMIN_HOWTO.md).
 

@@ -83,7 +83,8 @@ if(BUILD_BROKER)
         src/broker_protocol.cpp
         src/broker_service.cpp
         src/broker_server.cpp
-        src/geospatial_frame.cpp)
+        src/geospatial_frame.cpp
+        src/wasm_sandbox.cpp)
     target_include_directories(broker_service PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
     target_link_libraries(broker_service PUBLIC adi_server nvlink_placement Threads::Threads)
 
@@ -134,6 +135,10 @@ if(BUILD_TESTING AND BUILD_BROKER)
     add_executable(geospatial_frame_test tests/geospatial_frame_test.cpp)
     target_link_libraries(geospatial_frame_test PRIVATE broker_service)
     add_test(NAME geospatial_frame_test COMMAND geospatial_frame_test)
+
+    add_executable(wasm_sandbox_test tests/wasm_sandbox_test.cpp)
+    target_link_libraries(wasm_sandbox_test PRIVATE broker_service Threads::Threads)
+    add_test(NAME wasm_sandbox_test COMMAND wasm_sandbox_test)
 endif()
 
 install(TARGETS nvlink_placement adi_server DESTINATION lib)
