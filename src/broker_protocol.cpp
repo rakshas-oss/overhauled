@@ -203,6 +203,12 @@ bool validate_request(const BrokerRequest& request, std::string* error, const Pr
         }
         return false;
     }
+    if (request.timeout_ms > BROKER_MAX_TIMEOUT_MS) {
+        if (error != nullptr) {
+            *error = "timeout_ms exceeds maximum of 300000 ms";
+        }
+        return false;
+    }
     if (request.payload.size() > limits.max_payload_bytes) {
         if (error != nullptr) {
             *error = "payload exceeds max_payload_bytes";

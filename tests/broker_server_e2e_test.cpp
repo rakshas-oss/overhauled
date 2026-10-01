@@ -179,6 +179,27 @@ int main() {
         require(response.status == TaskStatus::Rejected, "malformed frame was not rejected");
         require(!response.error.empty(), "malformed frame rejection did not include error");
 
+        std::vector<uint8_t> oversized_timeout =
+            encode_request_frame(request, config.service_config.protocol_limits);
+        const std::size_t timeout_offset =
+            oversized_timeout.size() - request.payload.size() - 2 * sizeof(uint32_t);
+        const uint32_t oversized_timeout_be = htonl(BROKER_MAX_TIMEOUT_MS + 1);
+        std::memcpy(oversized_timeout.data() + timeout_offset,
+                    &oversized_timeout_be,
+                    sizeof(oversized_timeout_be));
+        const uint32_t oversized_timeout_len_be =
+            htonl(static_cast<uint32_t>(oversized_timeout.size()));
+        require(write_exact(sock, &oversized_timeout_len_be, sizeof(oversized_timeout_len_be)),
+                "failed to write oversized-timeout frame length");
+        require(write_exact(sock, oversized_timeout.data(), oversized_timeout.size()),
+                "failed to write oversized-timeout frame body");
+        require(read_response(sock, &response, &error, config.service_config.protocol_limits),
+                "failed to read oversized-timeout rejection");
+        require(response.status == TaskStatus::Rejected,
+                "oversized timeout was not rejected by broker server");
+        require(response.error == "timeout_ms exceeds maximum of 300000 ms",
+                "oversized-timeout rejection did not include the expected error");
+
         request.task_id = "e2e-task-2";
         request.payload = pack_doubles({7.0, 11.0});
         require(send_request(sock, request, config.service_config.protocol_limits), "failed to send second valid request");
