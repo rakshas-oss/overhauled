@@ -67,6 +67,7 @@ All variable fields are length-prefixed and bounded by configured limits.
 - Requests are routed with sticky source affinity and queue-aware placement
 - Compute path uses existing ADI compute entrypoint (`default_gpu_compute`)
 - CPU-only deterministic mode is available (`--cpu-only`) for testing and non-GPU nodes
+- `media.stream.v1` carries bounded MED1 video, audio, or generic data chunks; validated chunks are echoed as acknowledgments and are not sent through the inference compute path.
 
 ## Geospatial Frame Interoperability (`geospatial.frame.v1`)
 
@@ -138,6 +139,71 @@ format (and against the real YuKKi-OS broker client code) before being
 treated as interoperable; this document is the source of truth for the byte
 layout on the `overhauled` side.
 
+## Video/Audio/Data Broadcast Interoperability (media.stream.v1)
+
+When `BrokerRequest::kind == "media.stream.v1"`, `request.payload` carries a
+MED1-encoded media chunk (see `include/media_stream.h` /
+`src/media_stream.cpp`). This dedicated broker kind transports video, audio,
+and generic binary data without sending the chunk through the default
+packed-`double` compute path.
+
+### MED1 wire format
+
+All multi-byte fields are big-endian. The frame body is:
+
+1. `magic` (`uint32`, `0x4D454431`, ASCII `MED1`)
+2. `version` (`uint16`, currently `1`)
+3. `media_type` (`uint8`, `0=video`, `1=audio`, `2=generic_data`)
+4. `codec_length` (`uint16`)
+5. `codec` (UTF-8 or opaque identifier bytes, `codec_length` bytes)
+6. `stream_id_length` (`uint16`)
+7. `stream_id` (UTF-8 or opaque identifier bytes, `stream_id_length` bytes)
+8. `sequence_number` (`uint64`)
+9. `timestamp_ns` (`uint64`)
+10. `sample_rate` (`uint32`; zero when not applicable)
+11. `width` (`uint32`; zero when not applicable)
+12. `height` (`uint32`; zero when not applicable)
+13. `channels` (`uint32`; zero when not applicable)
+14. `flags` (`uint8`; bit 0 is `is_keyframe`, bit 1 is `is_final_chunk`, all other bits reserved)
+15. `payload_length` (`uint32`)
+16. `payload` (opaque chunk bytes, `payload_length` bytes)
+
+The complete MED1 frame is carried as the `payload` blob of a normal BRK1
+request (`kind = "media.stream.v1"`); it does not replace the BRK1 transport.
+
+### Validation and limits
+
+- Exact magic (`0x4D454431`) and version (`1`) are required.
+- `media_type` must be one of the three listed values and reserved flag bits
+  must be zero.
+- Each length-prefixed string is bounded by `max_string_bytes` (defaults to
+  1024 bytes), and `payload_length` is bounded by `max_payload_bytes`
+  (defaults to 512 KiB).
+- Declared strings and payloads are bounds-checked; truncated frames and any
+  trailing bytes are rejected.
+- Broker requests are additionally subject to the BRK1 frame and payload
+  limits before kind dispatch.
+
+### Broker handling
+
+- A well-formed MED1 frame returns `TaskStatus::Ok` and is echoed as the
+  response `result`, acknowledging validation without side effects.
+- A malformed frame is rejected with `TaskStatus::Rejected` and a structured
+  `error`; it never falls through to inference processing.
+
+### Build/test
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DENABLE_CUDA=OFF -DENABLE_TENSORRT=OFF -DBUILD_BROKER=ON
+cmake --build build -j"$(nproc)"
+ctest --test-dir build --output-on-failure -R 'media_stream_test|broker_service_test'
+```
+
+This repository only owns the MED1 payload contract and the `overhauled`-side
+broker handling of `media.stream.v1`. YuKKi-OS-side encoders and client
+integration must be validated against this byte layout; this repository has
+no direct source dependency on YuKKi-OS.
+
 ## GPU-Backed WASM Sandbox Interoperability (`wasm.task.v1`, `wasm.lifecycle.*`)
 
 When `BrokerRequest::kind` is `wasm.task.v1` or starts with `wasm.lifecycle.`, `request.payload` carries a `WSM1`-encoded binary frame for WebAssembly sandbox execution and safe hotswap management.
@@ -151,5 +217,4 @@ When `BrokerRequest::kind` is `wasm.task.v1` or starts with `wasm.lifecycle.`, `
 - `wasm.lifecycle.v1`: Generic lifecycle message (action specified in WSM1 payload).
 
 For the full wire specification, byte layout, Rust client contract, and safe hotswap sequence, see [docs/WASM_INTEROP.md](WASM_INTEROP.md).
-
 
