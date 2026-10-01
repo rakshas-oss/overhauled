@@ -1,0 +1,124 @@
+Start testing: Oct 01 05:51 UTC
+----------------------------------------------------------
+1/7 Testing: broker_protocol_test
+1/7 Test: broker_protocol_test
+Command: "/home/runner/work/overhauled/overhauled/build-debug/broker_protocol_test"
+Directory: /home/runner/work/overhauled/overhauled/build-debug
+"broker_protocol_test" start time: Oct 01 05:51 UTC
+Output:
+----------------------------------------------------------
+broker_protocol_test passed
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"broker_protocol_test" end time: Oct 01 05:51 UTC
+"broker_protocol_test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/7 Testing: broker_service_test
+2/7 Test: broker_service_test
+Command: "/home/runner/work/overhauled/overhauled/build-debug/broker_service_test"
+Directory: /home/runner/work/overhauled/overhauled/build-debug
+"broker_service_test" start time: Oct 01 05:51 UTC
+Output:
+----------------------------------------------------------
+broker_service_test passed
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"broker_service_test" end time: Oct 01 05:51 UTC
+"broker_service_test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/7 Testing: broker_server_e2e_test
+3/7 Test: broker_server_e2e_test
+Command: "/home/runner/work/overhauled/overhauled/build-debug/broker_server_e2e_test"
+Directory: /home/runner/work/overhauled/overhauled/build-debug
+"broker_server_e2e_test" start time: Oct 01 05:51 UTC
+Output:
+----------------------------------------------------------
+broker_server_e2e_test passed
+<end of output>
+Test time =   0.32 sec
+----------------------------------------------------------
+Test Passed.
+"broker_server_e2e_test" end time: Oct 01 05:51 UTC
+"broker_server_e2e_test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/7 Testing: broker_async_latency_benchmark_test
+4/7 Test: broker_async_latency_benchmark_test
+Command: "/home/runner/work/overhauled/overhauled/build-debug/broker_async_latency_benchmark_test"
+Directory: /home/runner/work/overhauled/overhauled/build-debug
+"broker_async_latency_benchmark_test" start time: Oct 01 05:51 UTC
+Output:
+----------------------------------------------------------
+broker_async_latency_benchmark_test passed
+low_latency wall_ms=0.817499 queue_ms=0.817499 broker_ms=0 throughput_rps=7339.46 payload_bytes=288 handshake_bytes=576
+high_latency wall_ms=300.898 queue_ms=0.897958 broker_ms=300 throughput_rps=19.9403 payload_bytes=288 handshake_bytes=588 cpu_idle_ratio=0.00592227
+<end of output>
+Test time =   0.60 sec
+----------------------------------------------------------
+Test Passed.
+"broker_async_latency_benchmark_test" end time: Oct 01 05:51 UTC
+"broker_async_latency_benchmark_test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/7 Testing: geospatial_frame_test
+5/7 Test: geospatial_frame_test
+Command: "/home/runner/work/overhauled/overhauled/build-debug/geospatial_frame_test"
+Directory: /home/runner/work/overhauled/overhauled/build-debug
+"geospatial_frame_test" start time: Oct 01 05:51 UTC
+Output:
+----------------------------------------------------------
+geospatial_frame_test passed
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"geospatial_frame_test" end time: Oct 01 05:51 UTC
+"geospatial_frame_test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+6/7 Testing: media_stream_test
+6/7 Test: media_stream_test
+Command: "/home/runner/work/overhauled/overhauled/build-debug/media_stream_test"
+Directory: /home/runner/work/overhauled/overhauled/build-debug
+"media_stream_test" start time: Oct 01 05:51 UTC
+Output:
+----------------------------------------------------------
+media_stream_test passed
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"media_stream_test" end time: Oct 01 05:51 UTC
+"media_stream_test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+7/7 Testing: wasm_sandbox_test
+7/7 Test: wasm_sandbox_test
+Command: "/home/runner/work/overhauled/overhauled/build-debug/wasm_sandbox_test"
+Directory: /home/runner/work/overhauled/overhauled/build-debug
+"wasm_sandbox_test" start time: Oct 01 05:51 UTC
+Output:
+----------------------------------------------------------
+Running wasm_sandbox_test...
+  test_task_wire_format passed
+  test_lifecycle_wire_format passed
+  test_hotswap_lifecycle_flow passed
+  test_drain_with_inflight_tasks passed
+  test_broker_service_integration passed
+  test_broker_server_e2e_tcp passed
+All wasm_sandbox_test passed successfully!
+<end of output>
+Test time =   0.29 sec
+----------------------------------------------------------
+Test Passed.
+"wasm_sandbox_test" end time: Oct 01 05:51 UTC
+"wasm_sandbox_test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Oct 01 05:51 UTC
