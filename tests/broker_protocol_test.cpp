@@ -48,6 +48,11 @@ int main() {
     assert(decoded_request.timeout_ms == request.timeout_ms);
     assert(decoded_request.payload == request.payload);
 
+    std::vector<uint8_t> nonzero_reserved_request = encoded_request;
+    nonzero_reserved_request[sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint8_t)] = 1;
+    assert(!decode_request_frame(nonzero_reserved_request, &decoded_request, &error, limits));
+    assert(error == "reserved broker protocol byte must be zero");
+
     std::string timeout_error;
     BrokerRequest invalid_timeout_request = request;
     invalid_timeout_request.timeout_ms = 0;
@@ -96,6 +101,13 @@ int main() {
     assert(decoded_response.selected_gpu == response.selected_gpu);
     assert(decoded_response.latency_ms == response.latency_ms);
     assert(decoded_response.result == response.result);
+
+    std::vector<uint8_t> invalid_status_response = encoded_response;
+    const std::size_t status_offset = sizeof(uint32_t) + sizeof(uint16_t) + 2 * sizeof(uint8_t) +
+                                      sizeof(uint16_t) + response.task_id.size();
+    invalid_status_response[status_offset] = 0xff;
+    assert(!decode_response_frame(invalid_status_response, &decoded_response, &error, limits));
+    assert(error == "invalid broker response status");
 
     std::vector<uint8_t> oversized = encoded_request;
     oversized.resize(limits.max_frame_bytes + 1, 0);

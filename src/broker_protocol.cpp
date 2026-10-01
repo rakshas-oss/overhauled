@@ -143,9 +143,13 @@ bool decode_common_header(const std::vector<uint8_t>& frame,
     uint32_t magic_be = 0;
     uint16_t version_be = 0;
     uint8_t type_raw = 0;
+    uint8_t reserved = 0;
     std::memcpy(&magic_be, frame.data(), sizeof(magic_be));
     std::memcpy(&version_be, frame.data() + sizeof(magic_be), sizeof(version_be));
     std::memcpy(&type_raw, frame.data() + sizeof(magic_be) + sizeof(version_be), sizeof(type_raw));
+    std::memcpy(&reserved,
+                frame.data() + sizeof(magic_be) + sizeof(version_be) + sizeof(type_raw),
+                sizeof(reserved));
 
     *offset = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint8_t) + sizeof(uint8_t);
 
@@ -164,6 +168,12 @@ bool decode_common_header(const std::vector<uint8_t>& frame,
     if (type_raw != static_cast<uint8_t>(expected_type)) {
         if (error != nullptr) {
             *error = "unexpected broker protocol message type";
+        }
+        return false;
+    }
+    if (reserved != 0) {
+        if (error != nullptr) {
+            *error = "reserved broker protocol byte must be zero";
         }
         return false;
     }
@@ -359,6 +369,12 @@ bool decode_response_frame(const std::vector<uint8_t>& frame,
     uint8_t status_raw = 0;
     std::memcpy(&status_raw, frame.data() + offset, sizeof(status_raw));
     offset += sizeof(status_raw);
+    if (status_raw > static_cast<uint8_t>(TaskStatus::Timeout)) {
+        if (error != nullptr) {
+            *error = "invalid broker response status";
+        }
+        return false;
+    }
     response.status = static_cast<TaskStatus>(status_raw);
 
     uint32_t gpu_be = 0;
