@@ -2,6 +2,8 @@
 
 This document defines the wire contract, lifecycle operations, and host/broker interface for executing GPU-backed WebAssembly (WASM) sandbox tasks from **YuKKi-OS** (`rakshas-oss/YuKKi-OS`) on **overhauled** (`rakshas-oss/overhauled`).
 
+The current overhauled software release is v0.4 (`0.4.0`). This release does not change the interoperability wire contracts: BRK1 and WSM1 remain protocol v1.
+
 ---
 
 ## 1. System Boundary and Architectural Scope

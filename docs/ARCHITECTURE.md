@@ -4,6 +4,7 @@
 
 ### Broker Boundary (Interoperability Layer)
 - Accepts versioned broker requests from external control planes
+- Current software release: v0.4 (`0.4.0`); BRK1 remains protocol v1
 - Validates bounded protocol frames and routes tasks to placement/execution
 - Returns structured response status, selected GPU, latency, result, and error fields
 

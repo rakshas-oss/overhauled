@@ -169,18 +169,16 @@ Runtime parameters (CLI overrides):
 
 ## 5. Run & Verify (v0.4)
 
-Start the server and verify the version:
+Start the server and run the example client:
 
 ```bash
 # Start server in background
 ./gpu_runtime_server --port 8080 &
-# Check version (should report v0.4)
-./gpu_runtime_server --version
 # Example test client
 python3 examples/test_tensor_client.py 127.0.0.1 8080
 ```
 
-Expected: `Overhauled GPU Runtime Server v0.4` printed by `--version`.
+The repository and package metadata version is `0.4.0`. The `gpu_runtime_server` target does not currently provide a `--version` option.
 
 ---
 
@@ -216,7 +214,7 @@ backend servers
 
 D. Kubernetes (hyperscale)
 - Use nodeSelectors and device plugin to request GPUs (nvidia.com/gpu)
-- Example deployment (cleaned and using v0.3 image):
+- Example deployment (cleaned and using v0.4 image):
 
 ```yaml
 apiVersion: apps/v1
@@ -237,7 +235,7 @@ spec:
         gpu: "nvidia"
       containers:
       - name: gpu-runtime-server
-        image: rakshas-oss/overhauled:v0.3
+        image: rakshas-oss/overhauled:v0.4
         args: ["--port", "8080"]
         ports:
         - containerPort: 8080
@@ -333,8 +331,8 @@ CUDA Out of Memory
 High latency variance / p99 spikes
 - Diagnosis: check `nvidia-smi -q` for throttling, monitor queue depths, and watch for host-staging in logs
 - Fixes:
-  - Increase batch size slightly or enable NVLink-aware placement (enabled by default in v0.3)
-  - Ensure `GpuTopology::enable_peer_access()` is called during startup (server does this in v0.3)
+  - Increase batch size slightly or enable NVLink-aware placement (enabled by default in v0.4)
+  - Ensure `GpuTopology::enable_peer_access()` is called during startup (server does this in v0.4)
 
 Low GPU utilization
 - Fixes:
@@ -358,10 +356,10 @@ Scaling is near-linear; measure at your payload and concurrency.
 Recommended tests before scaling production:
 - Run multi-client benchmarks from docs/BENCHMARK_RESULTS.md
 - Validate topology with `nvidia-smi topo -m`
-- Verify `./gpu_runtime_server --version` reports v0.3 in the deployed image
+- Verify the deployed image is built from the v0.4 release.
 
 ---
 
 If you want, I can also:
 - Run a YAML linter on the Kubernetes snippet and commit any minor formatting fixes.
-- Update packaging manifests (conanfile.py / vcpkg.json) to set the version-string to 0.3.0.
+- Confirm packaging manifests (conanfile.py / vcpkg.json) use version 0.4.0.

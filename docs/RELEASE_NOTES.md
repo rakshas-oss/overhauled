@@ -2,6 +2,15 @@
 
 Repository: rakshas-oss/overhauled
 
+Version: v0.4
+Date: 2026-10-01
+
+This release aligns project and package metadata at 0.4.0 and refreshes release and interoperability documentation.
+
+Interoperability note: this is a software release bump only. BRK1, WSM1, and NXR1 wire protocol versions remain at v1; no wire-format change is introduced.
+
+---
+
 Version: v0.3
 Date: 2026-08-20
 
@@ -51,4 +60,3 @@ cd overhauled
 Acknowledgements
 
 Thanks to all contributors and benchmark participants. If you have questions about the release, open an issue or join the discussion in the repo.
-

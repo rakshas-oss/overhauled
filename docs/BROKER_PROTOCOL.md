@@ -2,6 +2,8 @@
 
 This repository exposes a broker-facing interoperability boundary for YuKKi-OS control-plane dispatch.
 
+The current software release is v0.4 (`0.4.0`). The BRK1 broker wire protocol remains v1; this release does not change its frame format.
+
 ## Architecture Boundary
 
 - YuKKi-OS: secure control plane and task orchestration
@@ -151,5 +153,4 @@ When `BrokerRequest::kind` is `wasm.task.v1` or starts with `wasm.lifecycle.`, `
 - `wasm.lifecycle.v1`: Generic lifecycle message (action specified in WSM1 payload).
 
 For the full wire specification, byte layout, Rust client contract, and safe hotswap sequence, see [docs/WASM_INTEROP.md](WASM_INTEROP.md).
-
 

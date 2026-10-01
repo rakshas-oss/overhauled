@@ -7,6 +7,7 @@ This guide is for Linux administrators deploying `broker_server` from this repos
 - `overhauled`: GPU topology, placement, and execution plane
 - `YuKKi-OS`: external authenticated control plane
 - interoperability boundary: raw TCP carrying the versioned `BRK1` / protocol version `1` broker frames documented in [BROKER_PROTOCOL.md](BROKER_PROTOCOL.md)
+- current software release: v0.4 (`0.4.0`); the BRK1 wire protocol remains v1
 
 This repository does **not** embed YuKKi-OS and does **not** provide built-in TLS, authentication, or an HTTP health API for the broker.
 

@@ -101,6 +101,8 @@ ctest --output-on-failure
 
 Overhauled is the GPU topology, placement, and execution plane. `rakshas-oss/YuKKi-OS` is an external authenticated control plane. The interoperability boundary is the versioned broker protocol over TCP, not a direct source dependency or embedded runtime integration.
 
+The current software release is v0.4 (`0.4.0`). This release does not change the wire contracts: BRK1, WSM1, and NXR1 remain at protocol version 1.
+
 `YuKKi-OS control plane <-> authenticated proxy / mTLS boundary <-> BRK1 broker protocol <-> overhauled placement/execution`
 
 ### Broker Protocol (BRK1 / version 1)
