@@ -1,13 +1,13 @@
-# Overhauled GPU Runtime - Production Deployment Guide (v0.3)
+# Overhauled GPU Runtime - Production Deployment Guide (v0.4)
 
-This guide is the canonical deployment and operations reference for Overhauled v0.3. It consolidates installation, configuration, deployment strategies, tuning, and troubleshooting for production and development environments.
+This guide is the canonical deployment and operations reference for Overhauled v0.4. It consolidates installation, configuration, deployment strategies, tuning, and troubleshooting for production and development environments.
 
 Table of contents
 1. Architecture Overview
 2. Prerequisites
-3. Installation & Build (checkout v0.3)
+3. Installation & Build (checkout v0.4)
 4. Configuration (config.yaml example)
-5. Run & Verify (v0.3)
+5. Run & Verify (v0.4)
 6. Deployment Strategies (single server, multi-GPU, load-balanced, Kubernetes)
 7. Performance Tuning
 8. Monitoring & Observability
@@ -51,7 +51,7 @@ Hardware (recommended production):
 
 Software
 - OS: Ubuntu 20.04 LTS or later (or comparable Linux)
-- CUDA: 11.8+ (minimum). CUDA 12.0 is recommended and tested for v0.3.
+- CUDA: 11.8+ (minimum). CUDA 12.0 is recommended and tested for v0.4.
 - TensorRT: 8.5+ (compatible with chosen CUDA version). 8.6+ recommended for CUDA 12.
 - CMake: 3.18+
 - Compiler: GCC 9+ (or Clang compatible with C++17)
@@ -64,16 +64,16 @@ Python client dependencies (example):
 
 ---
 
-## 3. Installation & Build (checkout v0.3)
+## 3. Installation & Build (checkout v0.4)
 
-Clone and checkout the v0.3 release tag before building:
+Clone and checkout the v0.4 release tag before building:
 
 ```bash
 git clone https://github.com/rakshas-oss/overhauled.git
 cd overhauled
-# Checkout the release tag (v0.3)
+# Checkout the release tag (v0.4)
 git fetch --tags origin
-git checkout v0.3
+git checkout v0.4
 ```
 
 Install NVIDIA stack (example notes)
@@ -90,7 +90,7 @@ sudo sh cuda_12.0.0_525.60.13_linux.run
 Build from source (example):
 
 ```bash
-# from repository root (after checkout v0.3)
+# from repository root (after checkout v0.4)
 mkdir -p build && cd build
 cmake .. \
   -DCMAKE_BUILD_TYPE=Release \
@@ -167,20 +167,20 @@ Runtime parameters (CLI overrides):
 
 ---
 
-## 5. Run & Verify (v0.3)
+## 5. Run & Verify (v0.4)
 
 Start the server and verify the version:
 
 ```bash
 # Start server in background
 ./gpu_runtime_server --port 8080 &
-# Check version (should report v0.3)
+# Check version (should report v0.4)
 ./gpu_runtime_server --version
 # Example test client
 python3 examples/test_tensor_client.py 127.0.0.1 8080
 ```
 
-Expected: `Overhauled GPU Runtime Server v0.3` printed by `--version`.
+Expected: `Overhauled GPU Runtime Server v0.4` printed by `--version`.
 
 ---
 
@@ -365,4 +365,3 @@ Recommended tests before scaling production:
 If you want, I can also:
 - Run a YAML linter on the Kubernetes snippet and commit any minor formatting fixes.
 - Update packaging manifests (conanfile.py / vcpkg.json) to set the version-string to 0.3.0.
-
