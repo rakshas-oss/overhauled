@@ -68,6 +68,8 @@ All variable fields are length-prefixed and bounded by configured limits.
 - Compute path uses existing ADI compute entrypoint (`default_gpu_compute`)
 - CPU-only deterministic mode is available (`--cpu-only`) for testing and non-GPU nodes
 - `media.stream.v1` carries bounded MED1 video, audio, or generic data chunks; validated chunks are echoed as acknowledgments and are not sent through the inference compute path.
+- For the default inference/compute path, `payload` is a packed array of IEEE-754 binary64 values in big-endian byte order. The response `result` uses the same representation.
+- `timeout_ms` is the request processing deadline. If processing reaches the deadline, the broker returns `timeout` and discards any result. Work already executing cannot be preempted and may finish before the timeout response is sent.
 
 ## Geospatial Frame Interoperability (`geospatial.frame.v1`)
 
@@ -217,4 +219,3 @@ When `BrokerRequest::kind` is `wasm.task.v1` or starts with `wasm.lifecycle.`, `
 - `wasm.lifecycle.v1`: Generic lifecycle message (action specified in WSM1 payload).
 
 For the full wire specification, byte layout, Rust client contract, and safe hotswap sequence, see [docs/WASM_INTEROP.md](WASM_INTEROP.md).
-

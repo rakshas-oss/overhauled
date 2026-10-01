@@ -13,14 +13,27 @@ namespace {
 
 std::vector<uint8_t> pack_doubles(const std::array<double, 3>& values) {
     std::vector<uint8_t> payload(values.size() * sizeof(double));
-    std::memcpy(payload.data(), values.data(), payload.size());
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        uint64_t bits = 0;
+        std::memcpy(&bits, &values[i], sizeof(bits));
+        for (std::size_t byte = 0; byte < sizeof(double); ++byte) {
+            payload[i * sizeof(double) + byte] =
+                static_cast<uint8_t>(bits >> ((sizeof(double) - byte - 1) * 8));
+        }
+    }
     return payload;
 }
 
 std::array<double, 3> unpack_three_doubles(const std::vector<uint8_t>& payload) {
     std::array<double, 3> out{};
     assert(payload.size() == out.size() * sizeof(double));
-    std::memcpy(out.data(), payload.data(), payload.size());
+    for (std::size_t i = 0; i < out.size(); ++i) {
+        uint64_t bits = 0;
+        for (std::size_t byte = 0; byte < sizeof(double); ++byte) {
+            bits = (bits << 8) | payload[i * sizeof(double) + byte];
+        }
+        std::memcpy(&out[i], &bits, sizeof(bits));
+    }
     return out;
 }
 
@@ -45,6 +58,10 @@ int main() {
     req.priority = 5;
     req.timeout_ms = 3000;
     req.payload = pack_doubles({1.0, 2.0, 3.0});
+    assert((req.payload == std::vector<uint8_t>{
+                               0x3F, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                               0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                               0x40, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}));
 
     BrokerResponse ok = service.handle_request(req);
     assert(ok.status == TaskStatus::Ok);
@@ -58,6 +75,20 @@ int main() {
     BrokerResponse bad = service.handle_request(req);
     assert(bad.status == TaskStatus::Error);
     assert(!bad.error.empty());
+
+    {
+        BrokerServiceConfig timeout_config;
+        timeout_config.force_cpu_fallback = true;
+        timeout_config.simulated_latency_ms = 100;
+        BrokerService timeout_service(timeout_config);
+        BrokerRequest timeout_req = req;
+        timeout_req.timeout_ms = 10;
+        timeout_req.payload = pack_doubles({1.0, 2.0, 3.0});
+        const BrokerResponse timed_out = timeout_service.handle_request(timeout_req);
+        assert(timed_out.status == TaskStatus::Timeout);
+        assert(timed_out.result.empty());
+        assert(timed_out.error == "request timed out");
+    }
 
     // geospatial.frame.v1 kind: a well-formed NXR1 payload round trips as Ok.
     {
