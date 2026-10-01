@@ -1,4 +1,5 @@
 #include "broker_service.h"
+#include "geospatial_frame.h"
 
 #include <array>
 #include <cassert>
@@ -56,6 +57,54 @@ int main() {
     BrokerResponse bad = service.handle_request(req);
     assert(bad.status == TaskStatus::Error);
     assert(!bad.error.empty());
+
+    // geospatial.frame.v1 kind: a well-formed NXR1 payload round trips as Ok.
+    {
+        nvlink::geospatial::GeospatialFrame frame;
+        frame.latitude = 10.0;
+        frame.longitude = 20.0;
+        frame.altitude = 30.0;
+        frame.velocity_x = 1.0;
+        frame.velocity_y = 2.0;
+        frame.velocity_z = 3.0;
+        frame.fluidity = 0.5;
+        frame.drag = 0.25;
+        frame.divergence = 0.125;
+        frame.payload = {0xAA, 0xBB};
+
+        std::vector<uint8_t> encoded;
+        std::string error;
+        const bool encode_ok = nvlink::geospatial::encode_nxr1_frame(frame, &encoded, &error);
+        assert(encode_ok);
+
+        BrokerRequest geo_req;
+        geo_req.task_id = "task-geo";
+        geo_req.source = "yukki";
+        geo_req.destination = "overhauled";
+        geo_req.kind = nvlink::geospatial::kGeospatialFrameKind;
+        geo_req.priority = 1;
+        geo_req.timeout_ms = 3000;
+        geo_req.payload = encoded;
+
+        BrokerResponse geo_ok = service.handle_request(geo_req);
+        assert(geo_ok.status == TaskStatus::Ok);
+        assert(geo_ok.error.empty());
+
+        nvlink::geospatial::GeospatialFrame decoded;
+        const bool decode_ok = nvlink::geospatial::decode_nxr1_frame(geo_ok.result, &decoded, &error);
+        assert(decode_ok);
+        assert(decoded.latitude == frame.latitude);
+        assert(decoded.payload == frame.payload);
+
+        // A malformed NXR1 payload (bad magic) must be rejected, not crash
+        // or silently fall through to the double-array compute path.
+        BrokerRequest geo_bad = geo_req;
+        geo_bad.payload = encoded;
+        geo_bad.payload[0] ^= 0xFF;
+        BrokerResponse geo_rejected = service.handle_request(geo_bad);
+        assert(geo_rejected.status == TaskStatus::Rejected);
+        assert(!geo_rejected.error.empty());
+    }
 
     std::cout << "broker_service_test passed\n";
     return 0;

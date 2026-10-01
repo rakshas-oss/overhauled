@@ -32,6 +32,7 @@ public:
 
 private:
     int get_or_assign_client_id(const std::string& source);
+    BrokerResponse handle_geospatial_frame_request(const BrokerRequest& request) const;
 
     BrokerServiceConfig config_;
     bool use_gpu_placement_ = false;
