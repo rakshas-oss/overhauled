@@ -10,12 +10,18 @@ namespace nvlink::broker {
 namespace {
 
 uint64_t host_to_be64(uint64_t value) noexcept {
+    if (htonl(1) == 1) {
+        return value;
+    }
     const uint64_t high = static_cast<uint64_t>(htonl(static_cast<uint32_t>(value >> 32)));
     const uint64_t low = static_cast<uint64_t>(htonl(static_cast<uint32_t>(value & 0xffffffffULL)));
     return (low << 32) | high;
 }
 
 uint64_t be64_to_host(uint64_t value) noexcept {
+    if (ntohl(1) == 1) {
+        return value;
+    }
     const uint64_t high = static_cast<uint64_t>(ntohl(static_cast<uint32_t>(value >> 32)));
     const uint64_t low = static_cast<uint64_t>(ntohl(static_cast<uint32_t>(value & 0xffffffffULL)));
     return (low << 32) | high;
