@@ -1,34 +1,51 @@
-# NVLink-Aware GPU Task Placement Library
+# Overhauled v1.0
 
-A production-ready C++ library for intelligent GPU scheduling using NVLink topology awareness.
+A production-ready C++ library for NVLink-aware GPU task placement, topology-aware scheduling, and broker interoperability.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
+[![Release](https://img.shields.io/badge/Release-v1.0-blueviolet)](#)
+[![Broker](https://img.shields.io/badge/Protocol-BRK1%2Fv1-orange)](#)
 
-## 🎯 Overview
+## Overview
 
-This library provides **NVLink-aware task placement** for GPU task schedulers. Instead of blind round-robin assignment, it:
+Overhauled helps GPU systems place work on the right device with minimal host staging and better tail latency. The library combines:
 
-1. **Detects GPU topology** - Queries NVIDIA driver to identify NVLink, PCIe, and peer access links
-2. **Maintains sticky affinity** - Each client pinned to a home GPU for memory reuse
-3. **Rebalances intelligently** - Offloads backed-up work to NVLink peers (600+ GB/s) instead of PCIe neighbors (16 GB/s), but gracefully falls back to PCIe on older pre-NVLink devices.
-4. **Scales efficiently** - Thread-safe, zero external dependencies, production-proven
-5. **Serves ADI binary protocol traffic** - Optional multi-threaded server built on `nvlink::Placer`
+- NVLink-aware topology detection and peer selection
+- Sticky home-GPU affinity for reuse-friendly scheduling
+- Intelligent fallback from NVLink -> PCIe -> least-loaded GPU
+- Backend dispatch for CPU / GPU / NPU execution decisions
+- A broker protocol for interoperable request/response service flows
 
-## 🚀 Quick Start
+This repository is the placement and execution plane. It does not replace the control plane; instead it exposes a stable, versioned protocol boundary for systems like `rakshas-oss/YuKKi-OS` and other authenticated service meshes.
 
-### Installation
+## What's new in v1.0
+
+Version 1.0 marks the first stable release of the project and includes:
+
+- a stable broker protocol contract (`BRK1` / version 1)
+- production-oriented placement and fallback behavior
+- broader documentation covering operations, deployment, benchmarking, and protocol semantics
+- CPU-only build and test support for CI and non-GPU environments
+- clearer packaging and distribution guidance for Conan, vcpkg, and Homebrew
+
+## Quick start
+
+### Install from source
 
 ```bash
 git clone https://github.com/rakshas-oss/overhauled.git
 cd overhauled
-mkdir build && cd build
-cmake ..
-make
-sudo make install
+mkdir -p build && cd build
+cmake -S .. -B . \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DENABLE_CUDA=OFF \
+  -DENABLE_TENSORRT=OFF \
+  -DBUILD_BROKER=ON
+cmake --build . -j"$(nproc)"
 ```
 
-### Minimal Example
+### Minimal library example
 
 ```cpp
 #include "nvlink_placement.h"
@@ -38,191 +55,80 @@ using namespace nvlink;
 
 int main() {
     auto topo = GpuTopology::detect();
-    topo.print_info();
     topo.enable_peer_access();
 
     Placer placer(topo, 32);
 
-    int home_gpu = placer.assign_home(client_socket);
-    int target_gpu = placer.place(client_socket, [&](int gpu) {
-        return gpu_queues[gpu].size();
+    int home_gpu = placer.assign_home(42);
+    int target_gpu = placer.place(42, [&](int gpu) {
+        return gpu_queue_depth[gpu];
     });
 
-    gpu_queues[target_gpu].enqueue(task);
+    enqueue_task_on_gpu(target_gpu);
     return 0;
 }
 ```
 
-### ADI Server Example
+### Run the broker service in CPU-only mode
 
 ```bash
-cmake -S . -B build -DBUILD_EXAMPLES=ON
-cmake --build build
-./build/example_adi_server 8080 32
+cd build
+./broker_server 9090 --cpu-only
 ```
 
-The ADI server accepts a 4-byte big-endian length prefix followed by a 40-byte payload containing 5 big-endian doubles. It replies with a 13-byte header (`timestamp_ns`, `sequence_id`, `packet_type`) plus a 40-byte payload. The first request receives a Primary packet; later requests receive both Primary and Delta packets sharing the same `sequence_id`, where Delta is `current_result - previous_result`.
+This is useful for CI, non-GPU hosts, and smoke tests while preserving the same protocol contract.
 
-## 📊 Key Features
+## Documentation
 
-- **Sticky Affinity**: Each client pinned to home GPU
-- **NVLink-Aware Rebalancing**: Prefers fast NVLink links over PCIe (gracefully falls back to PCIe on pre-NVLink devices)
-- **Thread-Safe**: Safe for concurrent task dispatch
-- **Customizable Compute**: Supply your own GPU callback or use the default scaling implementation
+- [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md) — v1.0 release summary and migration notes
+- [docs/LIBRARY.md](docs/LIBRARY.md) — API usage and integration guide
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — design and topology view
+- [docs/BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md) — BRK1 broker protocol contract
+- [docs/WASM_INTEROP.md](docs/WASM_INTEROP.md) — WASM interoperability and sandbox boundary notes
+- [docs/SYSADMIN_HOWTO.md](docs/SYSADMIN_HOWTO.md) — Linux deployment and operations guide
+- [docs/BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) — performance benchmarks and latency data
+- [docs/PUBLISHING.md](docs/PUBLISHING.md) — packaging and publishing guide
+- [docs/WHITEPAPER.md](docs/WHITEPAPER.md) — design rationale and background
+- [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) — production deployment guidance
+- [OPERATIONS_RUNBOOK.md](OPERATIONS_RUNBOOK.md) — operational playbook
 
-## 📚 Documentation
-
-- [RELEASE NOTES](docs/RELEASE_NOTES.md) - What changed in recent releases
-- [LIBRARY.md](docs/LIBRARY.md) - API reference and integration guide
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System design
-- [BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md) - Broker interoperability contract and protocol v1
-- [WASM_INTEROP.md](docs/WASM_INTEROP.md) - GPU-backed WASM sandbox interoperability & safe hotswap contract
-- [SYSADMIN_HOWTO.md](docs/SYSADMIN_HOWTO.md) - Linux sysadmin guide for broker deployment and YuKKi-OS interoperability
-- [BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) - Performance benchmarking
-- [PUBLISHING.md](docs/PUBLISHING.md) - Packaging and publishing instructions
-- [WHITEPAPER.md](docs/WHITEPAPER.md) - Design rationale and background
-
-## 🔧 Build
+## Build modes
 
 ```bash
-mkdir build && cd build
-cmake -DENABLE_CUDA=OFF -DENABLE_TENSORRT=OFF ..
-cmake --build .
-ctest --output-on-failure
+# CPU-first / CI friendly
+cmake -S . -B build -DENABLE_CUDA=OFF -DENABLE_TENSORRT=OFF
+
+# Auto-detect CUDA runtime and topology support
+cmake -S . -B build -DENABLE_CUDA=ON -DENABLE_TENSORRT=OFF
+
+# TensorRT runtime server
+cmake -S . -B build -DENABLE_CUDA=ON -DENABLE_TENSORRT=ON -DTENSORRT_ROOT=/path/to/tensorrt
 ```
 
-### Build Modes
+## Key features
 
-- **CPU-first default (CI-friendly)**: `-DENABLE_CUDA=OFF -DENABLE_TENSORRT=OFF`
-- **Auto CUDA detection**: `-DENABLE_CUDA=ON -DENABLE_TENSORRT=OFF`
-- **TensorRT runtime server**: `-DENABLE_CUDA=ON -DENABLE_TENSORRT=ON -DTENSORRT_ROOT=/path/to/tensorrt`
+- Sticky affinity and home-GPU assignment
+- NVLink-aware rebalancing before PCIe fallback
+- Thread-safe placement decisions for concurrent task dispatch
+- Broker protocol support for external control-plane communication
+- CPU-only compatibility for smoke tests and development
 
-## 🔌 Broker Interoperability Boundary
+## Security and operating model
 
-Overhauled is the GPU topology, placement, and execution plane. `rakshas-oss/YuKKi-OS` is an external authenticated control plane. The interoperability boundary is the versioned broker protocol over TCP, not a direct source dependency or embedded runtime integration.
+Overhauled is designed as the execution plane. The broker transport is bounded and versioned, but it is not an authentication layer by itself. Production deployments should place the service behind an authenticated proxy, service mesh, or mTLS boundary and apply network restrictions as appropriate.
 
-`YuKKi-OS control plane <-> authenticated proxy / mTLS boundary <-> BRK1 broker protocol <-> overhauled placement/execution`
+## Performance
 
-### Broker Protocol (BRK1 / version 1)
+- Lower latency than blind round-robin placement
+- Better tail-latency behavior under multi-client load
+- High GPU utilization when topology-aware placement is enabled
 
-Every broker message is sent as:
+## License
 
-1. a 4-byte big-endian frame length
-2. a bounded frame body beginning with:
-   - 4-byte magic `BRK1`
-   - 2-byte big-endian protocol version `1`
-   - 1-byte message type (`1=request`, `2=response`)
-   - 1 reserved byte (`0`)
+MIT License — see [LICENSE](LICENSE).
 
-Request body fields, in order:
-
-- `task_id` (`uint16` length-prefixed string)
-- `source` (`uint16` length-prefixed string)
-- `destination` (`uint16` length-prefixed string)
-- `kind` (`uint16` length-prefixed string)
-- `priority` (`uint8`)
-- `timeout_ms` (`uint32`, big-endian, must be in the range `1..300000` ms)
-- `payload` (`uint32` length-prefixed binary blob)
-
-Response body fields, in order:
-
-- `task_id` (`uint16` length-prefixed string)
-- `status` (`0=ok`, `1=rejected`, `2=error`, `3=timeout`)
-- `selected_gpu` (`int32`; `-1` means CPU fallback)
-- `latency_ms` (`uint64`)
-- `result` (`uint32` length-prefixed binary blob)
-- `error` (`uint16` length-prefixed string)
-
-Default protocol limits are bounded and enforced before routing:
-
-- max frame body: 1 MiB
-- max payload/result blob: 512 KiB
-- max string field: 1024 bytes
-
-Validation rejects invalid magic, unsupported versions, wrong message types, trailing bytes, truncated frames, oversized strings/payloads, empty `task_id` / `source` / `destination` / `kind`, zero timeouts, and timeouts above the five-minute maximum. Out-of-range timeouts are rejected rather than clamped, and the broker does not derive a default from request characteristics. Malformed requests receive structured broker rejections instead of being parsed opportunistically. See [docs/BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md) for the protocol reference.
-
-### Async Tokio/Wasmtime interoperability notes
-
-- YuKKi-OS async clients should keep using the same socket framing model they already use (4-byte big-endian frame length), but the frame body must be BRK1/v1 binary fields documented above.
-- If a YuKKi-OS client still emits JSON `BrokerTask` / `BrokerResult` payloads, that is a protocol mismatch with `broker_server`; those frames will be rejected because `broker_server` expects BRK1/v1 binary request/response bodies, not JSON.
-- `broker_server` now supports bounded in-flight requests per TCP client connection (`max_inflight_per_client`, default `32`) so an async caller can pipeline request frames and correlate responses by `task_id`.
-- For latency benchmarking in CI/CPU-only mode, broker service config includes an optional `simulated_latency_ms` delay path that waits via normal blocking sleep (no busy polling).
-
-### Placement and execution behavior
-
-- `broker_server` is the broker-facing executable built in this repository.
-- `--cpu-only` disables GPU topology detection and always returns `selected_gpu = -1`, which is useful for CI, non-GPU nodes, and deterministic smoke tests.
-- Without `--cpu-only`, the broker detects GPU topology once at startup. Backend selection (below) runs first; only when the GPU backend is chosen does `Placer` pick a GPU using sticky affinity keyed by `source`, then queue-aware placement: home GPU first, then an NVLink-connected peer when beneficial, then least-loaded fallback.
-- On systems without NVLink, placement still works and falls back to PCIe / least-loaded choices rather than requiring NVLink hardware.
-- The default compute path used by current tests/examples expects the request payload to decode as a packed array of `double` values; the higher-level payload contract is otherwise application-specific and must be agreed between YuKKi-OS and the backend workload.
-- `kind = "geospatial.frame.v1"` is a dedicated message kind carrying an NXR1-encoded geospatial frame (big-endian magic/version/geospatial/velocity/flow doubles + length-prefixed opaque payload). See [docs/BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md#geospatial-frame-interoperability-geospatialframev1) for the wire contract, limits, and rejection behavior.
-- `kind = "media.stream.v1"` carries MED1-encoded video, audio, or generic data chunks for bounded broker validation and acknowledgment. See [docs/BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md#videoaudiodata-broadcast-interoperability-mediastreamv1) for the wire layout and handling.
-- `kind = "wasm.task.v1"` and `kind = "wasm.lifecycle.*"` carry WSM1-encoded WASM sandbox tasks and module lifecycle management frames (prepare/register, drain/stop, release/acknowledge) for safe hotswapping. See [docs/WASM_INTEROP.md](docs/WASM_INTEROP.md) for full contract details.
-
-### Backend selection (CPU / GPU / NPU) vs. GPU placement
-
-These are two separate layers:
-
-1. **Backend selection** (`include/backend_dispatch.h`, run in `BrokerService::handle_request`) chooses CPU, GPU, or NPU. **CPU is the default baseline.**
-2. **GPU placement** (`Placer`) only runs after the GPU backend was selected: home GPU -> NVLink peer -> least-loaded GPU.
-
-Tiered fallback order: CPU first; GPU only for data-parallel work above the offload threshold when a GPU is available; NPU only for inference work when an NPU executor is configured, enabled, and available. If an accelerator is unavailable, the request runs on CPU. If accelerator dispatch/execution fails, the request is re-run on CPU only when its `TaskProfile::fallback_safe` is set; otherwise the original error/rejection is returned.
-
-Rules (in order): `--cpu-only` forces CPU; exact-precision, verification-sensitive, and cryptographic profiles stay on CPU unless `accelerator_verified` declares an explicit deterministic implementation; inference + available NPU -> NPU; data-parallel + available GPU + `estimated_bytes >= gpu_offload_threshold_bytes` (or optional flops threshold) -> GPU; otherwise CPU. No concrete NPU executor ships today: implement `NpuExecutor` and set `BrokerServiceConfig::npu_executor` plus `npu_enabled`; without them NPU requests safely run on CPU.
-
-**Compatibility:** the BRK1 wire format is unchanged. The optional `BrokerRequest::profile` is in-process metadata, so existing YuKKi-OS requests carry no profile and run on CPU (`selected_gpu = -1`) unless the operator opts in with `--default-backend gpu` and a GPU is present. `BrokerResponse::backend` / `fell_back_to_cpu` report what ran. WASM task routing is unchanged.
-
-| CLI / config | Default | Meaning |
-| --- | --- | --- |
-| `--cpu-only` / `force_cpu_fallback` | off | Always CPU |
-| `--default-backend cpu\|gpu\|npu` / `default_backend` | `cpu` | Backend for profile-less requests (`gpu` offloads them when a GPU exists; `npu` still needs an inference profile) |
-| `--gpu-offload-threshold BYTES` / `gpu_offload_threshold_bytes` | 1 MiB | Minimum `estimated_bytes` for GPU offload |
-| `--npu-enabled` / `npu_enabled` | off | Allow NPU selection (also needs an executor) |
-
-### Security assumptions and current limitations
-
-- The broker transport is bounded and validated, but it does **not** provide authentication, authorization, or TLS on its own.
-- Production deployments should place it behind an authenticated TCP proxy, mTLS sidecar, or service mesh, and should restrict listener access with normal host/network firewall policy.
-- The server binds on all interfaces (`0.0.0.0`) for the configured port and exposes stdout/stderr logging only.
-- There is no built-in HTTP health endpoint, metrics endpoint, audit log, or native service manager integration in this repository.
-- Overhauled does not vendor YuKKi-OS code; the contract between the repositories is the BRK1/version 1 protocol and shared operational expectations only.
-- **WASM execution boundary**: Overhauled is not a WebAssembly runtime and does not parse or execute WASM bytecode. WASM execution remains solely in the YuKKi-OS host plane (Wasmtime).
-- **Sandbox isolation**: Overhauled does not enforce WASM linear memory boundaries or capability limits; host adapters must validate memory safety before passing buffer descriptors to overhauled.
-- **Hotswap state migration**: Overhauled coordinates GPU placement and safe task drainage across module versions, but does **not** attempt unsafe live GPU memory migration (raw pointers/textures/context) between module versions. State restoration must be handled by the sandbox/host.
-
-For deployment-oriented steps, see [docs/SYSADMIN_HOWTO.md](docs/SYSADMIN_HOWTO.md).
-
-### CPU-only broker build/run/test commands
-
-```bash
-cd /home/runner/work/overhauled/overhauled
-cmake -S . -B build \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DENABLE_CUDA=OFF \
-  -DENABLE_TENSORRT=OFF \
-  -DBUILD_BROKER=ON
-cmake --build build -j"$(nproc)"
-./build/broker_server 9090 --cpu-only
-```
-
-In another shell after build:
-
-```bash
-cd /home/runner/work/overhauled/overhauled/build
-ctest --output-on-failure -R 'broker_(protocol|service|server_e2e|async_latency_benchmark)_test|geospatial_frame_test'
-```
-
-## 📈 Performance
-
-- **27% lower latency** vs blind round-robin
-- **98% better tail latency** (p99)
-- **94%+ GPU utilization** across all devices
-
-## 📄 License
-
-MIT License - see LICENSE file
-
-## 🔗 References
+## References
 
 - [NVIDIA CUDA P2P Documentation](https://docs.nvidia.com/cuda/cuda-runtime-api/)
 - [NVLink Architecture](https://www.nvidia.com/en-us/data-center/nvlink/)
+- [YuKKi-OS](https://github.com/rakshas-oss/YuKKi-OS)
