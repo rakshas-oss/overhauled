@@ -125,6 +125,10 @@ if(BUILD_TESTING AND BUILD_BROKER)
     target_link_libraries(broker_service_test PRIVATE broker_service)
     add_test(NAME broker_service_test COMMAND broker_service_test)
 
+    add_executable(backend_dispatch_test tests/backend_dispatch_test.cpp)
+    target_link_libraries(backend_dispatch_test PRIVATE broker_service)
+    add_test(NAME backend_dispatch_test COMMAND backend_dispatch_test)
+
     add_executable(broker_server_e2e_test tests/broker_server_e2e_test.cpp)
     target_link_libraries(broker_server_e2e_test PRIVATE broker_service Threads::Threads)
     add_test(NAME broker_server_e2e_test COMMAND broker_server_e2e_test)

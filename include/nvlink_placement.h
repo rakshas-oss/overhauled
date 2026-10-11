@@ -39,6 +39,8 @@ class GpuTopology {
 public:
     int num_gpus() const { return num_gpus_; }
     static GpuTopology detect();
+    /// Topology of `num_gpus` PCIe-connected devices without querying hardware (tests/simulation).
+    static GpuTopology synthetic(int num_gpus);
     LinkType link(int from_gpu, int to_gpu) const;
     int bandwidth_hint(int from_gpu, int to_gpu) const;
     int best_nvlink_peer(int gpu) const;
