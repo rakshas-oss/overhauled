@@ -65,4 +65,3 @@ class NVLinkPlacementConan(ConanFile):
         self.cpp_info.includedirs = ["include"]
         # CUDA dependency
         self.cpp_info.system_libs = ["cudart"]
-    
