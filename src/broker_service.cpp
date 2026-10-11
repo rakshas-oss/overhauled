@@ -47,12 +47,24 @@ std::vector<uint8_t> encode_doubles_as_payload(const std::vector<double>& values
     return payload;
 }
 
+// CPU reference implementation of the generic compute kernel.
+std::vector<double> cpu_compute(std::vector<double> values) {
+    for (double& value : values) {
+        value *= 2.0;
+    }
+    return values;
+}
+
 } // namespace
 
 BrokerService::BrokerService(const BrokerServiceConfig& config)
     : config_(config) {
-    if (!config_.force_cpu_fallback && get_gpu_count() > 0) {
-        topology_ = std::make_unique<GpuTopology>(GpuTopology::detect());
+    const int gpu_total = (config_.synthetic_gpu_count >= 0) ? config_.synthetic_gpu_count
+                                                            : get_gpu_count();
+    if (!config_.force_cpu_fallback && gpu_total > 0) {
+        topology_ = std::make_unique<GpuTopology>(
+            config_.synthetic_gpu_count >= 0 ? GpuTopology::synthetic(gpu_total)
+                                             : GpuTopology::detect());
         placer_ = std::make_unique<Placer>(*topology_, config_.backlog_threshold);
         use_gpu_placement_ = true;
         gpu_inflight_.assign(static_cast<std::size_t>(topology_->num_gpus()), 0);
@@ -133,55 +145,104 @@ BrokerResponse BrokerService::handle_request(const BrokerRequest& request) {
         return finish_response(handle_wasm_lifecycle_request(request));
     }
 
-    int selected_gpu = -1;
-    bool incremented_inflight = false;
+    BackendPolicy policy;
+    policy.default_backend = config_.default_backend;
+    policy.gpu_offload_threshold_bytes = config_.gpu_offload_threshold_bytes;
+    policy.gpu_offload_threshold_flops = config_.gpu_offload_threshold_flops;
+    policy.force_cpu = config_.force_cpu_fallback;
+    policy.gpu_available = use_gpu_placement_;
+    policy.npu_available = config_.npu_enabled && config_.npu_executor != nullptr &&
+                           config_.npu_executor->available();
+    const BackendKind backend = select_backend(policy, request.profile);
+    const bool fallback_safe = request.profile.has_value() && request.profile->fallback_safe;
 
     try {
-        if (use_gpu_placement_) {
-            const int client_id = get_or_assign_client_id(request.source);
-            selected_gpu = placer_->place(client_id, [this](int gpu) {
-                std::lock_guard<std::mutex> lock(inflight_mutex_);
-                return gpu_inflight_[static_cast<std::size_t>(gpu)];
-            });
+        const std::vector<double> input = decode_payload_as_doubles(request.payload);
 
-            {
-                std::lock_guard<std::mutex> lock(inflight_mutex_);
-                std::size_t& inflight = gpu_inflight_[static_cast<std::size_t>(selected_gpu)];
-                ++inflight;
-                incremented_inflight = true;
-                if (inflight > config_.max_inflight_per_gpu) {
-                    --inflight;
-                    incremented_inflight = false;
-                    response.status = TaskStatus::Rejected;
-                    response.error = "selected GPU queue is at capacity";
-                    response.selected_gpu = selected_gpu;
+        if (backend == BackendKind::Gpu) {
+            BrokerResponse gpu_response = run_on_gpu(request, input);
+            if (gpu_response.status == TaskStatus::Ok || !fallback_safe) {
+                return finish_response(std::move(gpu_response));
+            }
+            response.fell_back_to_cpu = true;
+        } else if (backend == BackendKind::Npu) {
+            try {
+                response.result = encode_doubles_as_payload(config_.npu_executor->run(input));
+                response.status = TaskStatus::Ok;
+                response.backend = BackendKind::Npu;
+                return finish_response(std::move(response));
+            } catch (const std::exception& ex) {
+                if (!fallback_safe) {
+                    response.status = TaskStatus::Error;
+                    response.error = ex.what();
+                    response.backend = BackendKind::Npu;
                     return finish_response(std::move(response));
                 }
+                response.fell_back_to_cpu = true;
             }
         }
 
-        const std::vector<double> input = decode_payload_as_doubles(request.payload);
-        const int compute_gpu = (selected_gpu >= 0) ? selected_gpu : 0;
-        const std::vector<double> output = nvlink::adi::default_gpu_compute(input, compute_gpu);
-
+        // CPU baseline: also the safe fallback for failed accelerator dispatch.
         response.status = TaskStatus::Ok;
+        response.backend = BackendKind::Cpu;
+        response.selected_gpu = -1;
+        response.result = encode_doubles_as_payload(cpu_compute(input));
+    } catch (const std::exception& ex) {
+        response.status = TaskStatus::Error;
+        response.error = ex.what();
+    }
+
+    return finish_response(std::move(response));
+}
+
+BrokerResponse BrokerService::run_on_gpu(const BrokerRequest& request,
+                                         const std::vector<double>& input) {
+    BrokerResponse response;
+    response.task_id = request.task_id;
+    response.backend = BackendKind::Gpu;
+
+    int selected_gpu = -1;
+    bool incremented_inflight = false;
+    try {
+        const int client_id = get_or_assign_client_id(request.source);
+        selected_gpu = placer_->place(client_id, [this](int gpu) {
+            std::lock_guard<std::mutex> lock(inflight_mutex_);
+            return gpu_inflight_[static_cast<std::size_t>(gpu)];
+        });
         response.selected_gpu = selected_gpu;
+
+        {
+            std::lock_guard<std::mutex> lock(inflight_mutex_);
+            std::size_t& inflight = gpu_inflight_[static_cast<std::size_t>(selected_gpu)];
+            ++inflight;
+            incremented_inflight = true;
+            if (inflight > config_.max_inflight_per_gpu) {
+                --inflight;
+                incremented_inflight = false;
+                response.status = TaskStatus::Rejected;
+                response.error = "selected GPU queue is at capacity";
+                return response;
+            }
+        }
+
+        const std::vector<double> output = config_.gpu_compute_fn
+                                               ? config_.gpu_compute_fn(input, selected_gpu)
+                                               : nvlink::adi::default_gpu_compute(input, selected_gpu);
+        response.status = TaskStatus::Ok;
         response.result = encode_doubles_as_payload(output);
     } catch (const std::exception& ex) {
         response.status = TaskStatus::Error;
         response.error = ex.what();
-        response.selected_gpu = selected_gpu;
     }
 
-    if (incremented_inflight && selected_gpu >= 0) {
+    if (incremented_inflight) {
         std::lock_guard<std::mutex> lock(inflight_mutex_);
         std::size_t& inflight = gpu_inflight_[static_cast<std::size_t>(selected_gpu)];
         if (inflight > 0) {
             --inflight;
         }
     }
-
-    return finish_response(std::move(response));
+    return response;
 }
 
 bool BrokerService::has_gpu_topology() const noexcept {
