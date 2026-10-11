@@ -2,39 +2,32 @@
 
 Repository: rakshas-oss/overhauled
 
-Version: v0.3
-Date: 2026-08-20
+Version: v1.0.0
+Date: 2026-10-11
 
-This release packages improvements to topology detection, placement policy, performance, packaging, and documentation.
+This release formalizes the project as a stable, production-facing GPU placement and broker interoperability library. It consolidates the public contract, expands the documentation set, and makes the CPU-only and GPU-capable operational modes clearer for both development and production users.
 
 Highlights
 
-- NVLink-aware placement: improved rebalancing to prefer NVLink peers for reduced host-staging and lower tail latency.
-- Performance: validated improvements from benchmarks — ~27% lower mean latency and up to 98% better p99 tail latency versus blind round-robin on multi-client workloads (see docs/BENCHMARK_RESULTS.md).
-- API stability: Placer and GpuTopology APIs stabilized; added clearer documentation for GpuTopology::enable_peer_access and Placer configuration (backlog_threshold).
-- Thread-safety: confirmed immutable GpuTopology and concurrent-safe placement decisions; reduced locking in Placer where possible.
-- Packaging: updated package manifests for Conan, vcpkg and Homebrew; portfile and formula included in packaging/.
-- Documentation: consolidated docs, added this release notes file, fixed README links and updated docs index.
+- Stable placement policy: NVLink-aware home-GPU affinity, peer-aware rebalancing, and deterministic fallback behavior.
+- Broker interoperability: BRK1/v1 protocol is the supported external contract for request/response dispatch and service integration.
+- CPU-only compatibility: the broker service can run without CUDA for smoke tests, CI, and non-GPU environments.
+- Packaging readiness: Conan, vcpkg, and Homebrew guidance is aligned with the release version and publish flow.
+- Documentation refresh: installation, API usage, deployment, operations, protocol, and benchmarking references are aligned to the v1.0 release.
 
 Notable changes
 
-- New/changed files
-  - docs/RELEASE_NOTES.md (this file)
-  - README.md (links to release notes, fixed doc filenames)
-
-- API
-  - Placer::place(...) behaviour documented more clearly when home GPU is at threshold.
-  - GpuTopology::enable_peer_access() noted as required once after detect() to enable P2P where applicable.
-
-Bug fixes
-
-- Fix: Avoid fall-through to host-staging when an NVLink peer is available but was previously missed due to tie-breaking logic.
-- Fix: Corrected README doc links and removed references to non-existent docs (BENCHMARKING.md / NVLINK_PLACEMENT.md).
+- README.md refreshed as a v1.0 overview with quick-start guidance and release-oriented documentation links.
+- docs/LIBRARY.md updated with the stable public API model and the current broker and placement flow.
+- docs/PUBLISHING.md updated to use version 1.0.0 package metadata and release checklists.
+- DEPLOYMENT_GUIDE.md updated to reference the v1.0 operational model and CPU/GPU build modes.
+- The broker protocol and execution boundary are documented as the default supported integration contract for external systems.
 
 Upgrade notes
 
-- If you previously relied on internal topology representations, switch to the public GpuTopology API — internal layout may change in minor releases.
-- Re-run packaging/publish steps after bumping version strings in conanfile.py and vcpkg.json when publishing.
+- v1.0 follows the stable public API surface used by the placement library and broker service; it is the recommended baseline for new integrations.
+- Users migrating from earlier v0.3 docs or examples should treat the BRK1/v1 contract as the canonical interface and use the current release notes and docs as the source of truth.
+- For packaging, update any downstream version references to 1.0.0 before publishing or tagging a release build.
 
 How to get the release
 
@@ -43,12 +36,12 @@ How to get the release
 ```bash
 git clone https://github.com/rakshas-oss/overhauled.git
 cd overhauled
-# checkout tag v0.3 when available
+git fetch --tags origin
+git checkout v1.0.0
 ```
 
-- Package managers: see packaging/README.md and docs/PUBLISHING.md for current packaging status (Conan, vcpkg, Homebrew supported).
+- Package managers: see packaging/README.md and docs/PUBLISHING.md for current packaging guidance.
 
 Acknowledgements
 
-Thanks to all contributors and benchmark participants. If you have questions about the release, open an issue or join the discussion in the repo.
-
+Thanks to all contributors, operators, and benchmark participants who helped stabilize the v1.0 release. If you have questions, open an issue or use the repository discussion and operations guides.
