@@ -1,0 +1,8 @@
+# NumPy (BSD-3-Clause), used by the Python examples and analysis scripts.
+numpy>=1.21,<3
+# PyTorch (BSD-3-Clause), used by the TensorRT example and benchmark.
+torch>=1.12,<3
+# ONNX (Apache-2.0), required by torch.onnx.export in the example client.
+onnx>=1.12,<2
+# Conan (MIT), needed to run the package recipe.
+conan>=2,<3

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2024 NVLink Placement Contributors
+
 #pragma once
 // ADI Protocol Server - GPU-Accelerated Binary Protocol Handler
 // Integrates NVLink-aware task placement with the ADI binary protocol.

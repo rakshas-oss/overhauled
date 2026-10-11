@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024 NVLink Placement Contributors
+
 """
 Test client for the Tensor Schema Integration Server.
 Demonstrates ONNX model loading and inference over the ADI protocol.

@@ -165,3 +165,11 @@ When a client sends `EXECUTE_INFERENCE`:
 - [ ] Model versioning and A/B testing
 - [ ] Telemetry and performance profiling
 - [ ] Java/C# client bindings
+
+## Third-party licences
+
+CUDA Toolkit (including cudart/cuBLAS) and TensorRT (including NvInfer and
+nvonnxparser) are optional, user-supplied proprietary NVIDIA components. They
+are not covered by this project's MIT License and are not redistributed here.
+Users who install or use them must accept and comply with NVIDIA's applicable
+terms. See [NOTICE](NOTICE) for official licensing links.

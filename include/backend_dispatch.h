@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2024 NVLink Placement Contributors
+
 #pragma once
 // CPU/GPU/NPU backend selection. This layer runs *before* Placer: it decides
 // which kind of backend executes a task; Placer only chooses which GPU once

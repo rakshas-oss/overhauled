@@ -127,6 +127,14 @@ Overhauled is designed as the execution plane. The broker transport is bounded a
 
 MIT License — see [LICENSE](LICENSE).
 
+## Third-party licences
+
+CUDA Toolkit (including cudart/cuBLAS) and TensorRT (including NvInfer and
+nvonnxparser) are optional, user-supplied proprietary NVIDIA components. They
+are not covered by this project's MIT License and are not redistributed here.
+Users who install or use them must accept and comply with NVIDIA's applicable
+terms. See [NOTICE](NOTICE) for official licensing links.
+
 ## References
 
 - [NVIDIA CUDA P2P Documentation](https://docs.nvidia.com/cuda/cuda-runtime-api/)

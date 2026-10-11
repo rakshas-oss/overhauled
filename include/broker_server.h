@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2024 NVLink Placement Contributors
+
 #pragma once
 
 #include "broker_service.h"

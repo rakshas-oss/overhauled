@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2024 NVLink Placement Contributors
+
 #include "geospatial_frame.h"
 
 #include <arpa/inet.h>

@@ -212,8 +212,8 @@ Before each release:
 - [ ] Update version in `vcpkg.json`
 - [ ] Update version in `nvlink-placement.rb`
 - [ ] Update `README.md` with latest features
-- [ ] Create git tag: `git tag -a v1.0.0 -m "Release 1.0.0"`
-- [ ] Push tag: `git push origin v1.0.0`
+- [ ] Create a release tag for the version in `CMakeLists.txt` (the current 1.0.0 release tag is `v1`)
+- [ ] Push the corresponding release tag
 - [ ] GitHub release automatically created
 - [ ] Submit PRs to Conan Center Index
 - [ ] Submit PRs to vcpkg

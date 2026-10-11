@@ -1,13 +1,13 @@
-# Overhauled GPU Runtime - Production Deployment Guide (v0.3)
+# Overhauled GPU Runtime - Production Deployment Guide (v1.0.0)
 
-This guide is the canonical deployment and operations reference for Overhauled v0.3. It consolidates installation, configuration, deployment strategies, tuning, and troubleshooting for production and development environments.
+This guide is the canonical deployment and operations reference for Overhauled 1.0.0. It consolidates installation, configuration, deployment strategies, tuning, and troubleshooting for production and development environments.
 
 Table of contents
 1. Architecture Overview
 2. Prerequisites
-3. Installation & Build (checkout v0.3)
+3. Installation & Build (checkout v1)
 4. Configuration (config.yaml example)
-5. Run & Verify (v0.3)
+5. Run & Verify (v1.0.0)
 6. Deployment Strategies (single server, multi-GPU, load-balanced, Kubernetes)
 7. Performance Tuning
 8. Monitoring & Observability
@@ -51,7 +51,7 @@ Hardware (recommended production):
 
 Software
 - OS: Ubuntu 20.04 LTS or later (or comparable Linux)
-- CUDA: 11.8+ (minimum). CUDA 12.0 is recommended and tested for v0.3.
+- CUDA: 11.8+ (minimum). CUDA 12.0 is recommended.
 - TensorRT: 8.5+ (compatible with chosen CUDA version). 8.6+ recommended for CUDA 12.
 - CMake: 3.18+
 - Compiler: GCC 9+ (or Clang compatible with C++17)
@@ -64,16 +64,16 @@ Python client dependencies (example):
 
 ---
 
-## 3. Installation & Build (checkout v0.3)
+## 3. Installation & Build (checkout v1)
 
-Clone and checkout the v0.3 release tag before building:
+Clone and checkout the v1 release tag (project version 1.0.0) before building:
 
 ```bash
 git clone https://github.com/rakshas-oss/overhauled.git
 cd overhauled
-# Checkout the release tag (v0.3)
+# Checkout the release tag (v1)
 git fetch --tags origin
-git checkout v0.3
+git checkout v1
 ```
 
 Install NVIDIA stack (example notes)
@@ -90,7 +90,7 @@ sudo sh cuda_12.0.0_525.60.13_linux.run
 Build from source (example):
 
 ```bash
-# from repository root (after checkout v0.3)
+# from repository root (after checkout v1)
 mkdir -p build && cd build
 cmake .. \
   -DCMAKE_BUILD_TYPE=Release \
@@ -167,20 +167,20 @@ Runtime parameters (CLI overrides):
 
 ---
 
-## 5. Run & Verify (v0.3)
+## 5. Run & Verify (v1.0.0)
 
 Start the server and verify the version:
 
 ```bash
 # Start server in background
 ./gpu_runtime_server --port 8080 &
-# Check version (should report v0.3)
+# Check version (should report v1.0.0)
 ./gpu_runtime_server --version
 # Example test client
 python3 examples/test_tensor_client.py 127.0.0.1 8080
 ```
 
-Expected: `Overhauled GPU Runtime Server v0.3` printed by `--version`.
+Expected: `Overhauled GPU Runtime Server v1.0.0` printed by `--version`.
 
 ---
 
@@ -216,7 +216,7 @@ backend servers
 
 D. Kubernetes (hyperscale)
 - Use nodeSelectors and device plugin to request GPUs (nvidia.com/gpu)
-- Example deployment (cleaned and using v0.3 image):
+- Example deployment (using the 1.0.0 image):
 
 ```yaml
 apiVersion: apps/v1
@@ -237,7 +237,7 @@ spec:
         gpu: "nvidia"
       containers:
       - name: gpu-runtime-server
-        image: rakshas-oss/overhauled:v0.3
+        image: rakshas-oss/overhauled:v1.0.0
         args: ["--port", "8080"]
         ports:
         - containerPort: 8080
@@ -333,8 +333,8 @@ CUDA Out of Memory
 High latency variance / p99 spikes
 - Diagnosis: check `nvidia-smi -q` for throttling, monitor queue depths, and watch for host-staging in logs
 - Fixes:
-  - Increase batch size slightly or enable NVLink-aware placement (enabled by default in v0.3)
-  - Ensure `GpuTopology::enable_peer_access()` is called during startup (server does this in v0.3)
+  - Increase batch size slightly or enable NVLink-aware placement (enabled by default in 1.0.0)
+  - Ensure `GpuTopology::enable_peer_access()` is called during startup (server does this in 1.0.0)
 
 Low GPU utilization
 - Fixes:
@@ -358,11 +358,18 @@ Scaling is near-linear; measure at your payload and concurrency.
 Recommended tests before scaling production:
 - Run multi-client benchmarks from docs/BENCHMARK_RESULTS.md
 - Validate topology with `nvidia-smi topo -m`
-- Verify `./gpu_runtime_server --version` reports v0.3 in the deployed image
+- Verify `./gpu_runtime_server --version` reports v1.0.0 in the deployed image
 
 ---
 
 If you want, I can also:
 - Run a YAML linter on the Kubernetes snippet and commit any minor formatting fixes.
-- Update packaging manifests (conanfile.py / vcpkg.json) to set the version-string to 0.3.0.
+- Keep package metadata aligned with the 1.0.0 version in `CMakeLists.txt`.
 
+## Third-party licences
+
+CUDA Toolkit (including cudart/cuBLAS) and TensorRT (including NvInfer and
+nvonnxparser) are optional, user-supplied proprietary NVIDIA components. They
+are not covered by this project's MIT License and are not redistributed here.
+Users who install or use them must accept and comply with NVIDIA's applicable
+terms. See [NOTICE](NOTICE) for official licensing links.

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2024 NVLink Placement Contributors
+
 #pragma once
 // NVLink-Aware GPU Task Placement Library
 // Public API for topology detection and NVLink-aware task placement.
