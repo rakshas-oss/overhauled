@@ -1,5 +1,6 @@
 #include "broker_service.h"
 #include "geospatial_frame.h"
+#include "media_stream.h"
 
 #include <array>
 #include <cassert>
@@ -12,14 +13,27 @@ namespace {
 
 std::vector<uint8_t> pack_doubles(const std::array<double, 3>& values) {
     std::vector<uint8_t> payload(values.size() * sizeof(double));
-    std::memcpy(payload.data(), values.data(), payload.size());
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        uint64_t bits = 0;
+        std::memcpy(&bits, &values[i], sizeof(bits));
+        for (std::size_t byte = 0; byte < sizeof(double); ++byte) {
+            payload[i * sizeof(double) + byte] =
+                static_cast<uint8_t>(bits >> ((sizeof(double) - byte - 1) * 8));
+        }
+    }
     return payload;
 }
 
 std::array<double, 3> unpack_three_doubles(const std::vector<uint8_t>& payload) {
     std::array<double, 3> out{};
     assert(payload.size() == out.size() * sizeof(double));
-    std::memcpy(out.data(), payload.data(), payload.size());
+    for (std::size_t i = 0; i < out.size(); ++i) {
+        uint64_t bits = 0;
+        for (std::size_t byte = 0; byte < sizeof(double); ++byte) {
+            bits = (bits << 8) | payload[i * sizeof(double) + byte];
+        }
+        std::memcpy(&out[i], &bits, sizeof(bits));
+    }
     return out;
 }
 
@@ -44,6 +58,10 @@ int main() {
     req.priority = 5;
     req.timeout_ms = 3000;
     req.payload = pack_doubles({1.0, 2.0, 3.0});
+    assert((req.payload == std::vector<uint8_t>{
+                               0x3F, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                               0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                               0x40, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}));
 
     BrokerResponse ok = service.handle_request(req);
     assert(ok.status == TaskStatus::Ok);
@@ -53,10 +71,35 @@ int main() {
     assert(output[1] == 4.0);
     assert(output[2] == 6.0);
 
+    BrokerRequest invalid_timeout_req = req;
+    invalid_timeout_req.timeout_ms = 0;
+    BrokerResponse zero_timeout = service.handle_request(invalid_timeout_req);
+    assert(zero_timeout.status == TaskStatus::Rejected);
+    assert(zero_timeout.error == "timeout_ms must be greater than zero");
+
+    invalid_timeout_req.timeout_ms = BROKER_MAX_TIMEOUT_MS + 1;
+    BrokerResponse oversized_timeout = service.handle_request(invalid_timeout_req);
+    assert(oversized_timeout.status == TaskStatus::Rejected);
+    assert(oversized_timeout.error == "timeout_ms exceeds maximum of 300000 ms");
+
     req.payload = {0x01, 0x02, 0x03};
     BrokerResponse bad = service.handle_request(req);
     assert(bad.status == TaskStatus::Error);
     assert(!bad.error.empty());
+
+    {
+        BrokerServiceConfig timeout_config;
+        timeout_config.force_cpu_fallback = true;
+        timeout_config.simulated_latency_ms = 100;
+        BrokerService timeout_service(timeout_config);
+        BrokerRequest timeout_req = req;
+        timeout_req.timeout_ms = 10;
+        timeout_req.payload = pack_doubles({1.0, 2.0, 3.0});
+        const BrokerResponse timed_out = timeout_service.handle_request(timeout_req);
+        assert(timed_out.status == TaskStatus::Timeout);
+        assert(timed_out.result.empty());
+        assert(timed_out.error == "request timed out");
+    }
 
     // geospatial.frame.v1 kind: a well-formed NXR1 payload round trips as Ok.
     {
@@ -104,6 +147,50 @@ int main() {
         BrokerResponse geo_rejected = service.handle_request(geo_bad);
         assert(geo_rejected.status == TaskStatus::Rejected);
         assert(!geo_rejected.error.empty());
+    }
+
+    {
+        nvlink::media::MediaStreamFrame frame;
+        frame.media_type = nvlink::media::MediaType::Video;
+        frame.codec = "h264";
+        frame.stream_id = "camera-1";
+        frame.sequence_number = 7;
+        frame.timestamp_ns = 1234;
+        frame.width = 640;
+        frame.height = 480;
+        frame.is_keyframe = true;
+        frame.payload = {0x01, 0x02, 0x03};
+
+        std::vector<uint8_t> encoded;
+        std::string error;
+        const bool encode_ok = nvlink::media::encode_media_stream_frame(frame, &encoded, &error);
+        assert(encode_ok);
+
+        BrokerRequest media_req;
+        media_req.task_id = "task-media";
+        media_req.source = "yukki";
+        media_req.destination = "overhauled";
+        media_req.kind = nvlink::media::kMediaStreamKind;
+        media_req.priority = 1;
+        media_req.timeout_ms = 3000;
+        media_req.payload = encoded;
+
+        const BrokerResponse media_ok = service.handle_request(media_req);
+        assert(media_ok.status == TaskStatus::Ok);
+        assert(media_ok.error.empty());
+        nvlink::media::MediaStreamFrame decoded;
+        const bool decode_ok = nvlink::media::decode_media_stream_frame(
+            media_ok.result, &decoded, &error);
+        assert(decode_ok);
+        assert(decoded.stream_id == frame.stream_id);
+        assert(decoded.sequence_number == frame.sequence_number);
+        assert(decoded.payload == frame.payload);
+
+        BrokerRequest media_bad = media_req;
+        media_bad.payload[0] ^= 0xFF;
+        const BrokerResponse media_rejected = service.handle_request(media_bad);
+        assert(media_rejected.status == TaskStatus::Rejected);
+        assert(!media_rejected.error.empty());
     }
 
     std::cout << "broker_service_test passed\n";

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "backend_dispatch.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -9,6 +11,7 @@ namespace nvlink::broker {
 
 constexpr uint32_t BROKER_MAGIC = 0x42524b31U; // BRK1
 constexpr uint16_t BROKER_PROTOCOL_VERSION = 1;
+constexpr uint32_t BROKER_MAX_TIMEOUT_MS = 300000;
 
 enum class MessageType : uint8_t {
     Request = 1,
@@ -36,6 +39,8 @@ struct BrokerRequest {
     uint8_t priority = 0;
     uint32_t timeout_ms = 0;
     std::vector<uint8_t> payload;
+    // In-process only (not part of the BRK1 frame); absent means CPU by default.
+    std::optional<TaskProfile> profile;
 };
 
 struct BrokerResponse {
@@ -45,6 +50,9 @@ struct BrokerResponse {
     uint64_t latency_ms = 0;
     std::vector<uint8_t> result;
     std::string error;
+    // In-process only (not encoded in the BRK1 frame).
+    BackendKind backend = BackendKind::Cpu;
+    bool fell_back_to_cpu = false;
 };
 
 bool validate_request(const BrokerRequest& request, std::string* error, const ProtocolLimits& limits);

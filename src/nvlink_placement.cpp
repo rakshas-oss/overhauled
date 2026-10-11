@@ -101,6 +101,21 @@ GpuTopology GpuTopology::detect() {
     return topo;
 }
 
+GpuTopology GpuTopology::synthetic(int num_gpus) {
+    if (num_gpus <= 0) {
+        throw NVLinkError("Synthetic topology requires at least one GPU.");
+    }
+    GpuTopology topo;
+    topo.num_gpus_ = num_gpus;
+    topo.link_kind_.assign(num_gpus, std::vector<LinkType>(num_gpus, LinkType::PCIE));
+    topo.link_bandwidth_.assign(num_gpus, std::vector<int>(num_gpus, 10));
+    for (int i = 0; i < num_gpus; ++i) {
+        topo.link_kind_[i][i] = LinkType::SELF;
+        topo.link_bandwidth_[i][i] = 1000;
+    }
+    return topo;
+}
+
 LinkType GpuTopology::link(int from_gpu, int to_gpu) const {
     if (from_gpu < 0 || from_gpu >= num_gpus_ ||
         to_gpu < 0 || to_gpu >= num_gpus_) {

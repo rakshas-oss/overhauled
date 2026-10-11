@@ -10,12 +10,18 @@ namespace nvlink::broker {
 namespace {
 
 uint64_t host_to_be64(uint64_t value) noexcept {
+    if (htonl(1) == 1) {
+        return value;
+    }
     const uint64_t high = static_cast<uint64_t>(htonl(static_cast<uint32_t>(value >> 32)));
     const uint64_t low = static_cast<uint64_t>(htonl(static_cast<uint32_t>(value & 0xffffffffULL)));
     return (low << 32) | high;
 }
 
 uint64_t be64_to_host(uint64_t value) noexcept {
+    if (ntohl(1) == 1) {
+        return value;
+    }
     const uint64_t high = static_cast<uint64_t>(ntohl(static_cast<uint32_t>(value >> 32)));
     const uint64_t low = static_cast<uint64_t>(ntohl(static_cast<uint32_t>(value & 0xffffffffULL)));
     return (low << 32) | high;
@@ -143,9 +149,13 @@ bool decode_common_header(const std::vector<uint8_t>& frame,
     uint32_t magic_be = 0;
     uint16_t version_be = 0;
     uint8_t type_raw = 0;
+    uint8_t reserved = 0;
     std::memcpy(&magic_be, frame.data(), sizeof(magic_be));
     std::memcpy(&version_be, frame.data() + sizeof(magic_be), sizeof(version_be));
     std::memcpy(&type_raw, frame.data() + sizeof(magic_be) + sizeof(version_be), sizeof(type_raw));
+    std::memcpy(&reserved,
+                frame.data() + sizeof(magic_be) + sizeof(version_be) + sizeof(type_raw),
+                sizeof(reserved));
 
     *offset = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint8_t) + sizeof(uint8_t);
 
@@ -164,6 +174,12 @@ bool decode_common_header(const std::vector<uint8_t>& frame,
     if (type_raw != static_cast<uint8_t>(expected_type)) {
         if (error != nullptr) {
             *error = "unexpected broker protocol message type";
+        }
+        return false;
+    }
+    if (reserved != 0) {
+        if (error != nullptr) {
+            *error = "reserved broker protocol byte must be zero";
         }
         return false;
     }
@@ -200,6 +216,12 @@ bool validate_request(const BrokerRequest& request, std::string* error, const Pr
     if (request.timeout_ms == 0) {
         if (error != nullptr) {
             *error = "timeout_ms must be greater than zero";
+        }
+        return false;
+    }
+    if (request.timeout_ms > BROKER_MAX_TIMEOUT_MS) {
+        if (error != nullptr) {
+            *error = "timeout_ms exceeds maximum of 300000 ms";
         }
         return false;
     }
@@ -353,6 +375,12 @@ bool decode_response_frame(const std::vector<uint8_t>& frame,
     uint8_t status_raw = 0;
     std::memcpy(&status_raw, frame.data() + offset, sizeof(status_raw));
     offset += sizeof(status_raw);
+    if (status_raw > static_cast<uint8_t>(TaskStatus::Timeout)) {
+        if (error != nullptr) {
+            *error = "invalid broker response status";
+        }
+        return false;
+    }
     response.status = static_cast<TaskStatus>(status_raw);
 
     uint32_t gpu_be = 0;

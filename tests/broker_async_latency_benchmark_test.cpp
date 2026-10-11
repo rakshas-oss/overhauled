@@ -53,7 +53,14 @@ bool write_exact(int socket_fd, const void* buffer, std::size_t size) {
 
 std::vector<uint8_t> pack_doubles(const std::array<double, 3>& values) {
     std::vector<uint8_t> payload(values.size() * sizeof(double));
-    std::memcpy(payload.data(), values.data(), payload.size());
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        uint64_t bits = 0;
+        std::memcpy(&bits, &values[i], sizeof(bits));
+        for (std::size_t byte = 0; byte < sizeof(double); ++byte) {
+            payload[i * sizeof(double) + byte] =
+                static_cast<uint8_t>(bits >> ((sizeof(double) - byte - 1) * 8));
+        }
+    }
     return payload;
 }
 

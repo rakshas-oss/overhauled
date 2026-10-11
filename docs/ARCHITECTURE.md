@@ -8,6 +8,9 @@
 - Validates bounded protocol frames and routes tasks to placement/execution
 - Returns structured response status, selected GPU, latency, result, and error fields
 
+### Backend Dispatcher (CPU/GPU/NPU)
+Runs before `Placer` (`include/backend_dispatch.h`). CPU is the default baseline; GPU is selected only for data-parallel work above the offload threshold when a GPU exists; NPU only for inference work with an available `NpuExecutor` (none ships today, so NPU requests fall back to CPU). `--cpu-only` forces CPU; exact-precision, verification-sensitive, and cryptographic work stays on CPU unless an explicit verified accelerator path is declared. Failed accelerator execution retries on CPU only when the profile is `fallback_safe`. Requests without profile metadata (all existing BRK1 clients) run on CPU. Backend selection (CPU/GPU/NPU) is distinct from GPU placement below.
+
 ### GpuTopology
 Queries CUDA runtime to determine GPU interconnect:
 - NVLink (fast, 600+ GB/s)
@@ -15,6 +18,7 @@ Queries CUDA runtime to determine GPU interconnect:
 - No peer access (must stage through host)
 
 ### Placer
+GPU-only placement, invoked once the GPU backend was chosen (home GPU -> NVLink peer -> least-loaded GPU).
 Maintains task placement policy:
 1. **Sticky Affinity**: Each client pinned to home GPU
 2. **NVLink-Aware Rebalancing**: Offload to fast peers when home GPU backed up

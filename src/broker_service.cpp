@@ -2,11 +2,14 @@
 
 #include "adi_server.h"
 #include "geospatial_frame.h"
+#include "media_stream.h"
 #include "wasm_sandbox.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <exception>
+#include <limits>
 #include <thread>
 
 namespace nvlink::broker {
@@ -17,24 +20,51 @@ std::vector<double> decode_payload_as_doubles(const std::vector<uint8_t>& payloa
         throw NVLinkError("payload must be a packed array of doubles");
     }
     std::vector<double> values(payload.size() / sizeof(double), 0.0);
-    std::memcpy(values.data(), payload.data(), payload.size());
+    static_assert(sizeof(double) == sizeof(uint64_t), "inference payload requires binary64 doubles");
+    static_assert(std::numeric_limits<double>::is_iec559, "inference payload requires IEEE-754 doubles");
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        uint64_t bits = 0;
+        for (std::size_t byte = 0; byte < sizeof(double); ++byte) {
+            bits = (bits << 8) | payload[i * sizeof(double) + byte];
+        }
+        std::memcpy(&values[i], &bits, sizeof(bits));
+    }
     return values;
 }
 
 std::vector<uint8_t> encode_doubles_as_payload(const std::vector<double>& values) {
     std::vector<uint8_t> payload(values.size() * sizeof(double));
-    if (!payload.empty()) {
-        std::memcpy(payload.data(), values.data(), payload.size());
+    static_assert(sizeof(double) == sizeof(uint64_t), "inference payload requires binary64 doubles");
+    static_assert(std::numeric_limits<double>::is_iec559, "inference payload requires IEEE-754 doubles");
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        uint64_t bits = 0;
+        std::memcpy(&bits, &values[i], sizeof(bits));
+        for (std::size_t byte = 0; byte < sizeof(double); ++byte) {
+            payload[i * sizeof(double) + byte] =
+                static_cast<uint8_t>(bits >> ((sizeof(double) - byte - 1) * 8));
+        }
     }
     return payload;
+}
+
+// CPU reference implementation of the generic compute kernel.
+std::vector<double> cpu_compute(std::vector<double> values) {
+    for (double& value : values) {
+        value *= 2.0;
+    }
+    return values;
 }
 
 } // namespace
 
 BrokerService::BrokerService(const BrokerServiceConfig& config)
     : config_(config) {
-    if (!config_.force_cpu_fallback && get_gpu_count() > 0) {
-        topology_ = std::make_unique<GpuTopology>(GpuTopology::detect());
+    const int gpu_total = (config_.synthetic_gpu_count >= 0) ? config_.synthetic_gpu_count
+                                                            : get_gpu_count();
+    if (!config_.force_cpu_fallback && gpu_total > 0) {
+        topology_ = std::make_unique<GpuTopology>(
+            config_.synthetic_gpu_count >= 0 ? GpuTopology::synthetic(gpu_total)
+                                             : GpuTopology::detect());
         placer_ = std::make_unique<Placer>(*topology_, config_.backlog_threshold);
         use_gpu_placement_ = true;
         gpu_inflight_.assign(static_cast<std::size_t>(topology_->num_gpus()), 0);
@@ -73,20 +103,38 @@ BrokerResponse BrokerService::handle_request(const BrokerRequest& request) {
         return response;
     }
 
-    if (request.kind == nvlink::geospatial::kGeospatialFrameKind) {
-        response = handle_geospatial_frame_request(request);
+    const auto deadline = started + std::chrono::milliseconds(request.timeout_ms);
+    const auto finish_response = [&](BrokerResponse result) {
         const auto ended = std::chrono::steady_clock::now();
-        response.latency_ms = static_cast<uint64_t>(
+        result.latency_ms = static_cast<uint64_t>(
             std::chrono::duration_cast<std::chrono::milliseconds>(ended - started).count());
-        return response;
+        if (ended >= deadline) {
+            result.status = TaskStatus::Timeout;
+            result.result.clear();
+            result.error = "request timed out";
+        }
+        return result;
+    };
+
+    if (config_.simulated_latency_ms > 0) {
+        const auto simulated_end = std::chrono::steady_clock::now() +
+                                   std::chrono::milliseconds(config_.simulated_latency_ms);
+        std::this_thread::sleep_until(std::min(simulated_end, deadline));
+        if (std::chrono::steady_clock::now() >= deadline) {
+            return finish_response(response);
+        }
+    }
+
+    if (request.kind == nvlink::geospatial::kGeospatialFrameKind) {
+        return finish_response(handle_geospatial_frame_request(request));
+    }
+
+    if (request.kind == nvlink::media::kMediaStreamKind) {
+        return finish_response(handle_media_stream_request(request));
     }
 
     if (request.kind == nvlink::wasm::kWasmTaskKind) {
-        response = handle_wasm_task_request(request);
-        const auto ended = std::chrono::steady_clock::now();
-        response.latency_ms = static_cast<uint64_t>(
-            std::chrono::duration_cast<std::chrono::milliseconds>(ended - started).count());
-        return response;
+        return finish_response(handle_wasm_task_request(request));
     }
 
     if (request.kind == nvlink::wasm::kWasmLifecycleKind ||
@@ -94,68 +142,106 @@ BrokerResponse BrokerService::handle_request(const BrokerRequest& request) {
         request.kind == nvlink::wasm::kWasmLifecycleDrainKind ||
         request.kind == nvlink::wasm::kWasmLifecycleReleaseKind ||
         request.kind == nvlink::wasm::kWasmLifecycleQueryKind) {
-        response = handle_wasm_lifecycle_request(request);
-        const auto ended = std::chrono::steady_clock::now();
-        response.latency_ms = static_cast<uint64_t>(
-            std::chrono::duration_cast<std::chrono::milliseconds>(ended - started).count());
-        return response;
+        return finish_response(handle_wasm_lifecycle_request(request));
     }
 
-    int selected_gpu = -1;
-    bool incremented_inflight = false;
+    BackendPolicy policy;
+    policy.default_backend = config_.default_backend;
+    policy.gpu_offload_threshold_bytes = config_.gpu_offload_threshold_bytes;
+    policy.gpu_offload_threshold_flops = config_.gpu_offload_threshold_flops;
+    policy.force_cpu = config_.force_cpu_fallback;
+    policy.gpu_available = use_gpu_placement_;
+    policy.npu_available = config_.npu_enabled && config_.npu_executor != nullptr &&
+                           config_.npu_executor->available();
+    const BackendKind backend = select_backend(policy, request.profile);
+    const bool fallback_safe = request.profile.has_value() && request.profile->fallback_safe;
 
     try {
-        if (config_.simulated_latency_ms > 0) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(config_.simulated_latency_ms));
-        }
+        const std::vector<double> input = decode_payload_as_doubles(request.payload);
 
-        if (use_gpu_placement_) {
-            const int client_id = get_or_assign_client_id(request.source);
-            selected_gpu = placer_->place(client_id, [this](int gpu) {
-                std::lock_guard<std::mutex> lock(inflight_mutex_);
-                return gpu_inflight_[static_cast<std::size_t>(gpu)];
-            });
-
-            {
-                std::lock_guard<std::mutex> lock(inflight_mutex_);
-                std::size_t& inflight = gpu_inflight_[static_cast<std::size_t>(selected_gpu)];
-                ++inflight;
-                incremented_inflight = true;
-                if (inflight > config_.max_inflight_per_gpu) {
-                    --inflight;
-                    incremented_inflight = false;
-                    response.status = TaskStatus::Rejected;
-                    response.error = "selected GPU queue is at capacity";
-                    response.selected_gpu = selected_gpu;
-                    return response;
+        if (backend == BackendKind::Gpu) {
+            BrokerResponse gpu_response = run_on_gpu(request, input);
+            if (gpu_response.status == TaskStatus::Ok || !fallback_safe) {
+                return finish_response(std::move(gpu_response));
+            }
+            response.fell_back_to_cpu = true;
+        } else if (backend == BackendKind::Npu) {
+            try {
+                response.result = encode_doubles_as_payload(config_.npu_executor->run(input));
+                response.status = TaskStatus::Ok;
+                response.backend = BackendKind::Npu;
+                return finish_response(std::move(response));
+            } catch (const std::exception& ex) {
+                if (!fallback_safe) {
+                    response.status = TaskStatus::Error;
+                    response.error = ex.what();
+                    response.backend = BackendKind::Npu;
+                    return finish_response(std::move(response));
                 }
+                response.fell_back_to_cpu = true;
             }
         }
 
-        const std::vector<double> input = decode_payload_as_doubles(request.payload);
-        const int compute_gpu = (selected_gpu >= 0) ? selected_gpu : 0;
-        const std::vector<double> output = nvlink::adi::default_gpu_compute(input, compute_gpu);
-
+        // CPU baseline: also the safe fallback for failed accelerator dispatch.
         response.status = TaskStatus::Ok;
+        response.backend = BackendKind::Cpu;
+        response.selected_gpu = -1;
+        response.result = encode_doubles_as_payload(cpu_compute(input));
+    } catch (const std::exception& ex) {
+        response.status = TaskStatus::Error;
+        response.error = ex.what();
+    }
+
+    return finish_response(std::move(response));
+}
+
+BrokerResponse BrokerService::run_on_gpu(const BrokerRequest& request,
+                                         const std::vector<double>& input) {
+    BrokerResponse response;
+    response.task_id = request.task_id;
+    response.backend = BackendKind::Gpu;
+
+    int selected_gpu = -1;
+    bool incremented_inflight = false;
+    try {
+        const int client_id = get_or_assign_client_id(request.source);
+        selected_gpu = placer_->place(client_id, [this](int gpu) {
+            std::lock_guard<std::mutex> lock(inflight_mutex_);
+            return gpu_inflight_[static_cast<std::size_t>(gpu)];
+        });
         response.selected_gpu = selected_gpu;
+
+        {
+            std::lock_guard<std::mutex> lock(inflight_mutex_);
+            std::size_t& inflight = gpu_inflight_[static_cast<std::size_t>(selected_gpu)];
+            ++inflight;
+            incremented_inflight = true;
+            if (inflight > config_.max_inflight_per_gpu) {
+                --inflight;
+                incremented_inflight = false;
+                response.status = TaskStatus::Rejected;
+                response.error = "selected GPU queue is at capacity";
+                return response;
+            }
+        }
+
+        const std::vector<double> output = config_.gpu_compute_fn
+                                               ? config_.gpu_compute_fn(input, selected_gpu)
+                                               : nvlink::adi::default_gpu_compute(input, selected_gpu);
+        response.status = TaskStatus::Ok;
         response.result = encode_doubles_as_payload(output);
     } catch (const std::exception& ex) {
         response.status = TaskStatus::Error;
         response.error = ex.what();
-        response.selected_gpu = selected_gpu;
     }
 
-    if (incremented_inflight && selected_gpu >= 0) {
+    if (incremented_inflight) {
         std::lock_guard<std::mutex> lock(inflight_mutex_);
         std::size_t& inflight = gpu_inflight_[static_cast<std::size_t>(selected_gpu)];
         if (inflight > 0) {
             --inflight;
         }
     }
-
-    const auto ended = std::chrono::steady_clock::now();
-    response.latency_ms = static_cast<uint64_t>(
-        std::chrono::duration_cast<std::chrono::milliseconds>(ended - started).count());
     return response;
 }
 
@@ -199,6 +285,35 @@ BrokerResponse BrokerService::handle_geospatial_frame_request(const BrokerReques
     return response;
 }
 
+BrokerResponse BrokerService::handle_media_stream_request(const BrokerRequest& request) const {
+    BrokerResponse response;
+    response.task_id = request.task_id;
+
+    nvlink::media::MediaStreamFrame frame;
+    std::string decode_error;
+    if (!nvlink::media::decode_media_stream_frame(
+            request.payload, &frame, &decode_error, config_.protocol_limits.max_payload_bytes,
+            config_.protocol_limits.max_string_bytes)) {
+        response.status = TaskStatus::Rejected;
+        response.error = decode_error;
+        return response;
+    }
+
+    std::string encode_error;
+    std::vector<uint8_t> encoded;
+    if (!nvlink::media::encode_media_stream_frame(
+            frame, &encoded, &encode_error, config_.protocol_limits.max_payload_bytes,
+            config_.protocol_limits.max_string_bytes)) {
+        response.status = TaskStatus::Error;
+        response.error = encode_error;
+        return response;
+    }
+
+    response.status = TaskStatus::Ok;
+    response.result = std::move(encoded);
+    return response;
+}
+
 BrokerResponse BrokerService::handle_wasm_task_request(const BrokerRequest& request) {
     BrokerResponse response;
     response.task_id = request.task_id;
@@ -214,10 +329,6 @@ BrokerResponse BrokerService::handle_wasm_task_request(const BrokerRequest& requ
         response.status = TaskStatus::Rejected;
         response.error = "failed to decode WASM task request: " + decode_error;
         return response;
-    }
-
-    if (config_.simulated_latency_ms > 0) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(config_.simulated_latency_ms));
     }
 
     const nvlink::wasm::WasmTaskResponse wasm_resp = wasm_manager_->handle_task(wasm_req);

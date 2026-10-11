@@ -123,7 +123,7 @@ Request body fields, in order:
 - `destination` (`uint16` length-prefixed string)
 - `kind` (`uint16` length-prefixed string)
 - `priority` (`uint8`)
-- `timeout_ms` (`uint32`, big-endian, must be `> 0`)
+- `timeout_ms` (`uint32`, big-endian, must be in the range `1..300000` ms)
 - `payload` (`uint32` length-prefixed binary blob)
 
 Response body fields, in order:
@@ -141,7 +141,7 @@ Default protocol limits are bounded and enforced before routing:
 - max payload/result blob: 512 KiB
 - max string field: 1024 bytes
 
-Validation rejects invalid magic, unsupported versions, wrong message types, trailing bytes, truncated frames, oversized strings/payloads, empty `task_id` / `source` / `destination` / `kind`, and `timeout_ms == 0`. Malformed requests receive structured broker rejections instead of being parsed opportunistically. See [docs/BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md) for the protocol reference.
+Validation rejects invalid magic, unsupported versions, wrong message types, trailing bytes, truncated frames, oversized strings/payloads, empty `task_id` / `source` / `destination` / `kind`, zero timeouts, and timeouts above the five-minute maximum. Out-of-range timeouts are rejected rather than clamped, and the broker does not derive a default from request characteristics. Malformed requests receive structured broker rejections instead of being parsed opportunistically. See [docs/BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md) for the protocol reference.
 
 ### Async Tokio/Wasmtime interoperability notes
 
@@ -154,11 +154,32 @@ Validation rejects invalid magic, unsupported versions, wrong message types, tra
 
 - `broker_server` is the broker-facing executable built in this repository.
 - `--cpu-only` disables GPU topology detection and always returns `selected_gpu = -1`, which is useful for CI, non-GPU nodes, and deterministic smoke tests.
-- Without `--cpu-only`, the broker detects GPU topology once at startup and uses sticky affinity keyed by `source`, then queue-aware placement: home GPU first, then an NVLink-connected peer when beneficial, then least-loaded fallback.
+- Without `--cpu-only`, the broker detects GPU topology once at startup. Backend selection (below) runs first; only when the GPU backend is chosen does `Placer` pick a GPU using sticky affinity keyed by `source`, then queue-aware placement: home GPU first, then an NVLink-connected peer when beneficial, then least-loaded fallback.
 - On systems without NVLink, placement still works and falls back to PCIe / least-loaded choices rather than requiring NVLink hardware.
 - The default compute path used by current tests/examples expects the request payload to decode as a packed array of `double` values; the higher-level payload contract is otherwise application-specific and must be agreed between YuKKi-OS and the backend workload.
 - `kind = "geospatial.frame.v1"` is a dedicated message kind carrying an NXR1-encoded geospatial frame (big-endian magic/version/geospatial/velocity/flow doubles + length-prefixed opaque payload). See [docs/BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md#geospatial-frame-interoperability-geospatialframev1) for the wire contract, limits, and rejection behavior.
+- `kind = "media.stream.v1"` carries MED1-encoded video, audio, or generic data chunks for bounded broker validation and acknowledgment. See [docs/BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md#videoaudiodata-broadcast-interoperability-mediastreamv1) for the wire layout and handling.
 - `kind = "wasm.task.v1"` and `kind = "wasm.lifecycle.*"` carry WSM1-encoded WASM sandbox tasks and module lifecycle management frames (prepare/register, drain/stop, release/acknowledge) for safe hotswapping. See [docs/WASM_INTEROP.md](docs/WASM_INTEROP.md) for full contract details.
+
+### Backend selection (CPU / GPU / NPU) vs. GPU placement
+
+These are two separate layers:
+
+1. **Backend selection** (`include/backend_dispatch.h`, run in `BrokerService::handle_request`) chooses CPU, GPU, or NPU. **CPU is the default baseline.**
+2. **GPU placement** (`Placer`) only runs after the GPU backend was selected: home GPU -> NVLink peer -> least-loaded GPU.
+
+Tiered fallback order: CPU first; GPU only for data-parallel work above the offload threshold when a GPU is available; NPU only for inference work when an NPU executor is configured, enabled, and available. If an accelerator is unavailable, the request runs on CPU. If accelerator dispatch/execution fails, the request is re-run on CPU only when its `TaskProfile::fallback_safe` is set; otherwise the original error/rejection is returned.
+
+Rules (in order): `--cpu-only` forces CPU; exact-precision, verification-sensitive, and cryptographic profiles stay on CPU unless `accelerator_verified` declares an explicit deterministic implementation; inference + available NPU -> NPU; data-parallel + available GPU + `estimated_bytes >= gpu_offload_threshold_bytes` (or optional flops threshold) -> GPU; otherwise CPU. No concrete NPU executor ships today: implement `NpuExecutor` and set `BrokerServiceConfig::npu_executor` plus `npu_enabled`; without them NPU requests safely run on CPU.
+
+**Compatibility:** the BRK1 wire format is unchanged. The optional `BrokerRequest::profile` is in-process metadata, so existing YuKKi-OS requests carry no profile and run on CPU (`selected_gpu = -1`) unless the operator opts in with `--default-backend gpu` and a GPU is present. `BrokerResponse::backend` / `fell_back_to_cpu` report what ran. WASM task routing is unchanged.
+
+| CLI / config | Default | Meaning |
+| --- | --- | --- |
+| `--cpu-only` / `force_cpu_fallback` | off | Always CPU |
+| `--default-backend cpu\|gpu\|npu` / `default_backend` | `cpu` | Backend for profile-less requests (`gpu` offloads them when a GPU exists; `npu` still needs an inference profile) |
+| `--gpu-offload-threshold BYTES` / `gpu_offload_threshold_bytes` | 1 MiB | Minimum `estimated_bytes` for GPU offload |
+| `--npu-enabled` / `npu_enabled` | off | Allow NPU selection (also needs an executor) |
 
 ### Security assumptions and current limitations
 

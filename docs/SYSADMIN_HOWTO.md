@@ -103,9 +103,9 @@ cd /home/runner/work/overhauled/overhauled
 Behavior notes:
 
 - `--cpu-only` disables GPU topology detection and always reports `selected_gpu = -1`.
-- Without `--cpu-only`, the broker uses GPU topology if GPUs are present.
+- Without `--cpu-only`, the broker detects GPU topology if GPUs are present, but execution is CPU-first: requests choose the GPU backend (then `Placer`: home GPU -> NVLink peer -> least-loaded GPU) only when task profile metadata or `--default-backend gpu` justifies it. Requests without profile metadata run on CPU. See README "Backend selection".
 - NVLink is an optimization, not a requirement. On non-NVLink systems the placement logic still runs and falls back to PCIe / least-loaded choices.
-- The current broker executable accepts only `[port] [--cpu-only] [--help]`.
+- The current broker executable accepts `[port] [--cpu-only] [--default-backend cpu|gpu|npu] [--gpu-offload-threshold BYTES] [--npu-enabled] [--help]`.
 
 ## 6. Binding, listening, and firewall guidance
 

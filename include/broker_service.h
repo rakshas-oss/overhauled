@@ -1,5 +1,6 @@
 #pragma once
 
+#include "adi_server.h"
 #include "broker_protocol.h"
 #include "nvlink_placement.h"
 
@@ -21,6 +22,16 @@ struct BrokerServiceConfig {
     std::size_t backlog_threshold = 32;
     std::size_t max_inflight_per_gpu = 1024;
     bool force_cpu_fallback = false;
+    // Backend dispatch (runs before Placer). CPU-first defaults.
+    BackendKind default_backend = BackendKind::Cpu;
+    std::size_t gpu_offload_threshold_bytes = 1024 * 1024;
+    uint64_t gpu_offload_threshold_flops = 0;
+    bool npu_enabled = false;
+    std::shared_ptr<NpuExecutor> npu_executor = nullptr;
+    // Test/simulation hooks: >=0 builds a synthetic GPU topology instead of
+    // detecting hardware; gpu_compute_fn overrides the GPU compute kernel.
+    int synthetic_gpu_count = -1;
+    nvlink::adi::GpuComputeFn gpu_compute_fn = nullptr;
     uint32_t simulated_latency_ms = 0;
     ProtocolLimits protocol_limits{};
     std::shared_ptr<nvlink::wasm::WasmSandboxManager> wasm_manager = nullptr;
@@ -39,7 +50,9 @@ public:
 
 private:
     int get_or_assign_client_id(const std::string& source);
+    BrokerResponse run_on_gpu(const BrokerRequest& request, const std::vector<double>& input);
     BrokerResponse handle_geospatial_frame_request(const BrokerRequest& request) const;
+    BrokerResponse handle_media_stream_request(const BrokerRequest& request) const;
     BrokerResponse handle_wasm_task_request(const BrokerRequest& request);
     BrokerResponse handle_wasm_lifecycle_request(const BrokerRequest& request);
 

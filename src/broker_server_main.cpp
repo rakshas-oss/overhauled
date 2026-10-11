@@ -18,7 +18,8 @@ void signal_handler(int) {
 }
 
 void print_usage(const char* argv0) {
-    std::cout << "Usage: " << argv0 << " [port] [--cpu-only]\n";
+    std::cout << "Usage: " << argv0 << " [port] [--cpu-only] [--default-backend cpu|gpu|npu]\n"
+              << "       [--gpu-offload-threshold BYTES] [--npu-enabled]\n";
     std::cout << "Starts broker interoperability server for YuKKi-OS task dispatch.\n";
 }
 
@@ -35,6 +36,28 @@ int main(int argc, char** argv) {
         const std::string arg = argv[i];
         if (arg == "--cpu-only") {
             config.service_config.force_cpu_fallback = true;
+            continue;
+        }
+        if (arg == "--default-backend" && i + 1 < argc) {
+            const std::string value = argv[++i];
+            if (value == "cpu") {
+                config.service_config.default_backend = nvlink::broker::BackendKind::Cpu;
+            } else if (value == "gpu") {
+                config.service_config.default_backend = nvlink::broker::BackendKind::Gpu;
+            } else if (value == "npu") {
+                config.service_config.default_backend = nvlink::broker::BackendKind::Npu;
+            } else {
+                std::cerr << "Unknown backend: " << value << "\n";
+                return 1;
+            }
+            continue;
+        }
+        if (arg == "--gpu-offload-threshold" && i + 1 < argc) {
+            config.service_config.gpu_offload_threshold_bytes = std::stoull(argv[++i]);
+            continue;
+        }
+        if (arg == "--npu-enabled") {
+            config.service_config.npu_enabled = true;
             continue;
         }
         config.port = std::stoi(arg);
