@@ -1,8 +1,8 @@
 class NvlinkPlacement < Formula
   desc "NVLink-aware GPU task placement library"
   homepage "https://github.com/rakshas-oss/overhauled"
-  url "https://github.com/rakshas-oss/overhauled/archive/v1.0.0.tar.gz"
-  sha256 "9999999999999999999999999999999999999999999999999999999999999999"
+  url "https://github.com/rakshas-oss/overhauled/archive/refs/tags/v1.tar.gz"
+  sha256 "daf1ac97aee9bbc505285e7296e4693afe24d550fc36787b4e672dee717a984b"
   license "MIT"
   
   depends_on "cmake" => :build

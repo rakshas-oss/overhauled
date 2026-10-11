@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/Microsoft/vcpkg/master/scripts/vcpkg.schema.json",
   "name": "nvlink-placement",
-  "version": "0.3.0",
-  "description": "NVLink-aware GPU task placement library for CUDA",
+  "version": "1.0.0",
+  "description": "NVLink-aware GPU task placement library with optional system-supplied CUDA and TensorRT support",
   "homepage": "https://github.com/rakshas-oss/overhauled",
   "license": "MIT",
   "author": "rakshas-oss",
@@ -12,5 +12,10 @@
     "branch": "main"
   },
   "keywords": ["gpu", "cuda", "nvlink", "scheduling", "task-placement", "topology"],
-  "platforms": ["linux", "osx", "windows"]
+  "platforms": ["linux", "osx", "windows"],
+  "features": {
+    "nvidia-runtime": {
+      "description": "Optional system prerequisites: proprietary NVIDIA CUDA Toolkit/cuBLAS and TensorRT; not MIT-licensed or redistributed by this package. Users must accept NVIDIA's terms."
+    }
+  }
 }

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024 NVLink Placement Contributors
+
 from conan import ConanFile
 from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout
 from conan.tools.files import copy
@@ -5,7 +8,7 @@ from conan.tools.files import copy
 
 class NVLinkPlacementConan(ConanFile):
     name = "nvlink_placement"
-    version = "0.3.0"
+    version = "1.0.0"
     description = "NVLink-aware GPU task placement library"
     author = "rakshas-oss"
     license = "MIT"
@@ -23,9 +26,11 @@ class NVLinkPlacementConan(ConanFile):
     }
     
     generators = "CMakeDeps"
-    exports_sources = "CMakeLists.txt", "src/*", "include/*", "LICENSE", "README.md"
+    exports_sources = "CMakeLists.txt", "src/*", "include/*", "LICENSE", "NOTICE", "README.md"
     
     requires = ()
+    # Optional system prerequisites: CUDA Toolkit/cuBLAS and TensorRT are
+    # proprietary NVIDIA components, separately licensed and not redistributed.
     
     def config_options(self):
         if self.settings.os == "Windows":
@@ -52,6 +57,8 @@ class NVLinkPlacementConan(ConanFile):
         cmake.install()
         copy(self, "LICENSE", self.source_folder, 
              dst=self.package_folder, keep_path=False)
+        copy(self, "NOTICE", self.source_folder,
+             dst=self.package_folder, keep_path=False)
     
     def package_info(self):
         self.cpp_info.libs = ["nvlink_placement"]
@@ -59,5 +66,3 @@ class NVLinkPlacementConan(ConanFile):
         # CUDA dependency
         self.cpp_info.system_libs = ["cudart"]
     
-    def set_version(self):
-        self.version = "0.3.0"
