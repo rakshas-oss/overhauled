@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024 NVLink Placement Contributors
+
 """
 Comprehensive benchmarking and heuristic analysis suite for the
 TensorRT tensor schema integration.

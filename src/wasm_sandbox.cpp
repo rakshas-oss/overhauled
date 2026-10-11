@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2024 NVLink Placement Contributors
+
 #include "wasm_sandbox.h"
 #include "adi_server.h"
 

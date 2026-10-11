@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2024 NVLink Placement Contributors
+
 #ifndef ADI_TENSOR_PROTOCOL_H
 #define ADI_TENSOR_PROTOCOL_H
 

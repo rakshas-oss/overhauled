@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024 NVLink Placement Contributors
+
 """
 Architectural heuristic analysis for GPU task placement and fractional lane scheduling.
 """

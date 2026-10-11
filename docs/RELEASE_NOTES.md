@@ -37,7 +37,7 @@ How to get the release
 git clone https://github.com/rakshas-oss/overhauled.git
 cd overhauled
 git fetch --tags origin
-git checkout v1.0.0
+git checkout v1
 ```
 
 - Package managers: see packaging/README.md and docs/PUBLISHING.md for current packaging guidance.

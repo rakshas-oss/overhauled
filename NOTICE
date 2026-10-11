@@ -1,0 +1,22 @@
+Overhauled
+Copyright (c) 2024 NVLink Placement Contributors
+
+This project is licensed under the MIT License. See LICENSE for the full
+license text.
+
+Third-party components
+
+CUDA Toolkit (including CUDA Runtime/cudart and cuBLAS) and TensorRT (including
+NvInfer and the nvonnxparser ONNX parser) are optional, user-supplied NVIDIA
+components. They are proprietary, are not covered by this project's MIT
+License, and are not redistributed in this repository. Users who install or
+use these components must accept and comply with the applicable NVIDIA terms.
+
+Official NVIDIA license information:
+- CUDA Toolkit EULA: https://docs.nvidia.com/cuda/eula/index.html
+- TensorRT license: https://developer.nvidia.com/tensorrt-license
+
+Python dependencies listed in requirements.txt:
+- NumPy: BSD-3-Clause
+- PyTorch: BSD-3-Clause
+- ONNX: Apache-2.0

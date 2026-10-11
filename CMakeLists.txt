@@ -1,5 +1,8 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024 NVLink Placement Contributors
+
 cmake_minimum_required(VERSION 3.18)
-project(OverhauledTensorRuntime LANGUAGES CXX)
+project(OverhauledTensorRuntime VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -160,5 +163,6 @@ if(HAS_TENSORRT)
 endif()
 install(DIRECTORY include/ DESTINATION include)
 install(DIRECTORY examples/ DESTINATION examples)
+install(FILES LICENSE NOTICE DESTINATION share/overhauled)
 
 message(STATUS "Build summary: HAS_CUDA=${HAS_CUDA}, HAS_CUBLAS=${HAS_CUBLAS}, HAS_TENSORRT=${HAS_TENSORRT}, BUILD_BROKER=${BUILD_BROKER}")
