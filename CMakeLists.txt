@@ -11,6 +11,7 @@ option(ENABLE_CUDA "Enable CUDA acceleration when a CUDA compiler/toolkit is ava
 option(ENABLE_TENSORRT "Enable TensorRT runtime server" OFF)
 option(BUILD_BROKER "Build broker interoperability service and server" ON)
 option(BUILD_EXAMPLES "Build example binaries" ON)
+option(ENABLE_INTEROP_ENCRYPTION "Enable interop encryption layer" OFF)
 
 include(CheckLanguage)
 include(CTest)
@@ -92,6 +93,14 @@ if(BUILD_BROKER)
     target_include_directories(broker_service PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
     target_link_libraries(broker_service PUBLIC adi_server nvlink_placement Threads::Threads)
 
+    if(ENABLE_INTEROP_ENCRYPTION)
+        add_library(interop_encryption src/interop_encryption.cpp)
+        target_include_directories(interop_encryption PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+        target_link_libraries(interop_encryption PUBLIC Threads::Threads)
+        target_compile_definitions(interop_encryption PUBLIC OVERHAULED_INTEROP_ENCRYPTION=1)
+        target_link_libraries(broker_service PUBLIC interop_encryption)
+    endif()
+
     add_executable(broker_server src/broker_server_main.cpp)
     target_link_libraries(broker_server PRIVATE broker_service)
 endif()
@@ -151,6 +160,12 @@ if(BUILD_TESTING AND BUILD_BROKER)
     add_executable(wasm_sandbox_test tests/wasm_sandbox_test.cpp)
     target_link_libraries(wasm_sandbox_test PRIVATE broker_service Threads::Threads)
     add_test(NAME wasm_sandbox_test COMMAND wasm_sandbox_test)
+endif()
+
+if(ENABLE_INTEROP_ENCRYPTION)
+    # installation of the interop headers/library
+    install(TARGETS interop_encryption DESTINATION lib)
+    install(FILES include/interop_encryption.h DESTINATION include)
 endif()
 
 install(TARGETS nvlink_placement adi_server DESTINATION lib)
