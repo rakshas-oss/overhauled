@@ -1,10 +1,10 @@
-# Overhauled v1.0
+# Overhauled v1.1
 
 A production-ready C++ library for NVLink-aware GPU task placement, topology-aware scheduling, and broker interoperability.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
-[![Release](https://img.shields.io/badge/Release-v1.0-blueviolet)](#)
+[![Release](https://img.shields.io/badge/Release-v1.1-blueviolet)](#)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2Fv1-orange)](#)
 
 ## Overview
@@ -17,17 +17,16 @@ Overhauled helps GPU systems place work on the right device with minimal host st
 - Backend dispatch for CPU / GPU / NPU execution decisions
 - A broker protocol for interoperable request/response service flows
 
-This repository is the placement and execution plane. It does not replace the control plane; instead it exposes a stable, versioned protocol boundary for systems like `rakshas-oss/YuKKi-OS` and other authenticated service meshes.
+This repository is the placement and execution plane. It does not replace the control plane; instead it exposes a stable, versioned protocol boundary for systems like `rakshas-oss/YuKKi-OS` and other brokers.
 
-## What's new in v1.0
+## What's new in v1.1
 
-Version 1.0 marks the first stable release of the project and includes:
+Release v1.1 (2026-10-13) — highlights: improved placement stability, minor performance improvements, documentation and packaging updates. See docs/releases/v1.1.md for full notes.
 
-- a stable broker protocol contract (`BRK1` / version 1)
-- production-oriented placement and fallback behavior
-- broader documentation covering operations, deployment, benchmarking, and protocol semantics
-- CPU-only build and test support for CI and non-GPU environments
-- clearer packaging and distribution guidance for Conan, vcpkg, and Homebrew
+- Improved NVLink peer selection heuristics to reduce tail latency under contention
+- Multiple small performance and memory usage improvements in the placement pipeline
+- Bug fixes for CPU-only broker startup and race conditions in the home-GPU assignment table
+- Documentation: expanded operations notes, packaging guidance, and new release notes page
 
 ## Quick start
 
@@ -80,7 +79,8 @@ This is useful for CI, non-GPU hosts, and smoke tests while preserving the same 
 
 ## Documentation
 
-- [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md) — v1.0 release summary and migration notes
+- [docs/releases/v1.1.md](docs/releases/v1.1.md) — v1.1 release notes and migration notes
+- [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md) — historical release notes
 - [docs/LIBRARY.md](docs/LIBRARY.md) — API usage and integration guide
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — design and topology view
 - [docs/BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md) — BRK1 broker protocol contract
@@ -115,7 +115,7 @@ cmake -S . -B build -DENABLE_CUDA=ON -DENABLE_TENSORRT=ON -DTENSORRT_ROOT=/path/
 
 ## Security and operating model
 
-Overhauled is designed as the execution plane. The broker transport is bounded and versioned, but it is not an authentication layer by itself. Production deployments should place the service behind an authenticated proxy, service mesh, or mTLS boundary and apply network restrictions as appropriate.
+Overhauled is designed as the execution plane. The broker transport is bounded and versioned, but it is not an authentication layer by itself. Production deployments should place the service behind authenticated proxies and ensure broker transport security.
 
 ## Performance
 
