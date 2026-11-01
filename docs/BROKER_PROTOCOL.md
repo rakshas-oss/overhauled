@@ -25,6 +25,62 @@ Frame body starts with:
 
 All variable fields are length-prefixed and bounded by configured limits.
 
+## BRK2/v2 (TLV) transport
+
+The broker accepts BRK2/v2 frames on the same TCP listener as BRK1/v1. The
+outer frame remains a 4-byte big-endian body length; the body begins with a
+32-byte header:
+
+- magic: ASCII `BRK2`
+- major/minor: `2.0`
+- header length: uint16, `32`
+- message type: uint16 (`3=request`, `4=response`)
+- flags: uint16 (only the defined low eight bits are accepted)
+- request_id: uint64, echoed unchanged in the response
+- schema_id: uint32 (`1=request`, `2=response`)
+- schema_version: uint16 (`1`)
+- reserved: uint16 (`0`)
+- payload_length: uint32, exact number of TLV bytes
+
+Each TLV field is `uint16 field_id + uint8 wire_type + uint8 field_flags +
+uint32 value_length + value`. Integers and lengths are big-endian. Field
+flags are bit 0 critical and bit 1 repeated. Duplicate singular fields are
+rejected. Unknown optional fields are ignored; unknown critical fields are
+rejected. Unknown wire types, malformed UTF-8 strings, invalid lengths,
+trailing bytes, and configured-limit violations are rejected.
+
+Request schema 1:
+
+| Field | Type | Required |
+|---|---|---|
+| 1 task_id | UTF-8 | yes |
+| 2 source | UTF-8 | yes |
+| 3 destination | UTF-8 | yes |
+| 4 kind | UTF-8 | yes |
+| 5 priority | U8 | yes |
+| 6 timeout_ms | U32 | yes |
+| 7 payload | bytes | yes |
+| 8 idempotency_key | UUID | no |
+| 9 deadline_unix_ns | U64 | no |
+
+Response schema 2:
+
+| Field | Type |
+|---|---|
+| 1 task_id | UTF-8 |
+| 2 status | U8 (0=ok, 1=rejected, 2=error, 3=timeout) |
+| 3 selected_gpu | I64 |
+| 4 latency_ms | U64 |
+| 5 result | bytes |
+| 6 error | UTF-8 |
+
+The response header carries the original request_id. The server continues to
+support the existing BRK1/v1 request and response layout without translation;
+clients choose the protocol by sending the corresponding magic. BRK2 does
+not currently add a negotiation handshake, remote cancellation, compression,
+or authentication. Those capabilities must not be inferred from the reserved
+message-type and flag assignments.
+
 ## Request Fields
 
 - `task_id` (string)
