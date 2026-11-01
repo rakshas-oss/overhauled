@@ -95,7 +95,7 @@ bool decode_brk2_request_body(const std::vector<uint8_t>& body,BrokerRequest* ou
     if(read16(body.data()+6)!=BRK2_HEADER_BYTES)return fail("invalid BRK2 header length");
     if(read16(body.data()+8)!=MSG_REQUEST)return fail("unexpected BRK2 message type");
     const uint16_t flags=read16(body.data()+10);
-    if(flags & ~uint16_t(0x00ff))return fail("invalid BRK2 message flags");
+    if(flags != 0)return fail("unsupported BRK2 request flags");
     if(read16(body.data()+26)!=0)return fail("BRK2 reserved field must be zero");
     const std::size_t payload_len=read32(body.data()+28);
     if(payload_len>limits.max_payload_bytes||payload_len!=body.size()-BRK2_HEADER_BYTES)return fail("BRK2 payload length mismatch or limit exceeded");
