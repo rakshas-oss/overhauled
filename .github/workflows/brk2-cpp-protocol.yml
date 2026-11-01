@@ -31,5 +31,5 @@ jobs:
       - name: Build BRK2 protocol test
         run: cmake --build build --target brk2_protocol_test brk_conformance_test --parallel 2
       - name: Run BRK2 protocol test
-        run: ctest --test-dir build --output-on-failure -R '^(brk2_protocol_test|brk_conformance_test)
+        run: ctest --test-dir build --output-on-failure -R '^(brk2_protocol_test|brk_conformance_test)$'
 
