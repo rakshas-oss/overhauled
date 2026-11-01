@@ -83,7 +83,7 @@ This is useful for CI, non-GPU hosts, and smoke tests while preserving the same 
 - [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md) — historical release notes
 - [docs/LIBRARY.md](docs/LIBRARY.md) — API usage and integration guide
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — design and topology view
-- [docs/BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md) — BRK1 broker protocol contract
+- [docs/BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md) — BRK1 and BRK2 broker protocol contracts
 - [docs/WASM_INTEROP.md](docs/WASM_INTEROP.md) — WASM interoperability and sandbox boundary notes
 - [docs/SYSADMIN_HOWTO.md](docs/SYSADMIN_HOWTO.md) — Linux deployment and operations guide
 - [docs/BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) — performance benchmarks and latency data

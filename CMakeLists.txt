@@ -85,6 +85,7 @@ endif()
 if(BUILD_BROKER)
     add_library(broker_service
         src/broker_protocol.cpp
+        src/brk2_protocol.cpp
         src/broker_service.cpp
         src/broker_server.cpp
         src/geospatial_frame.cpp
@@ -129,6 +130,10 @@ if(BUILD_EXAMPLES)
 endif()
 
 if(BUILD_TESTING AND BUILD_BROKER)
+    add_executable(brk2_protocol_test tests/brk2_protocol_test.cpp)
+    target_link_libraries(brk2_protocol_test PRIVATE broker_service)
+    add_test(NAME brk2_protocol_test COMMAND brk2_protocol_test)
+
     add_executable(broker_protocol_test tests/broker_protocol_test.cpp)
     target_link_libraries(broker_protocol_test PRIVATE broker_service)
     add_test(NAME broker_protocol_test COMMAND broker_protocol_test)

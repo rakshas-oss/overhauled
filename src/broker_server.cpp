@@ -2,6 +2,7 @@
 // Copyright (c) 2024 NVLink Placement Contributors
 
 #include "broker_server.h"
+#include "brk2_protocol.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -68,6 +69,18 @@ bool write_exact(SocketHandle socket, const void* buffer, std::size_t size) {
         total += static_cast<std::size_t>(written);
     }
     return true;
+}
+
+void send_brk2_protocol_error(SocketHandle socket, uint64_t request_id,
+                                const std::string& error, const ProtocolLimits& limits) {
+    BrokerResponse response;
+    response.status = TaskStatus::Rejected;
+    response.error = error;
+    response.selected_gpu = -1;
+    const auto body = encode_brk2_response_body(response, request_id, limits);
+    const uint32_t length_be = htonl(static_cast<uint32_t>(body.size()));
+    (void)write_exact(socket, &length_be, sizeof(length_be));
+    (void)write_exact(socket, body.data(), body.size());
 }
 
 void close_socket(SocketHandle socket) noexcept {
@@ -285,13 +298,13 @@ private:
         std::mutex write_mutex;
         auto writes_enabled = std::make_shared<std::atomic<bool>>(true);
 
-        auto write_response = [&](const BrokerResponse& response) {
+        auto write_response = [&](const BrokerResponse& response, bool use_brk2, uint64_t request_id) {
             if (!writes_enabled->load(std::memory_order_acquire)) {
                 return false;
             }
-            const std::vector<uint8_t> response_frame = encode_response_frame(
-                response,
-                config_.service_config.protocol_limits);
+            const std::vector<uint8_t> response_frame = use_brk2
+                ? encode_brk2_response_body(response, request_id, config_.service_config.protocol_limits)
+                : encode_response_frame(response, config_.service_config.protocol_limits);
             const uint32_t response_len_be = htonl(static_cast<uint32_t>(response_frame.size()));
             std::lock_guard<std::mutex> write_lock(write_mutex);
             if (!writes_enabled->load(std::memory_order_acquire)) {
@@ -331,27 +344,52 @@ private:
                     break;
                 }
 
+                const bool use_brk2 = frame.size() >= 4 &&
+                    frame[0] == 'B' && frame[1] == 'R' && frame[2] == 'K' && frame[3] == '2';
                 BrokerRequest request;
                 std::string decode_error;
-                if (!decode_request_frame(frame,
-                                          &request,
-                                          &decode_error,
-                                          config_.service_config.protocol_limits)) {
-                    send_protocol_error_locked(request.task_id, decode_error);
+                uint64_t request_id = 0;
+                bool decoded = false;
+                if (use_brk2) {
+                    if (frame.size() >= 20) {
+                        for (std::size_t i = 12; i < 20; ++i) request_id = (request_id << 8) | frame[i];
+                    }
+                    decoded = decode_brk2_request_body(frame, &request, &request_id,
+                                                       &decode_error, config_.service_config.protocol_limits);
+                } else {
+                    decoded = decode_request_frame(frame, &request, &decode_error,
+                                                   config_.service_config.protocol_limits);
+                }
+                if (!decoded) {
+                    if (use_brk2) {
+                        std::lock_guard<std::mutex> write_lock(write_mutex);
+                        if (writes_enabled->load(std::memory_order_acquire))
+                            send_brk2_protocol_error(client_socket, request_id, decode_error,
+                                                     config_.service_config.protocol_limits);
+                    } else {
+                        send_protocol_error_locked(request.task_id, decode_error);
+                    }
                     continue;
                 }
 
                 if (pending_responses.size() >= config_.max_inflight_per_client) {
-                    send_protocol_error_locked(request.task_id, "too many inflight requests for client");
+                    if (use_brk2) {
+                        std::lock_guard<std::mutex> write_lock(write_mutex);
+                        if (writes_enabled->load(std::memory_order_acquire))
+                            send_brk2_protocol_error(client_socket, request_id,
+                                "too many inflight requests for client", config_.service_config.protocol_limits);
+                    } else {
+                        send_protocol_error_locked(request.task_id, "too many inflight requests for client");
+                    }
                     continue;
                 }
 
                 auto done = std::make_shared<std::atomic<bool>>(false);
                 pending_responses.push_back(PendingResponse{
-                    std::thread([this, request, write_response, done] {
+                    std::thread([this, request, write_response, done, use_brk2, request_id] {
                         try {
                             BrokerResponse response = service_.handle_request(request);
-                            (void)write_response(response);
+                            (void)write_response(response, use_brk2, request_id);
                         } catch (const std::exception&) {
                         }
                         done->store(true, std::memory_order_release);
