@@ -43,7 +43,7 @@ int main(){
     assert(encoded[8]==0&&encoded[9]==4);
     assert(encoded[12]==1&&encoded[19]==8); // response preserves request correlation id
 
-    auto malformed=body;malformed[30]=1;
+    auto malformed=body;malformed[26]=1;
     assert(!decode_brk2_request_body(malformed,&request,&id,&error,limits));
     auto truncated=body;truncated.pop_back();
     assert(!decode_brk2_request_body(truncated,&request,&id,&error,limits));
