@@ -13,7 +13,7 @@ void u64(std::vector<uint8_t>& b,uint64_t v){for(int i=7;i>=0;--i)b.push_back(ui
 void field(std::vector<uint8_t>& p,uint16_t id,uint8_t wt,const std::vector<uint8_t>& v,uint8_t flags=1){
     u16(p,id);p.push_back(wt);p.push_back(flags);u32(p,static_cast<uint32_t>(v.size()));p.insert(p.end(),v.begin(),v.end());
 }
-std::vector<uint8_t> str(const char* s){return {s,s+std::char_traits<char>::length(s)};}
+std::vector<uint8_t> str(const char* s){return std::vector<uint8_t>(s,s+std::char_traits<char>::length(s));}
 std::vector<uint8_t> request_body(){
     std::vector<uint8_t> p;
     field(p,1,8,str("interop-1"));field(p,2,8,str("yukki"));field(p,3,8,str("overhauled"));field(p,4,8,str("inference"));
