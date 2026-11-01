@@ -40,6 +40,7 @@ bool parse_fields(const std::vector<uint8_t>& body,std::vector<FieldView>* field
         FieldView f{read16(body.data()+pos),body[pos+2],body[pos+3],nullptr,read32(body.data()+pos+4)};
         pos+=8;
         if(f.flags & ~uint8_t(3)){if(error)*error="invalid BRK2 field flags";return false;}
+        if(f.type<1||f.type>12){if(error)*error="unknown BRK2 wire type";return false;}
         if(f.size>body.size()-pos){if(error)*error="truncated BRK2 TLV value";return false;}
         f.data=body.data()+pos;pos+=f.size;
         if(std::any_of(fields->begin(),fields->end(),[&](const FieldView& x){return x.id==f.id;})){
@@ -49,9 +50,27 @@ bool parse_fields(const std::vector<uint8_t>& body,std::vector<FieldView>* field
     }
     return true;
 }
+bool valid_utf8(const uint8_t* p,std::size_t n){
+    std::size_t i=0;
+    while(i<n){
+        const uint8_t c=p[i++];
+        if(c<=0x7f) continue;
+        uint32_t cp=0;std::size_t extra=0;
+        if(c>=0xc2&&c<=0xdf){cp=c&0x1f;extra=1;}
+        else if(c>=0xe0&&c<=0xef){cp=c&0x0f;extra=2;}
+        else if(c>=0xf0&&c<=0xf4){cp=c&0x07;extra=3;}
+        else return false;
+        if(extra>n-i)return false;
+        for(std::size_t j=0;j<extra;++j){const uint8_t d=p[i++];if((d&0xc0)!=0x80)return false;cp=(cp<<6)|(d&0x3f);}
+        if((extra==1&&cp<0x80)||(extra==2&&cp<0x800)||(extra==3&&cp<0x10000)||
+           cp>0x10ffff||(cp>=0xd800&&cp<=0xdfff))return false;
+    }
+    return true;
+}
 const FieldView* find(const std::vector<FieldView>& fs,uint16_t id){for(const auto& f:fs)if(f.id==id)return &f;return nullptr;}
 bool get_string(const std::vector<FieldView>& fs,uint16_t id,std::string* out,std::string* error){
     const auto* f=find(fs,id);if(!f||f->type!=WT_UTF8){if(error)*error="missing or wrong-type BRK2 string field "+std::to_string(id);return false;}
+    if(!valid_utf8(f->data,f->size)){if(error)*error="invalid UTF-8 in BRK2 string field";return false;}
     out->assign(reinterpret_cast<const char*>(f->data),f->size);
     if(out->empty()){if(error)*error="empty BRK2 required string field "+std::to_string(id);return false;}
     return true;
@@ -90,6 +109,9 @@ bool decode_brk2_request_body(const std::vector<uint8_t>& body,BrokerRequest* ou
     BrokerRequest req;
     if(!get_string(fs,1,&req.task_id,error)||!get_string(fs,2,&req.source,error)||
        !get_string(fs,3,&req.destination,error)||!get_string(fs,4,&req.kind,error))return false;
+    for (const auto* value : {&req.task_id, &req.source, &req.destination, &req.kind}) {
+        if (value->size() > limits.max_string_bytes) return fail("BRK2 string exceeds configured limit");
+    }
     const uint8_t *p=nullptr;
     if(!get_fixed(fs,5,WT_U8,1,&p,error))return false;req.priority=p[0];
     if(!get_fixed(fs,6,WT_U32,4,&p,error))return false;req.timeout_ms=read32(p);
@@ -105,6 +127,8 @@ bool decode_brk2_request_body(const std::vector<uint8_t>& body,BrokerRequest* ou
 
 std::vector<uint8_t> encode_brk2_response_body(const BrokerResponse& r,uint64_t request_id,const ProtocolLimits& limits){
     if(r.result.size()>limits.max_payload_bytes)throw std::runtime_error("BRK2 response payload exceeds limit");
+    if(r.task_id.size()>limits.max_string_bytes||r.error.size()>limits.max_string_bytes)
+        throw std::runtime_error("BRK2 response string exceeds configured limit");
     std::vector<uint8_t> p;
     field_str(p,1,r.task_id);field_u8(p,2,static_cast<uint8_t>(r.status));
     field_i64(p,3,static_cast<int64_t>(r.selected_gpu));field_u64(p,4,r.latency_ms);
