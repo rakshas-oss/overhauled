@@ -44,6 +44,10 @@ struct BrokerRequest {
     std::vector<uint8_t> payload;
     // In-process only (not part of the BRK1 frame); absent means CPU by default.
     std::optional<TaskProfile> profile;
+    // Optional wire-carried device preference, from BRK2 field 10 when present.
+    // Values: "" (unset), "cpu", "gpu", "npu", "auto". Old servers ignore it;
+    // new servers map "npu" to an inference profile (see BrokerService).
+    std::string device_preference;
 };
 
 struct BrokerResponse {
@@ -53,7 +57,8 @@ struct BrokerResponse {
     uint64_t latency_ms = 0;
     std::vector<uint8_t> result;
     std::string error;
-    // In-process only (not encoded in the BRK1 frame).
+    // Encoded in BRK2 responses as optional field 7 ("cpu"/"gpu"/"npu");
+    // not encoded in the BRK1 frame.
     BackendKind backend = BackendKind::Cpu;
     bool fell_back_to_cpu = false;
 };

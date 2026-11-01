@@ -207,6 +207,28 @@ int main() {
         CHECK(safe.fell_back_to_cpu && safe.selected_gpu == -1 && first_value(safe.result) == 2.0);
     }
 
+    // Wire-carried device_preference (BRK2 field 10) without an in-process
+    // profile: "npu" selects the NPU when an executor is enabled, and
+    // falls back to CPU when no executor is configured.
+    {
+        BrokerServiceConfig c;
+        c.npu_enabled = true;
+        c.npu_executor = std::make_shared<FakeNpu>();
+        BrokerService svc(c);
+        BrokerRequest req = make_request();
+        req.profile = std::nullopt;
+        req.device_preference = "npu";
+        const auto r = svc.handle_request(req);
+        CHECK(r.backend == BackendKind::Npu && first_value(r.result) == 3.0);
+        CHECK(r.selected_gpu == -1);
+
+        BrokerServiceConfig c2;
+        c2.npu_enabled = true;  // no executor
+        BrokerService svc2(c2);
+        const auto r2 = svc2.handle_request(req);
+        CHECK(r2.backend == BackendKind::Cpu && first_value(r2.result) == 2.0);
+    }
+
     std::cout << "backend_dispatch_test passed\n";
     return 0;
 }
