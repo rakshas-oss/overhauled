@@ -41,6 +41,6 @@ Error strings are implementation details. Tests should compare stable error cate
 
 Implementations must enforce explicit frame, payload, field-count, and per-field bounds before allocation or copying. Stream readers must tolerate partial reads, enforce a finite frame deadline, and release per-connection state on timeout or disconnect. Concurrency tests must verify request-ID correlation when multiple requests are in flight; no response may be attributed to a different request.
 
-## Current milestone boundary
+## Executable corpus
 
-This commit adds the shared seed corpus and normative test expectations. It does not yet add corpus loaders to the Rust and C++ test binaries, sustained-load benchmarks, a coverage-guided fuzzer, or a complete timeout/concurrency harness. Those are follow-on implementation tasks; CI must not report this seed corpus as executed until both runners consume it.
+The executable BRK1/BRK2 corpus, its line format, required runners, and current coverage boundary are documented in [BRK_CONFORMANCE_V1.md](BRK_CONFORMANCE_V1.md). Both language implementations must execute the mirrored corpus in CI; a fixture-only check is not conformance evidence.
