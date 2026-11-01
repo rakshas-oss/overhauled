@@ -1,0 +1,39 @@
+{
+  "format": "brk2-conformance-corpus",
+  "version": 1,
+  "protocol": "BRK2",
+  "byte_order": "big-endian",
+  "frame_prefix": "uint32 body_length",
+  "cases": [
+    {
+      "id": "request-minimal-known-fields",
+      "kind": "valid",
+      "frame_hex": "0000009842524b3202000020000300000102030405060708000000010001000000000078000108010000000f636f6e666f726d616e63652d303031000208010000000579756b6b69000308010000000a6f7665726861756c65640004080100000009696e666572656e63650005010100000001070006030100000004000009c40007090100000004000102ff00090400000000081a5e27eef13e0000",
+      "expect": "accept",
+      "message": {
+        "type": 3,
+        "request_id": "72623859790382856",
+        "schema_id": 1,
+        "schema_version": 1
+      },
+      "fields": [
+        {"id": 1, "wire_type": "utf8", "critical": true, "value": "conformance-001"},
+        {"id": 2, "wire_type": "utf8", "critical": true, "value": "yukki"},
+        {"id": 3, "wire_type": "utf8", "critical": true, "value": "overhauled"},
+        {"id": 4, "wire_type": "utf8", "critical": true, "value": "inference"},
+        {"id": 5, "wire_type": "u8", "critical": true, "value": 7},
+        {"id": 6, "wire_type": "u32", "critical": true, "value": 2500},
+        {"id": 7, "wire_type": "bytes", "critical": true, "value_hex": "000102ff"},
+        {"id": 9, "wire_type": "u64", "critical": false, "value": "1900000000000000000"}
+      ]
+    },
+    {"id": "truncated-prefix", "kind": "derived-invalid", "from": "request-minimal-known-fields", "mutation": {"op": "truncate", "length": 2}, "expect": "reject"},
+    {"id": "truncated-body", "kind": "derived-invalid", "from": "request-minimal-known-fields", "mutation": {"op": "truncate", "length": 1}, "expect": "reject"},
+    {"id": "trailing-byte", "kind": "derived-invalid", "from": "request-minimal-known-fields", "mutation": {"op": "append_hex", "hex": "00"}, "expect": "reject"},
+    {"id": "bad-magic", "kind": "derived-invalid", "from": "request-minimal-known-fields", "mutation": {"op": "overwrite_hex", "offset": 4, "hex": "00000000"}, "expect": "reject"},
+    {"id": "nonzero-reserved", "kind": "derived-invalid", "from": "request-minimal-known-fields", "mutation": {"op": "overwrite_hex", "offset": 30, "hex": "0001"}, "expect": "reject"},
+    {"id": "unknown-critical-field", "kind": "derived-invalid", "from": "request-minimal-known-fields", "mutation": {"op": "append_tlv", "field_id": 600, "wire_type": 1, "flags": 1, "value_hex": "01"}, "expect": "reject-at-schema-validation"},
+    {"id": "unknown-optional-field", "kind": "derived-valid", "from": "request-minimal-known-fields", "mutation": {"op": "append_tlv", "field_id": 500, "wire_type": 9, "flags": 0, "value_hex": "657874"}, "expect": "accept-and-preserve-or-ignore"},
+    {"id": "invalid-u8-width", "kind": "derived-invalid", "from": "request-minimal-known-fields", "mutation": {"op": "replace_field_value", "field_id": 5, "wire_type": 1, "value_hex": "0203"}, "expect": "reject"}
+  ]
+}
