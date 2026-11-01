@@ -1,0 +1,34 @@
+name: BRK2 C++ Protocol Tests
+
+on:
+  push:
+    branches: ["main", "copilot/**"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: brk2-cpp-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  brk2-cpp:
+    name: BRK2 C++ codec and mutation tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure CPU-only broker and tests
+        run: >-
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Debug
+          -DENABLE_CUDA=OFF
+          -DENABLE_TENSORRT=OFF
+          -DBUILD_BROKER=ON
+          -DBUILD_EXAMPLES=OFF
+          -DBUILD_TESTING=ON
+      - name: Build BRK2 protocol test
+        run: cmake --build build --target brk2_protocol_test --parallel 2
+      - name: Run BRK2 protocol test
+        run: ctest --test-dir build --output-on-failure -R '^brk2_protocol_test$'
