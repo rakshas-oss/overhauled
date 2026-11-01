@@ -134,6 +134,12 @@ if(BUILD_TESTING AND BUILD_BROKER)
     target_link_libraries(brk2_protocol_test PRIVATE broker_service)
     add_test(NAME brk2_protocol_test COMMAND brk2_protocol_test)
 
+    add_executable(brk_conformance_test tests/brk_conformance_test.cpp)
+    target_link_libraries(brk_conformance_test PRIVATE broker_service)
+    target_compile_definitions(brk_conformance_test PRIVATE
+        BRK_CONFORMANCE_CORPUS="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/protocol/brk-conformance-v1.corpus")
+    add_test(NAME brk_conformance_test COMMAND brk_conformance_test)
+
     add_executable(broker_protocol_test tests/broker_protocol_test.cpp)
     target_link_libraries(broker_protocol_test PRIVATE broker_service)
     add_test(NAME broker_protocol_test COMMAND broker_protocol_test)
