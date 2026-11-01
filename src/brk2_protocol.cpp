@@ -21,7 +21,7 @@ uint32_t read32(const uint8_t* p) { return (uint32_t(p[0]) << 24) | (uint32_t(p[
 uint64_t read64(const uint8_t* p) { uint64_t v=0; for(int i=0;i<8;++i) v=(v<<8)|p[i]; return v; }
 void put16(std::vector<uint8_t>& b,uint16_t v){b.push_back(uint8_t(v>>8));b.push_back(uint8_t(v));}
 void put32(std::vector<uint8_t>& b,uint32_t v){for(int i=3;i>=0;--i)b.push_back(uint8_t(v>>(i*8)));}
-void put64(std::vector<uint8_t>& b,uint64_t v){for(int i=7;i>=0;--i)b.push_back(uint8_t(v>>(i*8));}
+void put64(std::vector<uint8_t>& b,uint64_t v){for(int i=7;i>=0;--i)b.push_back(uint8_t(v>>(i*8)));}
 void put_field(std::vector<uint8_t>& p,uint16_t id,uint8_t type,const uint8_t* data,std::size_t n,uint8_t flags=0){
     if(n>std::numeric_limits<uint32_t>::max()) throw std::runtime_error("BRK2 field too large");
     put16(p,id);p.push_back(type);p.push_back(flags);put32(p,static_cast<uint32_t>(n));
@@ -83,6 +83,10 @@ bool decode_brk2_request_body(const std::vector<uint8_t>& body,BrokerRequest* ou
     if(read32(body.data()+20)!=BRK2_SCHEMA_REQUEST||read16(body.data()+24)!=1)return fail("unsupported BRK2 request schema");
     *request_id=read64(body.data()+12);
     std::vector<FieldView> fs;if(!parse_fields(body,&fs,error))return false;
+    for (const auto& f : fs) {
+        const bool known = f.id >= 1 && f.id <= 9;
+        if (!known && (f.flags & FIELD_CRITICAL)) return fail("unknown critical BRK2 field");
+    }
     BrokerRequest req;
     if(!get_string(fs,1,&req.task_id,error)||!get_string(fs,2,&req.source,error)||
        !get_string(fs,3,&req.destination,error)||!get_string(fs,4,&req.kind,error))return false;
