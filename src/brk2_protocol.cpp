@@ -103,7 +103,7 @@ bool decode_brk2_request_body(const std::vector<uint8_t>& body,BrokerRequest* ou
     *request_id=read64(body.data()+12);
     std::vector<FieldView> fs;if(!parse_fields(body,&fs,error))return false;
     for (const auto& f : fs) {
-        const bool known = f.id >= 1 && f.id <= 9;
+        const bool known = f.id >= 1 && f.id <= 10;
         if (!known && (f.flags & FIELD_CRITICAL)) return fail("unknown critical BRK2 field");
     }
     BrokerRequest req;
@@ -120,6 +120,15 @@ bool decode_brk2_request_body(const std::vector<uint8_t>& body,BrokerRequest* ou
     req.payload.assign(payload->data,payload->data+payload->size);
     if(const auto* key=find(fs,8)){if(key->type!=WT_UUID||key->size!=16)return fail("invalid BRK2 idempotency key");}
     if(const auto* deadline=find(fs,9)){if(deadline->type!=WT_U64||deadline->size!=8)return fail("invalid BRK2 deadline");}
+    // Optional field 10: device_preference, UTF-8, non-critical so old
+    // servers ignore it. Reject unknown values rather than silently
+    // misrouting a task to the wrong backend.
+    if(const auto* pref=find(fs,10)){
+        if(pref->type!=WT_UTF8)return fail("invalid BRK2 device_preference type");
+        std::string value(reinterpret_cast<const char*>(pref->data),pref->size);
+        if(value!="cpu"&&value!="gpu"&&value!="npu"&&value!="auto")return fail("unknown BRK2 device_preference");
+        req.device_preference=value;
+    }
     if(req.timeout_ms==0||req.timeout_ms>BROKER_MAX_TIMEOUT_MS)return fail("BRK2 timeout_ms outside 1..300000");
     if(body.size()>limits.max_frame_bytes)return fail("BRK2 frame exceeds limit");
     *out=std::move(req);return true;
@@ -133,6 +142,10 @@ std::vector<uint8_t> encode_brk2_response_body(const BrokerResponse& r,uint64_t 
     field_str(p,1,r.task_id);field_u8(p,2,static_cast<uint8_t>(r.status));
     field_i64(p,3,static_cast<int64_t>(r.selected_gpu));field_u64(p,4,r.latency_ms);
     field_bytes(p,5,r.result);field_str(p,6,r.error);
+    // Optional field 7: backend, so a client can verify it actually ran
+    // on the backend it requested instead of silently accepting a CPU
+    // fallback as an NPU result. Old clients ignore unknown optional fields.
+    field_str(p,7,backend_name(r.backend));
     if(p.size()>limits.max_payload_bytes||BRK2_HEADER_BYTES+p.size()>limits.max_frame_bytes)throw std::runtime_error("BRK2 response exceeds frame limit");
     return envelope(MSG_RESPONSE,FLAG_RESPONSE|FLAG_END_STREAM,request_id,BRK2_SCHEMA_RESPONSE,p);
 }

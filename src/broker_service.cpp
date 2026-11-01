@@ -156,8 +156,33 @@ BrokerResponse BrokerService::handle_request(const BrokerRequest& request) {
     policy.gpu_available = use_gpu_placement_;
     policy.npu_available = config_.npu_enabled && config_.npu_executor != nullptr &&
                            config_.npu_executor->available();
-    const BackendKind backend = select_backend(policy, request.profile);
-    const bool fallback_safe = request.profile.has_value() && request.profile->fallback_safe;
+    // Wire-carried device preference (BRK2 field 10) fills in the profile
+    // that the BRK1/BRK2 wire format otherwise cannot carry. Without this,
+    // a YuKKi-OS inference task arriving over the wire always looked
+    // profile-less and could never select the NPU. "cpu" is an explicit
+    // CPU request, not just a default.
+    std::optional<TaskProfile> effective_profile = request.profile;
+    bool fallback_safe = request.profile.has_value() && request.profile->fallback_safe;
+    if (!effective_profile.has_value()) {
+        if (request.device_preference == "npu") {
+            TaskProfile p;
+            p.is_inference = true;
+            p.fallback_safe = true;
+            p.estimated_bytes = request.payload.size();
+            effective_profile = p;
+            fallback_safe = true;
+        } else if (request.device_preference == "gpu") {
+            TaskProfile p;
+            p.is_data_parallel = true;
+            p.estimated_bytes = request.payload.size();
+            p.fallback_safe = true;
+            effective_profile = p;
+            fallback_safe = true;
+        } else if (request.device_preference == "cpu") {
+            policy.force_cpu = true;
+        }
+    }
+    const BackendKind backend = select_backend(policy, effective_profile);
 
     try {
         const std::vector<double> input = decode_payload_as_doubles(request.payload);

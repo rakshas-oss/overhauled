@@ -2,6 +2,7 @@
 // Copyright (c) 2024 NVLink Placement Contributors
 
 #include "broker_server.h"
+#include "npu_device.h"
 
 #include <csignal>
 #include <cstdlib>
@@ -22,7 +23,9 @@ void signal_handler(int) {
 
 void print_usage(const char* argv0) {
     std::cout << "Usage: " << argv0 << " [port] [--cpu-only] [--default-backend cpu|gpu|npu]\n"
-              << "       [--gpu-offload-threshold BYTES] [--npu-enabled]\n";
+              << "       [--gpu-offload-threshold BYTES] [--npu-enabled] [--npu-simulated]\n"
+              << "  --npu-simulated: enable the CPU-emulated NPU executor for\n"
+              << "    conformance/CI only. It is NOT hardware acceleration.\n";
     std::cout << "Starts broker interoperability server for YuKKi-OS task dispatch.\n";
 }
 
@@ -61,6 +64,15 @@ int main(int argc, char** argv) {
         }
         if (arg == "--npu-enabled") {
             config.service_config.npu_enabled = true;
+            continue;
+        }
+        if (arg == "--npu-simulated") {
+            // Previously --npu-enabled alone wired no executor, so the NPU
+            // could never be selected. This flag wires the explicit
+            // simulation executor; real hardware executors replace it.
+            config.service_config.npu_enabled = true;
+            config.service_config.npu_executor =
+                std::make_shared<nvlink::broker::SimulatedNpuExecutor>();
             continue;
         }
         config.port = std::stoi(arg);
