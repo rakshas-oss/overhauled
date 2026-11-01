@@ -2,6 +2,7 @@
 #include "brk2_protocol.h"
 
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <vector>
@@ -51,12 +52,12 @@ int main(){
     assert(!decode_brk2_request_body(body,&request,&id,&error,oversized));
     // Deterministic mutation corpus: every byte/bit flip and every truncation
     // must be rejected safely or decoded, never crash or read out of bounds.
-    for (size_t cut = 0; cut < body.size(); ++cut) {
+    for (std::size_t cut = 0; cut < body.size(); ++cut) {
         std::vector<uint8_t> truncated_body(body.begin(), body.begin() + cut);
         BrokerRequest fuzz_request; uint64_t fuzz_id = 0; std::string fuzz_error;
         (void)decode_brk2_request_body(truncated_body, &fuzz_request, &fuzz_id, &fuzz_error, limits);
     }
-    for (size_t index = 0; index < body.size(); ++index) {
+    for (std::size_t index = 0; index < body.size(); ++index) {
         for (unsigned bit = 0; bit < 8; ++bit) {
             auto mutated = body;
             mutated[index] ^= static_cast<uint8_t>(1u << bit);
