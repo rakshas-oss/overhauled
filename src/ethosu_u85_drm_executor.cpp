@@ -57,6 +57,25 @@ struct DrmJob {
     std::uint32_t region_bo_handles[8];
 };
 struct DrmSubmit { std::uint64_t jobs; std::uint32_t job_count, pad; };
+struct DrmGemClose { std::uint32_t handle, pad; };
+constexpr unsigned long kIoctlGemClose = _IOW('d', 0x09, DrmGemClose);
+struct GemHandle {
+    int fd = -1;
+    std::uint32_t value = 0;
+    GemHandle() = default;
+    GemHandle(int owner, std::uint32_t h) : fd(owner), value(h) {}
+    ~GemHandle() { if (fd >= 0 && value != 0) { DrmGemClose c{value, 0}; (void)::ioctl(fd, kIoctlGemClose, &c); } }
+    GemHandle(GemHandle&& o) noexcept : fd(o.fd), value(o.value) { o.fd = -1; o.value = 0; }
+    GemHandle& operator=(GemHandle&& o) noexcept {
+        if (this != &o) {
+            if (fd >= 0 && value != 0) { DrmGemClose c{value, 0}; (void)::ioctl(fd, kIoctlGemClose, &c); }
+            fd = o.fd; value = o.value; o.fd = -1; o.value = 0;
+        }
+        return *this;
+    }
+    GemHandle(const GemHandle&) = delete;
+    GemHandle& operator=(const GemHandle&) = delete;
+};
 
 #define ETHOSU_IOCTL(id, type) _IOWR('d', kDrmCommandBase + (id), type)
 constexpr unsigned long kIoctlQuery = ETHOSU_IOCTL(kQuery, DrmDevQuery);
@@ -262,7 +281,7 @@ std::vector<double> EthosU85DrmExecutor::run(const std::vector<double>& input) {
     DrmJob job{};
     job.cmd_bo = cs.handle;
     job.sram_size = b.sram_size;
-    for (std::size_t i = 0; i < handles.size(); ++i) job.region_bo_handles[i] = handles[i];
+    for (std::size_t i = 0; i < handles.size(); ++i) job.region_bo_handles[i] = handles[i].value;
     DrmSubmit submit{reinterpret_cast<std::uint64_t>(&job), 1, 0};
     if (::ioctl(impl_->fd, kIoctlSubmit, &submit) < 0)
         throw std::runtime_error("Ethos-U SUBMIT failed: " + std::string(std::strerror(errno)));
@@ -271,7 +290,7 @@ std::vector<double> EthosU85DrmExecutor::run(const std::vector<double>& input) {
     if (::clock_gettime(CLOCK_MONOTONIC, &now) != 0)
         throw std::runtime_error("clock_gettime failed while waiting for Ethos-U job");
     const std::int64_t deadline = (std::int64_t(now.tv_sec) * 1000000000LL + now.tv_nsec) + kJobTimeoutNs;
-    DrmBoWait wait{handles[b.output_region], 0, deadline};
+    DrmBoWait wait{handles[b.output_region].value, 0, deadline};
     if (::ioctl(impl_->fd, kIoctlBoWait, &wait) < 0)
         throw std::runtime_error("Ethos-U BO_WAIT failed: " + std::string(std::strerror(errno)));
 
