@@ -101,6 +101,28 @@ int main(int argc, char** argv) {
         config.port = std::stoi(arg);
     }
 
+    if (!ethosu_device.empty() && ethosu_bundle.empty()) {
+        std::cerr << "--ethosu-device requires --npu-ethosu-bundle FILE\\n";
+        return 1;
+    }
+    if (!ethosu_bundle.empty()) {
+#ifdef OVERHAULED_HAS_ETHOSU_DRM
+        auto executor = std::make_shared<nvlink::broker::EthosU85DrmExecutor>(
+            ethosu_bundle, ethosu_device);
+        if (!executor->available()) {
+            std::cerr << "Ethos-U mainline DRM device unavailable: "
+                      << executor->device_path() << "\\n";
+            return 1;
+        }
+        config.service_config.npu_enabled = true;
+        config.service_config.npu_executor = std::move(executor);
+#else
+        std::cerr << "Ethos-U DRM support is not compiled in; rebuild with "
+                     "-DENABLE_ETHOSU_DRM=ON\\n";
+        return 1;
+#endif
+    }
+
     try {
         auto server = std::make_shared<nvlink::broker::BrokerServer>(config);
         g_server = server;
