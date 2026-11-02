@@ -7,9 +7,10 @@
 // --npu-enabled in broker_server_main wired no executor at all.
 //
 // This file adds two things, deliberately kept separate:
-//  * NpuDevice: a plain descriptor for a real NPU device (name/model).
-//    A real Ethos-U85 (or other) executor should implement NpuExecutor
-//    against its own driver and register itself with this descriptor.
+//  * EthosU85DrmExecutor: the opt-in mainline Linux DRM implementation is
+//    provided by ethosu_u85_drm_executor.h when ENABLE_ETHOSU_DRM=ON.
+//    It consumes a Vela-compiled YU85BND1 bundle; it is not a vector-math
+//    emulation. The simulation executor below remains CI-only.
 //  * SimulatedNpuExecutor: a CPU-emulated executor for conformance and
 //    CI only. It is NOT hardware acceleration and must never be
 //    presented as such. It exists so the full YuKKi-OS -> BRK2 -> broker
