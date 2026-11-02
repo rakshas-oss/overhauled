@@ -28,8 +28,8 @@ jobs:
           -DBUILD_BROKER=ON
           -DBUILD_EXAMPLES=OFF
           -DBUILD_TESTING=ON
-      - name: Build BRK2 protocol test
-        run: cmake --build build --target brk2_protocol_test brk_conformance_test --parallel 2
-      - name: Run BRK2 protocol test
-        run: ctest --test-dir build --output-on-failure -R '^(brk2_protocol_test|brk_conformance_test)$'
+      - name: Build all CPU-only broker and test targets
+        run: cmake --build build --parallel 2
+      - name: Run complete C++ test suite
+        run: ctest --test-dir build --output-on-failure
 
