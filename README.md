@@ -1,142 +1,85 @@
 # Overhauled v1.1.1
 
-A production-ready C++ library for NVLink-aware GPU task placement, topology-aware scheduling, and broker interoperability.
+Overhauled is a C++17 placement and execution library with an interoperable broker service. It provides topology-aware GPU scheduling and broker dispatch for CPU, GPU, and optional NPU execution. It is the execution plane, not a replacement for a control plane such as [YuKKi-OS](https://github.com/rakshas-oss/YuKKi-OS).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
 [![Release](https://img.shields.io/badge/Release-v1.1.1-blueviolet)](#)
-[![Broker](https://img.shields.io/badge/Protocol-BRK1%2Fv1-orange)](#)
+[![Broker](https://img.shields.io/badge/Protocol-BRK1%2FBRK2-orange)](#)
 
-## Overview
+## Capabilities
 
-Overhauled helps GPU systems place work on the right device with minimal host staging and better tail latency. The library combines:
+- NVLink-aware topology detection, sticky home-GPU affinity, and queue-aware placement.
+- Broker dispatch for CPU, GPU, and NPU preferences, with the selected backend returned to clients.
+- BRK1/v1 compatibility and BRK2/v2 TLV framing on the same TCP listener.
+- A shared Rust/C++ protocol conformance corpus and CPU-only test suite.
+- Opt-in mainline Linux DRM Ethos-U85 executor, with a documented Vela-generated `YU85BND1` bundle format.
+- Optional CUDA/TensorRT GPU runtime features; deterministic CPU-only broker operation remains available.
 
-- NVLink-aware topology detection and peer selection
-- Sticky home-GPU affinity for reuse-friendly scheduling
-- Intelligent fallback from NVLink -> PCIe -> least-loaded GPU
-- Backend dispatch for CPU / GPU / NPU execution decisions
-- A broker protocol for interoperable request/response service flows
+## Control-plane interoperability
 
-This repository is the placement and execution plane. It does not replace the control plane; instead it exposes a stable, versioned protocol boundary for systems like `rakshas-oss/YuKKi-OS` and other control-plane orchestrators.
+YuKKi-OS remains the control plane; Overhauled owns broker execution and accelerator placement. YuKKi-OS uses the BRK1 or BRK2 binary broker envelope for the Overhauled endpoint. Its separate generic JSON broker client is not compatible with this listener. BRK2 request field `device_preference` (field 10) can request `cpu`, `gpu`, or `npu`; response field `backend` (field 7) reports which backend actually handled the request. A preference is not a hardware guarantee. See [docs/YUKKI_INTEROP.md](docs/YUKKI_INTEROP.md) for the cross-repository boundary and hardware qualifications.
 
-## What's new in v1.1.1
-
-Release v1.1.1 (2026-10-13) — patch release: align active version metadata, packaging metadata, and operational references with the current release baseline.
-
-- Refreshed the version baseline for the active project release line
-- Updated packaging and installation metadata to the current 1.1.1 release
-- Kept compatibility with the existing v1.1 feature set while aligning docs and references
-- Documentation refresh across release metadata, deployment notes, and package-manager guidance
-
-## Quick start
-
-### Install from source
+## Quick start: CPU-only broker
 
 ```bash
 git clone https://github.com/rakshas-oss/overhauled.git
 cd overhauled
-mkdir -p build && cd build
-cmake -S .. -B . \
+cmake -S . -B build \
   -DCMAKE_BUILD_TYPE=Release \
   -DENABLE_CUDA=OFF \
   -DENABLE_TENSORRT=OFF \
   -DBUILD_BROKER=ON
-cmake --build . -j"$(nproc)"
+cmake --build build -j"$(nproc)"
+ctest --test-dir build --output-on-failure
+./build/broker_server 9090 --cpu-only
 ```
 
-### Minimal library example
+This mode is useful for CI, development, and non-GPU hosts. The service uses bounded broker framing, but the protocol is not an authentication layer; deploy it only on a trusted network or behind an independently secured proxy.
 
-```cpp
-#include "nvlink_placement.h"
-#include <iostream>
+## Optional Ethos-U85 Linux DRM backend
 
-using namespace nvlink;
-
-int main() {
-    auto topo = GpuTopology::detect();
-    topo.enable_peer_access();
-
-    Placer placer(topo, 32);
-
-    int home_gpu = placer.assign_home(42);
-    int target_gpu = placer.place(42, [&](int gpu) {
-        return gpu_queue_depth[gpu];
-    });
-
-    enqueue_task_on_gpu(target_gpu);
-    return 0;
-}
-```
-
-### Run the broker service in CPU-only mode
+Physical NPU execution is opt-in and requires Linux with a kernel exposing the mainline Ethos-U DRM UAPI, plus a compatible Vela-generated bundle. Configure and build with:
 
 ```bash
-cd build
-./broker_server 9090 --cpu-only
+cmake -S . -B build \
+  -DENABLE_ETHOSU_DRM=ON \
+  -DENABLE_CUDA=OFF \
+  -DENABLE_TENSORRT=OFF \
+  -DBUILD_BROKER=ON
+cmake --build build -j"$(nproc)"
+ctest --test-dir build --output-on-failure
 ```
 
-This is useful for CI, non-GPU hosts, and smoke tests while preserving the same protocol contract.
-
-## Documentation
-
-- [docs/releases/v1.1.md](docs/releases/v1.1.md) — v1.1 release notes and migration notes
-- [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md) — historical release notes
-- [docs/LIBRARY.md](docs/LIBRARY.md) — API usage and integration guide
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — design and topology view
-- [docs/BROKER_PROTOCOL.md](docs/BROKER_PROTOCOL.md) — BRK1 and BRK2 broker protocol contracts
-- [docs/WASM_INTEROP.md](docs/WASM_INTEROP.md) — WASM interoperability and sandbox boundary notes
-- [docs/SYSADMIN_HOWTO.md](docs/SYSADMIN_HOWTO.md) — Linux deployment and operations guide
-- [docs/BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) — performance benchmarks and latency data
-- [docs/PUBLISHING.md](docs/PUBLISHING.md) — packaging and publishing guide
-- [docs/WHITEPAPER.md](docs/WHITEPAPER.md) — design rationale and background
-- [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) — production deployment guidance
-- [OPERATIONS_RUNBOOK.md](OPERATIONS_RUNBOOK.md) — operational playbook
-
-## Build modes
+Then launch using a `YU85BND1` model bundle:
 
 ```bash
-# CPU-first / CI friendly
-cmake -S . -B build -DENABLE_CUDA=OFF -DENABLE_TENSORRT=OFF
+./build/broker_server 9090 --npu-ethosu-bundle model.yu85
+# Optional explicit DRM render node:
+./build/broker_server 9090 --npu-ethosu-bundle model.yu85 --ethosu-device /dev/dri/renderD128
+```
 
-# Auto-detect CUDA runtime and topology support
+`--npu-simulated` is CPU emulation for CI/conformance, not hardware acceleration. A successful build, parser test, or simulator run does not establish physical-board inference. See [docs/ETHOSU_U85_BUNDLE.md](docs/ETHOSU_U85_BUNDLE.md) for bundle layout and validation limits.
+
+## Other build modes
+
+```bash
+# CUDA-aware placement, without TensorRT
 cmake -S . -B build -DENABLE_CUDA=ON -DENABLE_TENSORRT=OFF
 
-# TensorRT runtime server
+# TensorRT runtime server (requires CUDA and user-provided TensorRT)
 cmake -S . -B build -DENABLE_CUDA=ON -DENABLE_TENSORRT=ON -DTENSORRT_ROOT=/path/to/tensorrt
 ```
 
-## Key features
+## Documentation
 
-- Sticky affinity and home-GPU assignment
-- NVLink-aware rebalancing before PCIe fallback
-- Thread-safe placement decisions for concurrent task dispatch
-- Broker protocol support for external control-plane communication
-- CPU-only compatibility for smoke tests and development
-
-## Security and operating model
-
-Overhauled is designed as the execution plane. The broker transport is bounded and versioned, but it is not an authentication layer by itself. Production deployments should place the service behind a trusted boundary and apply network restrictions, host validation, and deployment-level controls appropriate for the environment.
-
-## Performance
-
-- Lower latency than blind round-robin placement
-- Better tail-latency behavior under multi-client load
-- High GPU utilization when topology-aware placement is enabled
+- [Broker protocol](docs/BROKER_PROTOCOL.md) · [BRK2 conformance](docs/BRK2_CONFORMANCE_V1.md) · [Executable BRK corpus](docs/BRK_CONFORMANCE_V1.md)
+- [YuKKi-OS interoperability](docs/YUKKI_INTEROP.md) · [WASM interoperability](docs/WASM_INTEROP.md)
+- [Ethos-U85 bundle and hardware boundary](docs/ETHOSU_U85_BUNDLE.md)
+- [Architecture](docs/ARCHITECTURE.md) · [Library guide](docs/LIBRARY.md)
+- [System administration](docs/SYSADMIN_HOWTO.md) · [Operations runbook](OPERATIONS_RUNBOOK.md) · [Deployment guide](DEPLOYMENT_GUIDE.md)
+- [Publishing](docs/PUBLISHING.md) · [Release notes](docs/RELEASE_NOTES.md) · [Benchmarks](docs/BENCHMARK_RESULTS.md)
 
 ## License
 
-MIT License — see [LICENSE](LICENSE).
-
-## Third-party licences
-
-CUDA Toolkit (including cudart/cuBLAS) and TensorRT (including NvInfer and
-nvonnxparser) are optional, user-supplied proprietary NVIDIA components. They
-are not covered by this project's MIT License and are not redistributed here.
-Users who install or use them must accept and comply with NVIDIA's applicable
-terms. See [NOTICE](NOTICE) for official licensing links.
-
-## References
-
-- [NVIDIA CUDA P2P Documentation](https://docs.nvidia.com/cuda/cuda-runtime-api/)
-- [NVLink Architecture](https://www.nvidia.com/en-us/data-center/nvlink/)
-- [YuKKi-OS](https://github.com/rakshas-oss/YuKKi-OS)
+MIT License — see [LICENSE](LICENSE). Optional CUDA Toolkit and TensorRT components are user-supplied proprietary NVIDIA software, not redistributed under this project's license; see [NOTICE](NOTICE).
