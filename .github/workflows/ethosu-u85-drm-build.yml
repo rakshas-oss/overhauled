@@ -1,0 +1,56 @@
+name: Ethos-U85 DRM Linux Build
+
+on:
+  push:
+    branches: [ci/ethosu-u85-drm-build]
+  pull_request:
+    paths:
+      - "CMakeLists.txt"
+      - "include/ethosu_u85_drm_executor.h"
+      - "src/ethosu_u85_drm_executor.cpp"
+      - "src/broker_server_main.cpp"
+      - "tests/**"
+      - ".github/workflows/ethosu-u85-drm-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drm-enabled:
+    name: Linux DRM-enabled build and tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure with Ethos-U DRM enabled
+        run: >-
+          cmake -S . -B build-drm
+          -DCMAKE_BUILD_TYPE=Release
+          -DENABLE_CUDA=OFF
+          -DENABLE_ETHOSU_DRM=ON
+          -DBUILD_BROKER=ON
+          -DBUILD_EXAMPLES=OFF
+          -DBUILD_TESTING=ON
+      - name: Build DRM-enabled broker and test targets
+        run: cmake --build build-drm --parallel 2
+      - name: Run CPU-side conformance and broker tests
+        run: ctest --test-dir build-drm --output-on-failure
+
+  cpu-only-regression:
+    name: Linux CPU-only regression build and tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure CPU-only build
+        run: >-
+          cmake -S . -B build-cpu
+          -DCMAKE_BUILD_TYPE=Release
+          -DENABLE_CUDA=OFF
+          -DENABLE_ETHOSU_DRM=OFF
+          -DBUILD_BROKER=ON
+          -DBUILD_EXAMPLES=OFF
+          -DBUILD_TESTING=ON
+      - name: Build CPU-only broker and test targets
+        run: cmake --build build-cpu --parallel 2
+      - name: Run CPU-only regression tests
+        run: ctest --test-dir build-cpu --output-on-failure
