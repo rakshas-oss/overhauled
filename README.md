@@ -1,10 +1,10 @@
-# Overhauled v1.1
+# Overhauled v1.1.1
 
 A production-ready C++ library for NVLink-aware GPU task placement, topology-aware scheduling, and broker interoperability.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
-[![Release](https://img.shields.io/badge/Release-v1.1-blueviolet)](#)
+[![Release](https://img.shields.io/badge/Release-v1.1.1-blueviolet)](#)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2Fv1-orange)](#)
 
 ## Overview
@@ -17,16 +17,16 @@ Overhauled helps GPU systems place work on the right device with minimal host st
 - Backend dispatch for CPU / GPU / NPU execution decisions
 - A broker protocol for interoperable request/response service flows
 
-This repository is the placement and execution plane. It does not replace the control plane; instead it exposes a stable, versioned protocol boundary for systems like `rakshas-oss/YuKKi-OS` and other brokers.
+This repository is the placement and execution plane. It does not replace the control plane; instead it exposes a stable, versioned protocol boundary for systems like `rakshas-oss/YuKKi-OS` and other control-plane orchestrators.
 
-## What's new in v1.1
+## What's new in v1.1.1
 
-Release v1.1 (2026-10-13) — highlights: improved placement stability, minor performance improvements, documentation and packaging updates. See docs/releases/v1.1.md for full notes.
+Release v1.1.1 (2026-10-13) — patch release: align active version metadata, packaging metadata, and operational references with the current release baseline.
 
-- Improved NVLink peer selection heuristics to reduce tail latency under contention
-- Multiple small performance and memory usage improvements in the placement pipeline
-- Bug fixes for CPU-only broker startup and race conditions in the home-GPU assignment table
-- Documentation: expanded operations notes, packaging guidance, and new release notes page
+- Refreshed the version baseline for the active project release line
+- Updated packaging and installation metadata to the current 1.1.1 release
+- Kept compatibility with the existing v1.1 feature set while aligning docs and references
+- Documentation refresh across release metadata, deployment notes, and package-manager guidance
 
 ## Quick start
 
@@ -115,7 +115,7 @@ cmake -S . -B build -DENABLE_CUDA=ON -DENABLE_TENSORRT=ON -DTENSORRT_ROOT=/path/
 
 ## Security and operating model
 
-Overhauled is designed as the execution plane. The broker transport is bounded and versioned, but it is not an authentication layer by itself. Production deployments should place the service behind authenticated proxies and ensure broker transport security.
+Overhauled is designed as the execution plane. The broker transport is bounded and versioned, but it is not an authentication layer by itself. Production deployments should place the service behind a trusted boundary and apply network restrictions, host validation, and deployment-level controls appropriate for the environment.
 
 ## Performance
 

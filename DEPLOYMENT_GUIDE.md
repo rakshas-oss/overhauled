@@ -1,13 +1,13 @@
-# Overhauled GPU Runtime - Production Deployment Guide (v1.0.0)
+# Overhauled GPU Runtime - Production Deployment Guide (v1.1.1)
 
-This guide is the canonical deployment and operations reference for Overhauled 1.0.0. It consolidates installation, configuration, deployment strategies, tuning, and troubleshooting for production and development environments.
+This guide is the canonical deployment and operations reference for Overhauled 1.1.1. It consolidates installation, configuration, deployment strategies, tuning, and troubleshooting for production use.
 
 Table of contents
 1. Architecture Overview
 2. Prerequisites
-3. Installation & Build (checkout v1)
+3. Installation & Build (checkout v1.1.1)
 4. Configuration (config.yaml example)
-5. Run & Verify (v1.0.0)
+5. Run & Verify (v1.1.1)
 6. Deployment Strategies (single server, multi-GPU, load-balanced, Kubernetes)
 7. Performance Tuning
 8. Monitoring & Observability
@@ -29,7 +29,7 @@ Components:
 - NVIDIA stack: CUDA runtime, cuBLAS/cuDNN, TensorRT
 
 How it fits together:
-Clients send inference requests to the GPU Runtime Server via TCP; the server parses the ADI protocol, looks up the client's home GPU (sticky affinity), runs placement logic (Placer) based on topology (GpuTopology), and dispatches tasks to GPU worker queues. The Model Manager handles model loading and TensorRT engine lifecycle.
+Clients send inference requests to the GPU Runtime Server via TCP; the server parses the ADI protocol, looks up the client's home GPU (sticky affinity), runs placement logic (Placer) based on topology, and dispatches work across available GPUs.
 
 ---
 
@@ -64,16 +64,16 @@ Python client dependencies (example):
 
 ---
 
-## 3. Installation & Build (checkout v1)
+## 3. Installation & Build (checkout v1.1.1)
 
-Clone and checkout the v1 release tag (project version 1.0.0) before building:
+Clone and checkout the v1.1.1 release tag (project version 1.1.1) before building:
 
 ```bash
 git clone https://github.com/rakshas-oss/overhauled.git
 cd overhauled
-# Checkout the release tag (v1)
+# Checkout the release tag (v1.1.1)
 git fetch --tags origin
-git checkout v1
+git checkout v1.1.1
 ```
 
 Install NVIDIA stack (example notes)
@@ -90,7 +90,7 @@ sudo sh cuda_12.0.0_525.60.13_linux.run
 Build from source (example):
 
 ```bash
-# from repository root (after checkout v1)
+# from repository root (after checkout v1.1.1)
 mkdir -p build && cd build
 cmake .. \
   -DCMAKE_BUILD_TYPE=Release \
@@ -167,20 +167,20 @@ Runtime parameters (CLI overrides):
 
 ---
 
-## 5. Run & Verify (v1.0.0)
+## 5. Run & Verify (v1.1.1)
 
 Start the server and verify the version:
 
 ```bash
 # Start server in background
 ./gpu_runtime_server --port 8080 &
-# Check version (should report v1.0.0)
+# Check version (should report v1.1.1)
 ./gpu_runtime_server --version
 # Example test client
 python3 examples/test_tensor_client.py 127.0.0.1 8080
 ```
 
-Expected: `Overhauled GPU Runtime Server v1.0.0` printed by `--version`.
+Expected: `Overhauled GPU Runtime Server v1.1.1` printed by `--version`.
 
 ---
 
@@ -200,7 +200,7 @@ C. Load-balanced multi-server (production)
 - HAProxy or similar load balancer distributing TCP connections across stateless server instances
 - Example HAProxy backend config (TCP mode):
 
-```
+```text
 frontend tensor_inference
   bind *:8080
   mode tcp
@@ -216,7 +216,7 @@ backend servers
 
 D. Kubernetes (hyperscale)
 - Use nodeSelectors and device plugin to request GPUs (nvidia.com/gpu)
-- Example deployment (using the 1.0.0 image):
+- Example deployment (using the 1.1.1 image):
 
 ```yaml
 apiVersion: apps/v1
@@ -237,7 +237,7 @@ spec:
         gpu: "nvidia"
       containers:
       - name: gpu-runtime-server
-        image: rakshas-oss/overhauled:v1.0.0
+        image: rakshas-oss/overhauled:v1.1.1
         args: ["--port", "8080"]
         ports:
         - containerPort: 8080
@@ -333,8 +333,8 @@ CUDA Out of Memory
 High latency variance / p99 spikes
 - Diagnosis: check `nvidia-smi -q` for throttling, monitor queue depths, and watch for host-staging in logs
 - Fixes:
-  - Increase batch size slightly or enable NVLink-aware placement (enabled by default in 1.0.0)
-  - Ensure `GpuTopology::enable_peer_access()` is called during startup (server does this in 1.0.0)
+  - Increase batch size slightly or enable NVLink-aware placement (enabled by default in 1.1.1)
+  - Ensure `GpuTopology::enable_peer_access()` is called during startup (server does this in 1.1.1)
 
 Low GPU utilization
 - Fixes:
@@ -358,13 +358,9 @@ Scaling is near-linear; measure at your payload and concurrency.
 Recommended tests before scaling production:
 - Run multi-client benchmarks from docs/BENCHMARK_RESULTS.md
 - Validate topology with `nvidia-smi topo -m`
-- Verify `./gpu_runtime_server --version` reports v1.0.0 in the deployed image
+- Verify `./gpu_runtime_server --version` reports v1.1.1 in the deployed image
 
 ---
-
-If you want, I can also:
-- Run a YAML linter on the Kubernetes snippet and commit any minor formatting fixes.
-- Keep package metadata aligned with the 1.0.0 version in `CMakeLists.txt`.
 
 ## Third-party licences
 

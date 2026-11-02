@@ -47,8 +47,8 @@ brew install nvlink-placement
 
 | Manager | Status | Version |
 |---------|--------|----------|
-| Conan | Ready | 1.0.0 |
-| vcpkg | Ready | 1.0.0 |
-| Homebrew | Ready | 1.0.0 |
-| apt (Ubuntu) | In Progress | 1.0.0 |
-| dnf (Fedora) | In Progress | 1.0.0 |
+| Conan | Ready | 1.1.1 |
+| vcpkg | Ready | 1.1.1 |
+| Homebrew | Ready | 1.1.1 |
+| apt (Ubuntu) | In Progress | 1.1.1 |
+| dnf (Fedora) | In Progress | 1.1.1 |
