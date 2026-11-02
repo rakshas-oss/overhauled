@@ -12,6 +12,11 @@ option(ENABLE_TENSORRT "Enable TensorRT runtime server" OFF)
 option(BUILD_BROKER "Build broker interoperability service and server" ON)
 option(BUILD_EXAMPLES "Build example binaries" ON)
 option(ENABLE_INTEROP_ENCRYPTION "Enable interop encryption layer" OFF)
+option(ENABLE_ETHOSU_DRM "Enable the mainline Linux Ethos-U DRM executor" OFF)
+
+if(ENABLE_ETHOSU_DRM AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message(FATAL_ERROR "ENABLE_ETHOSU_DRM is supported only on Linux.")
+endif()
 
 include(CheckLanguage)
 include(CTest)
@@ -104,6 +109,11 @@ if(BUILD_BROKER)
 
     add_executable(broker_server src/broker_server_main.cpp)
     target_link_libraries(broker_server PRIVATE broker_service)
+
+    if(ENABLE_ETHOSU_DRM)
+        target_sources(broker_service PRIVATE src/ethosu_u85_drm_executor.cpp)
+        target_compile_definitions(broker_server PRIVATE OVERHAULED_HAS_ETHOSU_DRM=1)
+    endif()
 endif()
 
 if(HAS_TENSORRT)
