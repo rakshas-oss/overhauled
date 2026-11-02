@@ -254,14 +254,15 @@ std::vector<double> EthosU85DrmExecutor::run(const std::vector<double>& input) {
     if (input.size() != b.input_elements)
         throw std::runtime_error("input element count does not match Ethos-U bundle");
 
-    std::vector<std::uint32_t> handles(b.regions.size(), 0);
+    std::vector<GemHandle> handles;
+    handles.reserve(b.regions.size());
     std::vector<Mapping> maps;
     maps.reserve(b.regions.size());
     for (std::size_t i = 0; i < b.regions.size(); ++i) {
         DrmBoCreate create{b.regions[i].size(), 0, 0};
         if (::ioctl(impl_->fd, kIoctlBoCreate, &create) < 0)
             throw std::runtime_error("Ethos-U BO_CREATE failed: " + std::string(std::strerror(errno)));
-        handles[i] = create.handle;
+        handles.emplace_back(impl_->fd, create.handle);
         maps.emplace_back(impl_->fd, create.handle, b.regions[i].size());
         std::memcpy(maps.back().address, b.regions[i].data(), b.regions[i].size());
     }
@@ -278,8 +279,9 @@ std::vector<double> EthosU85DrmExecutor::run(const std::vector<double>& input) {
     if (::ioctl(impl_->fd, kIoctlCmdstreamCreate, &cs) < 0)
         throw std::runtime_error("Ethos-U CMDSTREAM_BO_CREATE failed: " + std::string(std::strerror(errno)));
 
+    GemHandle command_handle(impl_->fd, cs.handle);
     DrmJob job{};
-    job.cmd_bo = cs.handle;
+    job.cmd_bo = command_handle.value;
     job.sram_size = b.sram_size;
     for (std::size_t i = 0; i < handles.size(); ++i) job.region_bo_handles[i] = handles[i].value;
     DrmSubmit submit{reinterpret_cast<std::uint64_t>(&job), 1, 0};
