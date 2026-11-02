@@ -25,20 +25,14 @@ void signal_handler(int) {
 }
 
 void print_usage(const char* argv0) {
-    std::cout << "Usage: " << argv0 << " [port] [--cpu-only] [--default-backend cpu|gpu|npu]
-"
-              << "       [--gpu-offload-threshold BYTES] [--npu-enabled] [--npu-simulated]
-"
-              << "       [--npu-ethosu-bundle FILE] [--ethosu-device /dev/dri/renderD*]
-"
-              << "  --npu-ethosu-bundle: execute a Vela-compiled YU85BND1 model via mainline DRM.
-"
-              << "  --npu-simulated: enable the CPU-emulated NPU executor for
-"
-              << "    conformance/CI only. It is NOT hardware acceleration.
-";
-    std::cout << "Starts broker interoperability server for YuKKi-OS task dispatch.
-";
+    std::cout
+        << "Usage: " << argv0 << " [port] [--cpu-only] [--default-backend cpu|gpu|npu]\n"
+        << "       [--gpu-offload-threshold BYTES] [--npu-enabled] [--npu-simulated]\n"
+        << "       [--npu-ethosu-bundle FILE] [--ethosu-device /dev/dri/renderD*]\n"
+        << "  --npu-ethosu-bundle: execute a Vela-compiled YU85BND1 model via mainline DRM.\n"
+        << "  --npu-simulated: enable the CPU-emulated NPU executor for\n"
+        << "    conformance/CI only. It is NOT hardware acceleration.\n"
+        << "Starts broker interoperability server for YuKKi-OS task dispatch.\n";
 }
 
 } // namespace
@@ -67,8 +61,7 @@ int main(int argc, char** argv) {
             } else if (value == "npu") {
                 config.service_config.default_backend = nvlink::broker::BackendKind::Npu;
             } else {
-                std::cerr << "Unknown backend: " << value << "
-";
+                std::cerr << "Unknown backend: " << value << "\n";
                 return 1;
             }
             continue;
@@ -90,9 +83,6 @@ int main(int argc, char** argv) {
             continue;
         }
         if (arg == "--npu-simulated") {
-            // Previously --npu-enabled alone wired no executor, so the NPU
-            // could never be selected. This flag wires the explicit
-            // simulation executor; real hardware executors replace it.
             config.service_config.npu_enabled = true;
             config.service_config.npu_executor =
                 std::make_shared<nvlink::broker::SimulatedNpuExecutor>();
@@ -102,7 +92,7 @@ int main(int argc, char** argv) {
     }
 
     if (!ethosu_device.empty() && ethosu_bundle.empty()) {
-        std::cerr << "--ethosu-device requires --npu-ethosu-bundle FILE\\n";
+        std::cerr << "--ethosu-device requires --npu-ethosu-bundle FILE\n";
         return 1;
     }
     if (!ethosu_bundle.empty()) {
@@ -111,14 +101,14 @@ int main(int argc, char** argv) {
             ethosu_bundle, ethosu_device);
         if (!executor->available()) {
             std::cerr << "Ethos-U mainline DRM device unavailable: "
-                      << executor->device_path() << "\\n";
+                      << executor->device_path() << "\n";
             return 1;
         }
         config.service_config.npu_enabled = true;
         config.service_config.npu_executor = std::move(executor);
 #else
         std::cerr << "Ethos-U DRM support is not compiled in; rebuild with "
-                     "-DENABLE_ETHOSU_DRM=ON\\n";
+                     "-DENABLE_ETHOSU_DRM=ON\n";
         return 1;
 #endif
     }
@@ -131,15 +121,12 @@ int main(int argc, char** argv) {
 
         std::cout << "Starting broker server on port " << config.port
                   << (config.service_config.force_cpu_fallback ? " (cpu-only mode)" : "")
-                  << "
-";
+                  << "\n";
         server->run();
-        std::cout << "Broker server stopped cleanly.
-";
+        std::cout << "Broker server stopped cleanly.\n";
         return 0;
     } catch (const std::exception& ex) {
-        std::cerr << "Broker server failed: " << ex.what() << "
-";
+        std::cerr << "Broker server failed: " << ex.what() << "\n";
         return 1;
     }
 }
