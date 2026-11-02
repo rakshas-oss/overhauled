@@ -12,6 +12,11 @@ option(ENABLE_TENSORRT "Enable TensorRT runtime server" OFF)
 option(BUILD_BROKER "Build broker interoperability service and server" ON)
 option(BUILD_EXAMPLES "Build example binaries" ON)
 option(ENABLE_INTEROP_ENCRYPTION "Enable interop encryption layer" OFF)
+option(ENABLE_ETHOSU_DRM "Enable the mainline Linux Ethos-U DRM executor" OFF)
+
+if(ENABLE_ETHOSU_DRM AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message(FATAL_ERROR "ENABLE_ETHOSU_DRM is supported only on Linux.")
+endif()
 
 include(CheckLanguage)
 include(CTest)
