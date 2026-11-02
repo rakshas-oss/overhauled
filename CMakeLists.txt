@@ -109,6 +109,11 @@ if(BUILD_BROKER)
 
     add_executable(broker_server src/broker_server_main.cpp)
     target_link_libraries(broker_server PRIVATE broker_service)
+
+    if(ENABLE_ETHOSU_DRM)
+        target_sources(broker_service PRIVATE src/ethosu_u85_drm_executor.cpp)
+        target_compile_definitions(broker_server PRIVATE OVERHAULED_HAS_ETHOSU_DRM=1)
+    endif()
 endif()
 
 if(HAS_TENSORRT)
