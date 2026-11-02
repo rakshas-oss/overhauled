@@ -35,7 +35,7 @@ cp /path/to/nvlink_placement/conanfile.py recipes/nvlink_placement/all/
 # 3. Create config file
 cat > recipes/nvlink_placement/config.yml << 'EOF'
 versions:
-  "1.0.0":
+  "1.1.1":
     folder: all
 EOF
 
@@ -44,7 +44,7 @@ conan create . --build=missing
 
 # 5. Push and create PR
 git add recipes/nvlink_placement/
-git commit -m "Add nvlink_placement/1.0.0"
+git commit -m "Add nvlink_placement/1.1.1"
 git push origin nvlink_placement
 # Create PR on GitHub
 ```
@@ -54,7 +54,7 @@ git push origin nvlink_placement
 ```cpp
 // conanfile.txt
 [requires]
-nvlink_placement/1.0.0
+nvlink_placement/1.1.1
 
 [generators]
 CMakeDeps
@@ -94,7 +94,7 @@ cp /path/to/nvlink_placement/vcpkg-portfile.cmake ports/nvlink-placement/portfil
 cat > ports/nvlink-placement/vcpkg.json << 'EOF'
 {
   "name": "nvlink-placement",
-  "version": "1.0.0"
+  "version": "1.1.1"
 }
 EOF
 
@@ -174,7 +174,7 @@ Create PPA:
 mkdir -p debian
 
 # Upload to PPA
-dput ppa:your-username/nvlink-placement nvlink-placement_1.0.0_source.changes
+dput ppa:your-username/nvlink-placement nvlink-placement_1.1.1_source.changes
 ```
 
 Usage:
@@ -212,7 +212,7 @@ Before each release:
 - [ ] Update version in `vcpkg.json`
 - [ ] Update version in `nvlink-placement.rb`
 - [ ] Update `README.md` with latest features
-- [ ] Create a release tag for the version in `CMakeLists.txt` (the current 1.0.0 release tag is `v1`)
+- [ ] Create a release tag for the version in `CMakeLists.txt` (the current 1.1.1 release tag is `v1.1.1`)
 - [ ] Push the corresponding release tag
 - [ ] GitHub release automatically created
 - [ ] Submit PRs to Conan Center Index
@@ -228,8 +228,8 @@ After publishing to each package manager:
 
 ### Conan
 ```bash
-conan search nvlink_placement/1.0.0@
-conan install --requires=nvlink_placement/1.0.0
+conan search nvlink_placement/1.1.1@
+conan install --requires=nvlink_placement/1.1.1
 ```
 
 ### vcpkg

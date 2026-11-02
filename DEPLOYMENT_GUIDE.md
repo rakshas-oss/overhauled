@@ -362,10 +362,6 @@ Recommended tests before scaling production:
 
 ---
 
-If you want, I can also:
-- Run a YAML linter on the Kubernetes snippet and commit any minor formatting fixes.
-- Keep package metadata aligned with the 1.1.1 version in `CMakeLists.txt`.
-
 ## Third-party licences
 
 CUDA Toolkit (including cudart/cuBLAS) and TensorRT (including NvInfer and
