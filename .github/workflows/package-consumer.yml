@@ -19,8 +19,17 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
+      - name: Select platform-supported package components
+        shell: bash
+        run: |
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            echo "BUILD_BROKER=OFF" >> "$GITHUB_ENV"
+            echo "Windows package validation covers the portable core libraries. The broker server remains POSIX-only until its Winsock port is complete."
+          else
+            echo "BUILD_BROKER=ON" >> "$GITHUB_ENV"
+          fi
       - name: Configure CPU-only package
-        run: cmake -S . -B build -DENABLE_CUDA=OFF -DENABLE_TENSORRT=OFF -DBUILD_BROKER=ON -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=install
+        run: cmake -S . -B build -DENABLE_CUDA=OFF -DENABLE_TENSORRT=OFF -DBUILD_BROKER=${{ env.BUILD_BROKER }} -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=install
       - name: Build and install
         run: |
           cmake --build build --config Release --parallel
