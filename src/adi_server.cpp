@@ -19,6 +19,9 @@
 #include <vector>
 
 #if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #else
@@ -345,7 +348,12 @@ private:
         }
 
         const int reuse = 1;
-        if (::setsockopt(listener_socket_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) != 0) {
+#if defined(_WIN32)
+        const char* reuse_option = reinterpret_cast<const char*>(&reuse);
+#else
+        const void* reuse_option = &reuse;
+#endif
+        if (::setsockopt(listener_socket_, SOL_SOCKET, SO_REUSEADDR, reuse_option, static_cast<decltype(sizeof(reuse))>(sizeof(reuse))) != 0) {
             const int saved_errno = errno;
             close_socket(listener_socket_);
             listener_socket_ = kInvalidSocket;
