@@ -1,0 +1,31 @@
+name: Package Consumer Smoke Test
+
+on:
+  push:
+    branches: ["main", "packaging/**"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  installed-cmake-package:
+    name: Installed CMake package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure CPU-only package
+        run: cmake -S . -B build -DENABLE_CUDA=OFF -DENABLE_TENSORRT=OFF -DBUILD_BROKER=ON -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF -DCMAKE_INSTALL_PREFIX=install
+      - name: Build and install
+        run: |
+          cmake --build build --config Release --parallel
+          cmake --install build --config Release
+      - name: Configure downstream consumer
+        run: cmake -S tests/package-consumer -B consumer-build -DCMAKE_PREFIX_PATH="${{ github.workspace }}/install"
+      - name: Build downstream consumer
+        run: cmake --build consumer-build --config Release --parallel
