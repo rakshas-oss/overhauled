@@ -185,7 +185,6 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/OverhauledTensorRuntimeConfigVersion.cmake
     DESTINATION ${OVERHAULED_CMAKE_INSTALL_DIR})
 
-include(CPack)
 set(CPACK_PACKAGE_NAME "OverhauledTensorRuntime")
 set(CPACK_PACKAGE_VENDOR "rakshas-oss")
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
