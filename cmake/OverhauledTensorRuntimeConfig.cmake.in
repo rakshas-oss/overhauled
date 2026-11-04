@@ -1,5 +1,8 @@
 @PACKAGE_INIT@
 include(CMakeFindDependencyMacro)
 find_dependency(Threads REQUIRED)
+if(@HAS_CUDA@)
+    find_dependency(CUDAToolkit REQUIRED)
+endif()
 include("${CMAKE_CURRENT_LIST_DIR}/OverhauledTensorRuntimeTargets.cmake")
 check_required_components(OverhauledTensorRuntime)
