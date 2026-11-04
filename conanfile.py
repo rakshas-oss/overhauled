@@ -66,9 +66,21 @@ class NVLinkPlacementConan(ConanFile):
 
     def package_info(self):
         self.cpp_info.set_property("cmake_file_name", "OverhauledTensorRuntime")
-        self.cpp_info.set_property("cmake_target_name", "Overhauled::nvlink_placement")
-        self.cpp_info.libs = ["nvlink_placement", "adi_server"]
+
+        placement = self.cpp_info.components["nvlink_placement"]
+        placement.libs = ["nvlink_placement"]
+        placement.set_property("cmake_target_name", "Overhauled::nvlink_placement")
+
+        adi = self.cpp_info.components["adi_server"]
+        adi.libs = ["adi_server"]
+        adi.requires = ["nvlink_placement"]
+        adi.set_property("cmake_target_name", "Overhauled::adi_server")
+
         if self.options.broker:
-            self.cpp_info.libs.append("broker_service")
+            broker = self.cpp_info.components["broker_service"]
+            broker.libs = ["broker_service"]
+            broker.requires = ["adi_server"]
+            broker.set_property("cmake_target_name", "Overhauled::broker_service")
+
         if self.options.cuda:
-            self.cpp_info.system_libs = ["cudart"]
+            placement.system_libs = ["cudart"]
