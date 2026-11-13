@@ -160,6 +160,9 @@ public:
         if (config_.max_inflight_per_client == 0 || config_.max_clients == 0) {
             throw std::invalid_argument("client and in-flight limits must be greater than zero");
         }
+        if (config_.socket_timeout_ms <= 0) {
+            throw std::invalid_argument("socket_timeout_ms must be greater than zero");
+        }
         const std::size_t hw = std::max<std::size_t>(1, std::thread::hardware_concurrency());
         const std::size_t pool_size = config_.worker_threads == 0
             ? std::min<std::size_t>(256, std::max<std::size_t>(4, hw * 2))
