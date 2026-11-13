@@ -24,6 +24,22 @@ std::vector<uint8_t> request_body(){
     u64(b,0x0102030405060708ULL);u32(b,1);u16(b,1);u16(b,0);u32(b,static_cast<uint32_t>(p.size()));
     b.insert(b.end(),p.begin(),p.end());return b;
 }
+std::vector<uint8_t> request_body_with_field_count(std::size_t target_count) {
+    auto body = request_body();
+    // request_body() contains eight fields; add distinct optional extension IDs.
+    const std::size_t initial_count = 8;
+    assert(target_count >= initial_count);
+    for (std::size_t i = initial_count; i < target_count; ++i) {
+        const auto id = static_cast<uint16_t>(1000 + i);
+        field(body, id, 1, {static_cast<uint8_t>(i & 0xff)}, 0);
+    }
+    const auto payload_size = static_cast<uint32_t>(body.size() - 32);
+    body[28] = static_cast<uint8_t>(payload_size >> 24);
+    body[29] = static_cast<uint8_t>(payload_size >> 16);
+    body[30] = static_cast<uint8_t>(payload_size >> 8);
+    body[31] = static_cast<uint8_t>(payload_size);
+    return body;
+}
 }
 int main(){
     using namespace nvlink::broker;
@@ -35,6 +51,17 @@ int main(){
     assert(request.task_id=="interop-1"&&request.source=="yukki"&&request.destination=="overhauled");
     assert(request.kind=="inference"&&request.priority==7&&request.timeout_ms==2500);
     assert((request.payload==std::vector<uint8_t>{0,1,2,255}));
+
+    // C++ must enforce the same 4,096-field ceiling as YuKKi-OS.
+    ProtocolLimits field_limits;
+    field_limits.max_frame_bytes = 1U << 20;
+    field_limits.max_payload_bytes = 1U << 20;
+    auto max_fields_body = request_body_with_field_count(4096);
+    assert(decode_brk2_request_body(max_fields_body, &request, &id, &error, field_limits));
+    auto over_max_fields_body = request_body_with_field_count(4097);
+    error.clear();
+    assert(!decode_brk2_request_body(over_max_fields_body, &request, &id, &error, field_limits));
+    assert(error == "too many BRK2 TLV fields");
 
     BrokerResponse response;response.task_id=request.task_id;response.status=TaskStatus::Ok;
     response.selected_gpu=-1;response.latency_ms=4;response.result=request.payload;
