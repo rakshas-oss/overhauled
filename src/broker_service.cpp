@@ -71,6 +71,7 @@ BrokerService::BrokerService(const BrokerServiceConfig& config)
         placer_ = std::make_unique<Placer>(*topology_, config_.backlog_threshold);
         use_gpu_placement_ = true;
         gpu_inflight_.assign(static_cast<std::size_t>(topology_->num_gpus()), 0);
+        gpu_weighted_inflight_.assign(static_cast<std::size_t>(topology_->num_gpus()), 0);
     }
 
     if (config_.wasm_manager != nullptr) {
@@ -85,7 +86,7 @@ BrokerService::BrokerService(const BrokerServiceConfig& config)
                 const int client_id = get_or_assign_client_id(source);
                 return placer_->place(client_id, [this](int gpu) {
                     std::lock_guard<std::mutex> lock(inflight_mutex_);
-                    return gpu_inflight_[static_cast<std::size_t>(gpu)];
+                    return gpu_weighted_inflight_[static_cast<std::size_t>(gpu)];
                 });
             };
         }
@@ -230,28 +231,42 @@ BrokerResponse BrokerService::run_on_gpu(const BrokerRequest& request,
     response.backend = BackendKind::Gpu;
 
     int selected_gpu = -1;
-    bool incremented_inflight = false;
     try {
         const int client_id = get_or_assign_client_id(request.source);
         selected_gpu = placer_->place(client_id, [this](int gpu) {
             std::lock_guard<std::mutex> lock(inflight_mutex_);
-            return gpu_inflight_[static_cast<std::size_t>(gpu)];
+            return gpu_weighted_inflight_[static_cast<std::size_t>(gpu)];
         });
         response.selected_gpu = selected_gpu;
 
+        const std::size_t weight = std::max<std::size_t>(
+            1, request.payload.size() / 65536 +
+                   (request.payload.size() % 65536 != 0 ? 1 : 0));
         {
             std::lock_guard<std::mutex> lock(inflight_mutex_);
             std::size_t& inflight = gpu_inflight_[static_cast<std::size_t>(selected_gpu)];
-            ++inflight;
-            incremented_inflight = true;
-            if (inflight > config_.max_inflight_per_gpu) {
-                --inflight;
-                incremented_inflight = false;
+            if (inflight >= config_.max_inflight_per_gpu) {
                 response.status = TaskStatus::Rejected;
                 response.error = "selected GPU queue is at capacity";
                 return response;
             }
+            ++inflight;
+            gpu_weighted_inflight_[static_cast<std::size_t>(selected_gpu)] += weight;
         }
+
+        struct InflightGuard {
+            std::mutex& mutex;
+            std::vector<std::size_t>& counts;
+            std::vector<std::size_t>& weighted;
+            std::size_t gpu;
+            std::size_t weight;
+            ~InflightGuard() {
+                std::lock_guard<std::mutex> lock(mutex);
+                if (counts[gpu] > 0) --counts[gpu];
+                weighted[gpu] = weighted[gpu] >= weight ? weighted[gpu] - weight : 0;
+            }
+        } guard{inflight_mutex_, gpu_inflight_, gpu_weighted_inflight_,
+                static_cast<std::size_t>(selected_gpu), weight};
 
         const std::vector<double> output = config_.gpu_compute_fn
                                                ? config_.gpu_compute_fn(input, selected_gpu)
@@ -261,14 +276,9 @@ BrokerResponse BrokerService::run_on_gpu(const BrokerRequest& request,
     } catch (const std::exception& ex) {
         response.status = TaskStatus::Error;
         response.error = ex.what();
-    }
-
-    if (incremented_inflight) {
-        std::lock_guard<std::mutex> lock(inflight_mutex_);
-        std::size_t& inflight = gpu_inflight_[static_cast<std::size_t>(selected_gpu)];
-        if (inflight > 0) {
-            --inflight;
-        }
+    } catch (...) {
+        response.status = TaskStatus::Error;
+        response.error = "GPU executor threw a non-standard exception";
     }
     return response;
 }
