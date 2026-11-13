@@ -219,15 +219,18 @@ void gpu_worker_thread(int gpu_id, TaskQueue<InferenceTask>& queue) {
 
                 for (const auto& binding : model->input_bindings) {
                     if (!lane.context->setTensorAddress(binding.name.c_str(), lane.d_input)) {
+                        lane.disabled = true;
                         throw std::runtime_error("TensorRT rejected an input tensor address");
                     }
                 }
                 for (const auto& binding : model->output_bindings) {
                     if (!lane.context->setTensorAddress(binding.name.c_str(), lane.d_output)) {
+                        lane.disabled = true;
                         throw std::runtime_error("TensorRT rejected an output tensor address");
                     }
                 }
                 if (!lane.context->enqueueV3(lane.stream)) {
+                    lane.disabled = true;
                     throw std::runtime_error("TensorRT enqueueV3 rejected the inference task");
                 }
 
