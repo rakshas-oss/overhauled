@@ -14,8 +14,6 @@ namespace {
 
 // Fixed geospatial/velocity/flow fields transmitted as big-endian doubles,
 // in wire order.
-constexpr std::size_t kFieldCount = 9;
-
 constexpr std::size_t kHeaderBytes = sizeof(uint32_t) + sizeof(uint8_t) + sizeof(uint64_t);
 constexpr std::size_t kDoubleFieldCount = 7;
 constexpr std::size_t kFloatFieldCount = 2;
@@ -137,16 +135,16 @@ bool encode_nxr1_frame(const GeospatialFrame& frame,
     append_bytes(&frame_bytes, &version, sizeof(version));
     append_bytes(&frame_bytes, &seq_id_be, sizeof(seq_id_be));
 
-    const double* const double_fields[] = {
+    const double* const vector_fields[] = {
         &frame.latitude, &frame.longitude, &frame.altitude,
         &frame.velocity_x, &frame.velocity_y, &frame.velocity_z,
-        &frame.divergence,
     };
-    for (const double* field : double_fields) {
+    for (const double* field : vector_fields) {
         if (!append_double(&frame_bytes, *field, error)) return false;
     }
     if (!append_float(&frame_bytes, frame.fluidity, error) ||
-        !append_float(&frame_bytes, frame.drag, error)) return false;
+        !append_float(&frame_bytes, frame.drag, error) ||
+        !append_double(&frame_bytes, frame.divergence, error)) return false;
 
     const uint32_t payload_len_be = htonl(static_cast<uint32_t>(frame.payload.size()));
     append_bytes(&frame_bytes, &payload_len_be, sizeof(payload_len_be));
@@ -190,16 +188,16 @@ bool decode_nxr1_frame(const std::vector<uint8_t>& bytes,
 
     GeospatialFrame frame;
     frame.seq_id = be64_to_host(seq_id_be);
-    double* const double_fields[] = {
+    double* const vector_fields[] = {
         &frame.latitude, &frame.longitude, &frame.altitude,
         &frame.velocity_x, &frame.velocity_y, &frame.velocity_z,
-        &frame.divergence,
     };
-    for (double* field : double_fields) {
+    for (double* field : vector_fields) {
         if (!read_double(bytes, &offset, field, error)) return false;
     }
     if (!read_float(bytes, &offset, &frame.fluidity, error) ||
-        !read_float(bytes, &offset, &frame.drag, error)) return false;
+        !read_float(bytes, &offset, &frame.drag, error) ||
+        !read_double(bytes, &offset, &frame.divergence, error)) return false;
 
     if (!take(kPayloadLenBytes, bytes.size(), &offset, error)) {
         return false;
