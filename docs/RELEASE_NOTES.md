@@ -2,7 +2,20 @@
 
 Repository: rakshas-oss/overhauled
 
-Version: v1.0.0
+## v1.1.2
+Date: 2026-11-13
+
+### Highlights
+
+- **BRK2 parser hardening**: Added O(1) TLV duplicate detection and enforced the shared 4,096-field limit.
+- **Broker client tracking**: Added O(1) active-client ID collision checks alongside the bounded source LRU.
+- **Placement concurrency**: Reduced affinity-lock scope so queue-depth callbacks run outside the affinity mutex.
+- **Adversarial benchmark accuracy**: Correlated response latency by BRK2 request ID and removed synthetic fallback measurements.
+- **Protocol boundary coverage**: Added conformance tests for the BRK2 field-count ceiling.
+
+---
+
+## v1.0.0 (Historical)
 Date: 2026-10-11
 
 This release formalizes the project as a stable, production-facing GPU placement and broker interoperability library. It consolidates the public contract, expands the documentation set, and makes the CPU-only and GPU-capable operational modes clearer for both development and production users.
