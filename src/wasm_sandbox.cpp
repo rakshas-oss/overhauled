@@ -818,6 +818,12 @@ WasmLifecycleResponse WasmSandboxManager::prepare_module(const WasmLifecycleRequ
         }
     }
 
+    if (it == modules_.end() && modules_.size() >= kMaxRegisteredModules) {
+        resp.status = WasmLifecycleStatus::Busy;
+        resp.error = "maximum registered WASM module versions reached";
+        return resp;
+    }
+
     int32_t assigned_gpu = -1;
     if (request.target_gpu >= 0) {
         assigned_gpu = request.target_gpu;
