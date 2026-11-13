@@ -159,9 +159,8 @@ def adv02(host, port):
 
 def adv03(host, port):
     print("\n[ADV-03] 4,096 TLV fields plus IEEE-754 special values")
-    # Seven mandatory fields plus one optional device hint = eight; add 4,088
-    # zero-length optional TLVs to reach exactly 4,096 fields.
-    extras = b"".join(tlv(fid, 1, 0, b"") for fid in range(100, 4188))
+    # Seven mandatory fields; add 4,089 one-byte optional TLVs to reach exactly 4,096 fields.
+    extras = b"".join(tlv(fid, 1, 0, bytes([fid & 0xff])) for fid in range(100, 4189))
     payload = struct.pack("!4d", float("nan"), float("inf"), float("-inf"), -0.0)
     frame = request_frame(0xA003, "adv03", payload, extra=extras, device="")
     encoded_frame_bytes = len(frame) - 4
