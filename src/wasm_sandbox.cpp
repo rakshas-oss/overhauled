@@ -1027,13 +1027,29 @@ WasmTaskResponse WasmSandboxManager::handle_task(const WasmTaskRequest& request,
             resp.result = compute_fn(assigned_gpu, request);
         } else if (!request.payload.empty()) {
             if (request.payload.size() % sizeof(double) == 0) {
-                // If payload decodes as packed array of doubles, use standard ADI GPU/CPU compute
+                // Decode network-order IEEE-754 binary64 values. Never memcpy
+                // wire bytes directly into native doubles: that is host-endian.
+                static_assert(sizeof(double) == sizeof(uint64_t), "requires 64-bit double");
+                static_assert(std::numeric_limits<double>::is_iec559, "requires IEEE-754 double");
                 std::vector<double> doubles(request.payload.size() / sizeof(double));
-                std::memcpy(doubles.data(), request.payload.data(), request.payload.size());
+                for (std::size_t i = 0; i < doubles.size(); ++i) {
+                    uint64_t bits = 0;
+                    for (std::size_t b = 0; b < sizeof(double); ++b) {
+                        bits = (bits << 8) | request.payload[i * sizeof(double) + b];
+                    }
+                    std::memcpy(&doubles[i], &bits, sizeof(bits));
+                }
                 const int compute_gpu = (assigned_gpu >= 0) ? assigned_gpu : 0;
                 const std::vector<double> out_doubles = nvlink::adi::default_gpu_compute(doubles, compute_gpu);
                 resp.result.resize(out_doubles.size() * sizeof(double));
-                std::memcpy(resp.result.data(), out_doubles.data(), resp.result.size());
+                for (std::size_t i = 0; i < out_doubles.size(); ++i) {
+                    uint64_t bits = 0;
+                    std::memcpy(&bits, &out_doubles[i], sizeof(bits));
+                    for (std::size_t b = 0; b < sizeof(double); ++b) {
+                        resp.result[i * sizeof(double) + b] =
+                            static_cast<uint8_t>(bits >> ((sizeof(double) - b - 1) * 8));
+                    }
+                }
             } else {
                 // Echo payload transformed
                 resp.result = request.payload;

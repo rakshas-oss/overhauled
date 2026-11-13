@@ -15,6 +15,7 @@ struct BrokerServerConfig {
     int socket_timeout_ms = 5000;
     std::size_t max_clients = 128;
     std::size_t max_inflight_per_client = 32;
+    std::size_t worker_threads = 0; // 0 = auto-detect, bounded to 256 workers
     bool verbose = false;
     BrokerServiceConfig service_config{};
 };
