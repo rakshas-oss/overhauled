@@ -94,9 +94,12 @@ int Placer::place(int client_id, QueueDepthFn queue_depth) const {
     if (topo_.num_gpus() <= 0) {
         throw NVLinkError("Placer requires a topology with at least one GPU.");
     }
-    std::lock_guard<std::mutex> lock(affinity_mutex_);
-    auto it = affinity_.find(client_id);
-    int home = (it != affinity_.end()) ? it->second : -1;
+    int home = -1;
+    {
+        std::lock_guard<std::mutex> lock(affinity_mutex_);
+        auto it = affinity_.find(client_id);
+        if (it != affinity_.end()) home = it->second;
+    }
     if (home < 0 || home >= topo_.num_gpus()) {
         home = static_cast<int>(rr_counter_.fetch_add(1, std::memory_order_relaxed) % topo_.num_gpus());
     }
