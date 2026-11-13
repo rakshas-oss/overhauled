@@ -308,21 +308,27 @@ def benchmark_tensor_serialization():
             end = time.perf_counter()
             times_deser.append((end - start) * 1e6)
         
-        size_kb = size_bytes / 1024
-        results[f'serialize_{int(size_kb)}kb_us'] = float(np.mean(times_ser))
-        results[f'deserialize_{int(size_kb)}kb_us'] = float(np.mean(times_deser))
-    
-    # Alias for easier access
-    results['serialize_100b_us'] = results.get('serialize_0kb_us', 0.05)
-    results['deserialize_100b_us'] = results.get('deserialize_0kb_us', 0.05)
-    results['serialize_1kb_us'] = results.get('serialize_1kb_us', 0.1)
-    results['deserialize_1kb_us'] = results.get('deserialize_1kb_us', 0.1)
-    results['serialize_10kb_us'] = results.get('serialize_10kb_us', 0.5)
-    results['deserialize_10kb_us'] = results.get('deserialize_10kb_us', 0.5)
-    results['serialize_100kb_us'] = results.get('serialize_100kb_us', 5.0)
-    results['deserialize_100kb_us'] = results.get('deserialize_100kb_us', 5.0)
-    results['serialize_1mb_us'] = results.get('serialize_1024kb_us', 50.0)
-    results['deserialize_1mb_us'] = results.get('deserialize_1024kb_us', 50.0)
+        size_labels = {
+            100: '100b',
+            1024: '1kb',
+            10240: '10kb',
+            102400: '100kb',
+            1048576: '1mb',
+        }
+        label = size_labels.get(size_bytes)
+        if label is None:
+            raise ValueError(f"unmapped tensor benchmark size: {size_bytes}")
+        results[f'serialize_{label}_us'] = float(np.mean(times_ser))
+        results[f'deserialize_{label}_us'] = float(np.mean(times_deser))
+
+    expected_keys = {
+        f'{operation}_{label}_us'
+        for operation in ('serialize', 'deserialize')
+        for label in ('100b', '1kb', '10kb', '100kb', '1mb')
+    }
+    missing = expected_keys.difference(results)
+    if missing:
+        raise RuntimeError(f"tensor benchmark did not produce required measurements: {sorted(missing)}")
     
     return results
 

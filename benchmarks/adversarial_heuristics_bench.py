@@ -57,6 +57,12 @@ def recv_response(sock):
     return recv_exact(sock, size)
 
 
+def response_request_id(response):
+    if len(response) < 20 or response[:4] != MAGIC:
+        raise ValueError("invalid BRK2 response header")
+    return struct.unpack_from("!Q", response, 12)[0]
+
+
 def stats(samples):
     if not samples:
         return "n=0"
@@ -97,16 +103,21 @@ def adv01(host, port, attackers, clients):
         with socket.create_connection((host, port), timeout=10) as s:
             s.settimeout(10)
             for batch in range(4):
-                wire = bytearray()
-                sent = []
+                sent_at = {}
                 for index in range(32):
                     rid = (cid << 32) | (batch * 32 + index + 1)
-                    wire.extend(request_frame(rid, f"adv01-{cid}", payload))
-                    sent.append(time.perf_counter())
-                s.sendall(wire)
-                for started in sent:
-                    recv_response(s)
+                    frame = request_frame(rid, f"adv01-{cid}", payload)
+                    sent_at[rid] = time.perf_counter()
+                    s.sendall(frame)
+                for _ in range(32):
+                    response = recv_response(s)
+                    rid = response_request_id(response)
+                    started = sent_at.pop(rid, None)
+                    if started is None:
+                        raise ValueError(f"unexpected or duplicate BRK2 response request_id={rid}")
                     samples.append((time.perf_counter() - started) * 1000)
+                if sent_at:
+                    raise ValueError(f"missing BRK2 responses for request_ids={sorted(sent_at)}")
         return samples
 
     started = time.perf_counter()

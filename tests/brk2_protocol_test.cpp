@@ -24,6 +24,21 @@ std::vector<uint8_t> request_body(){
     u64(b,0x0102030405060708ULL);u32(b,1);u16(b,1);u16(b,0);u32(b,static_cast<uint32_t>(p.size()));
     b.insert(b.end(),p.begin(),p.end());return b;
 }
+std::vector<uint8_t> request_body_with_field_count(std::size_t target_count){
+    auto body=request_body();
+    constexpr std::size_t base_fields=8;
+    assert(target_count>=base_fields && target_count<=4097);
+    for(std::size_t i=0;i<target_count-base_fields;++i){
+        const uint16_t id=static_cast<uint16_t>(1000+i);
+        u16(body,id);body.push_back(1);body.push_back(0);u32(body,1);body.push_back(0x5a);
+    }
+    const uint32_t payload_size=static_cast<uint32_t>(body.size()-32);
+    body[28]=static_cast<uint8_t>(payload_size>>24);
+    body[29]=static_cast<uint8_t>(payload_size>>16);
+    body[30]=static_cast<uint8_t>(payload_size>>8);
+    body[31]=static_cast<uint8_t>(payload_size);
+    return body;
+}
 }
 int main(){
     using namespace nvlink::broker;
@@ -35,6 +50,16 @@ int main(){
     assert(request.task_id=="interop-1"&&request.source=="yukki"&&request.destination=="overhauled");
     assert(request.kind=="inference"&&request.priority==7&&request.timeout_ms==2500);
     assert((request.payload==std::vector<uint8_t>{0,1,2,255}));
+
+    // C++ and Rust both cap BRK2 messages at 4096 TLV fields.
+    ProtocolLimits field_limits;
+    field_limits.max_frame_bytes=1024*1024;
+    field_limits.max_payload_bytes=1024*1024;
+    auto at_limit=request_body_with_field_count(4096);
+    assert(decode_brk2_request_body(at_limit,&request,&id,&error,field_limits));
+    auto over_limit=request_body_with_field_count(4097);
+    assert(!decode_brk2_request_body(over_limit,&request,&id,&error,field_limits));
+    assert(error=="too many BRK2 TLV fields");
 
     BrokerResponse response;response.task_id=request.task_id;response.status=TaskStatus::Ok;
     response.selected_gpu=-1;response.latency_ms=4;response.result=request.payload;
