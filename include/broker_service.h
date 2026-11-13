@@ -53,6 +53,7 @@ public:
     std::shared_ptr<nvlink::wasm::WasmSandboxManager> wasm_manager() const noexcept;
 
 private:
+    friend struct BrokerServiceTestAccess;
     int get_or_assign_client_id(const std::string& source);
     BrokerResponse run_on_gpu(const BrokerRequest& request, const std::vector<double>& input);
     BrokerResponse handle_geospatial_frame_request(const BrokerRequest& request) const;
