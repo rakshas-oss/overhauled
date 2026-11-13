@@ -12,8 +12,8 @@
 namespace nvlink::geospatial {
 namespace {
 
-// Fixed geospatial/velocity/flow fields transmitted as big-endian doubles,
-// in wire order.
+// Canonical NXR1 v1 layout: 13-byte prefix, six f64 vector fields,
+// fluidity/drag as f32, divergence as f64, then a u32 payload length.
 constexpr std::size_t kHeaderBytes = sizeof(uint32_t) + sizeof(uint8_t) + sizeof(uint64_t);
 constexpr std::size_t kDoubleFieldCount = 7;
 constexpr std::size_t kFloatFieldCount = 2;
@@ -23,12 +23,14 @@ constexpr std::size_t kPayloadLenBytes = sizeof(uint32_t);
 constexpr std::size_t kFixedFrameBytes = kHeaderBytes + kFieldsBytes + kPayloadLenBytes;
 
 uint64_t host_to_be64(uint64_t value) noexcept {
+    if (htonl(1U) == 1U) return value; // Native big-endian.
     const uint64_t high = static_cast<uint64_t>(htonl(static_cast<uint32_t>(value >> 32)));
     const uint64_t low = static_cast<uint64_t>(htonl(static_cast<uint32_t>(value & 0xffffffffULL)));
     return (low << 32) | high;
 }
 
 uint64_t be64_to_host(uint64_t value) noexcept {
+    if (htonl(1U) == 1U) return value; // Native big-endian.
     const uint64_t high = static_cast<uint64_t>(ntohl(static_cast<uint32_t>(value >> 32)));
     const uint64_t low = static_cast<uint64_t>(ntohl(static_cast<uint32_t>(value & 0xffffffffULL)));
     return (low << 32) | high;
