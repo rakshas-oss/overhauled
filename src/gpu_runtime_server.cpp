@@ -11,6 +11,7 @@
 #include <chrono>
 #include <atomic>
 #include <cstring>
+#include <cerrno>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -23,6 +24,8 @@
 
 #define NUM_STREAMS_PER_GPU 16
 #define MAGIC_ADI1 0x41444931
+constexpr uint32_t kMaxFrameBytes = 16U * 1024U * 1024U;
+constexpr std::size_t kMaxQueueDepth = 1024;
 
 #define CUDA_CHECK(call) \
     do { \
@@ -42,10 +45,12 @@ struct InferenceTask {
 template<typename T>
 class TaskQueue {
 public:
-    void push(T value) {
+    bool try_push(T value, std::size_t max_depth) {
         std::lock_guard<std::mutex> lock(m_);
+        if (q_.size() >= max_depth) return false;
         q_.push(std::move(value));
         cv_.notify_one();
+        return true;
     }
 
     bool try_pop(T& value) {
@@ -107,8 +112,8 @@ void gpu_worker_thread(int gpu_id, TaskQueue<InferenceTask>& queue) {
                 InferenceTask task;
                 if (queue.try_pop(task)) {
                     auto model = ModelManager::instance().getModel(task.model_id);
-                    if (!model) {
-                        task.promise.set_value(std::vector<uint8_t>());
+                    if (!model || task.input_payload.size() != model->total_input_bytes) {
+                        task.promise.set_value({});
                         continue;
                     }
 
@@ -154,6 +159,38 @@ void gpu_worker_thread(int gpu_id, TaskQueue<InferenceTask>& queue) {
     }
 }
 
+namespace {
+
+bool read_exact_bytes(int fd, void* dst, std::size_t len) {
+    auto* out = static_cast<uint8_t*>(dst);
+    for (std::size_t off = 0; off < len;) {
+        const ssize_t n = ::read(fd, out + off, len - off);
+        if (n < 0 && errno == EINTR) continue;
+        if (n <= 0) return false;
+        off += static_cast<std::size_t>(n);
+    }
+    return true;
+}
+
+bool write_exact_bytes(int fd, const void* src, std::size_t len) {
+    const auto* in = static_cast<const uint8_t*>(src);
+    for (std::size_t off = 0; off < len;) {
+        const ssize_t n = ::send(fd, in + off, len - off, MSG_NOSIGNAL);
+        if (n < 0 && errno == EINTR) continue;
+        if (n <= 0) return false;
+        off += static_cast<std::size_t>(n);
+    }
+    return true;
+}
+
+bool is_safe_model_path(const std::string& path) {
+    return path.size() > 5 && path.find('\0') == std::string::npos &&
+           path.find("..") == std::string::npos &&
+           path.compare(path.size() - 5, 5, ".onnx") == 0;
+}
+
+} // namespace
+
 void handle_client(int sock, std::vector<std::unique_ptr<TaskQueue<InferenceTask>>>& queues, std::atomic<uint32_t>& rr_counter) {
     uint32_t sequence_id = 0;
     std::vector<float> last_result_frame;
@@ -161,46 +198,48 @@ void handle_client(int sock, std::vector<std::unique_ptr<TaskQueue<InferenceTask
     try {
         while (true) {
             RequestHeader req_hdr;
-            int n = read(sock, &req_hdr, sizeof(req_hdr));
-            if (n <= 0) break;
+            if (!read_exact_bytes(sock, &req_hdr, sizeof(req_hdr))) break;
 
             req_hdr.magic = ntohl(req_hdr.magic);
             req_hdr.payload_len = ntohl(req_hdr.payload_len);
 
-            if (req_hdr.magic != MAGIC_ADI1) {
+            if (req_hdr.magic != MAGIC_ADI1 || req_hdr.payload_len > kMaxFrameBytes) {
                 std::cerr << "[Client Handler] Bad Magic Number." << std::endl;
                 break;
             }
 
             std::vector<uint8_t> payload(req_hdr.payload_len);
-            size_t bytes_read = 0;
-            while (bytes_read < req_hdr.payload_len) {
-                int r = read(sock, payload.data() + bytes_read, req_hdr.payload_len - bytes_read);
-                if (r <= 0) throw std::runtime_error("Disconnected while reading payload.");
-                bytes_read += r;
-            }
+            if (!payload.empty() && !read_exact_bytes(sock, payload.data(), payload.size()))
+                throw std::runtime_error("Disconnected while reading payload.");
 
             if (static_cast<PacketOpcode>(req_hdr.opcode) == PacketOpcode::LOAD_MODEL) {
-                uint32_t model_id = *reinterpret_cast<uint32_t*>(payload.data());
-                std::string onnx_path(reinterpret_cast<char*>(payload.data() + 4), req_hdr.payload_len - 4);
-                bool ok = ModelManager::instance().loadOnnxModel(model_id, onnx_path);
+                if (payload.size() <= sizeof(uint32_t)) break;
+                uint32_t model_id_be = 0;
+                std::memcpy(&model_id_be, payload.data(), sizeof(model_id_be));
+                const uint32_t model_id = ntohl(model_id_be);
+                const std::string onnx_path(reinterpret_cast<const char*>(payload.data() + sizeof(uint32_t)),
+                                             payload.size() - sizeof(uint32_t));
+                const bool ok = is_safe_model_path(onnx_path) &&
+                                ModelManager::instance().loadOnnxModel(model_id, onnx_path);
 
                 ResponseHeader resp{};
                 resp.sequence_id = htonl(sequence_id++);
                 resp.status_code = ok ? 0 : 1;
-                write(sock, &resp, sizeof(resp));
+                if (!write_exact_bytes(sock, &resp, sizeof(resp))) break;
             }
             else if (static_cast<PacketOpcode>(req_hdr.opcode) == PacketOpcode::EXECUTE_INFERENCE) {
-                InferenceHeader* inf_hdr = reinterpret_cast<InferenceHeader*>(payload.data());
-                
+                if (payload.size() < sizeof(InferenceHeader)) break;
+                InferenceHeader inf_hdr{};
+                std::memcpy(&inf_hdr, payload.data(), sizeof(inf_hdr));
+
                 std::vector<uint8_t> tensor_bytes(payload.begin() + sizeof(InferenceHeader), payload.end());
                 InferenceTask task;
-                task.model_id = inf_hdr->model_id;
+                task.model_id = ntohl(inf_hdr.model_id);
                 task.input_payload = std::move(tensor_bytes);
                 auto future = task.promise.get_future();
 
                 uint32_t q_idx = rr_counter.fetch_add(1) % queues.size();
-                queues[q_idx]->push(std::move(task));
+                if (!queues[q_idx]->try_push(std::move(task), kMaxQueueDepth)) break;
 
                 std::vector<uint8_t> output_result = future.get();
 
@@ -214,8 +253,9 @@ void handle_client(int sock, std::vector<std::unique_ptr<TaskQueue<InferenceTask
                 primary_hdr.status_code = output_result.empty() ? 2 : 0;
                 primary_hdr.payload_len = htonl(output_result.size());
 
-                write(sock, &primary_hdr, sizeof(primary_hdr));
-                write(sock, output_result.data(), output_result.size());
+                if (!write_exact_bytes(sock, &primary_hdr, sizeof(primary_hdr))) break;
+                if (!output_result.empty() &&
+                    !write_exact_bytes(sock, output_result.data(), output_result.size())) break;
 
                 size_t num_floats = output_result.size() / sizeof(float);
                 const float* current_floats = reinterpret_cast<const float*>(output_result.data());
@@ -232,8 +272,9 @@ void handle_client(int sock, std::vector<std::unique_ptr<TaskQueue<InferenceTask
                     delta_hdr.packet_type = 1;
                     delta_hdr.payload_len = htonl(delta.size() * sizeof(float));
 
-                    write(sock, &delta_hdr, sizeof(delta_hdr));
-                    write(sock, delta.data(), delta.size() * sizeof(float));
+                    if (!write_exact_bytes(sock, &delta_hdr, sizeof(delta_hdr))) break;
+                    if (!delta.empty() &&
+                        !write_exact_bytes(sock, delta.data(), delta.size() * sizeof(float))) break;
                 }
 
                 last_result_frame.assign(current_floats, current_floats + num_floats);
