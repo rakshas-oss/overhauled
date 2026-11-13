@@ -258,6 +258,7 @@ private:
     bool force_cpu_ = false;
     GpuSelectorFn gpu_selector_;
     uint64_t next_lease_id_ = 1;
+    static constexpr std::size_t kMaxRegisteredModules = 1024;
 };
 
 } // namespace nvlink::wasm
