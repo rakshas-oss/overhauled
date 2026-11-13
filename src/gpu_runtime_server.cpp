@@ -15,6 +15,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <system_error>
+#include <stdexcept>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -34,12 +35,31 @@ constexpr int kClientSocketTimeoutSeconds = 5;
 std::atomic<std::size_t> g_active_clients{0};
 std::mutex g_model_load_mutex;
 
+struct ActiveClientGuard {
+    ~ActiveClientGuard() {
+        g_active_clients.fetch_sub(1, std::memory_order_acq_rel);
+    }
+};
+
+class CudaTaskError : public std::runtime_error {
+public:
+    explicit CudaTaskError(const std::string& message) : std::runtime_error(message) {}
+};
+
 #define CUDA_CHECK(call) \
     do { \
         cudaError_t err = call; \
         if (err != cudaSuccess) { \
-            fprintf(stderr, "CUDA Error at %s:%d - %s\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
+            fprintf(stderr, "Fatal CUDA worker initialization error at %s:%d - %s\\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
             exit(EXIT_FAILURE); \
+        } \
+    } while (0)
+
+#define CUDA_TASK_CHECK(call) \
+    do { \
+        cudaError_t err = call; \
+        if (err != cudaSuccess) { \
+            throw CudaTaskError(std::string("CUDA task operation failed: ") + cudaGetErrorString(err)); \
         } \
     } while (0)
 
@@ -85,9 +105,11 @@ struct StreamLane {
     InferenceTask current_task;
     size_t output_size = 0;
     bool in_flight = false;
+    bool disabled = false;
 };
 
 void gpu_worker_thread(int gpu_id, TaskQueue<InferenceTask>& queue) {
+    // Device selection and stream creation are worker-initialization operations.
     CUDA_CHECK(cudaSetDevice(gpu_id));
     std::cout << "[GPU Worker " << gpu_id << "] Running with " << NUM_STREAMS_PER_GPU << " fractional lanes." << std::endl;
 
@@ -96,67 +118,134 @@ void gpu_worker_thread(int gpu_id, TaskQueue<InferenceTask>& queue) {
         CUDA_CHECK(cudaStreamCreate(&lanes[i].stream));
     }
 
+    const auto fail_lane_task = [](StreamLane& lane) {
+        try {
+            lane.current_task.promise.set_value({});
+        } catch (...) {
+            // Preserve worker liveness if a promise was already satisfied.
+        }
+        lane.in_flight = false;
+    };
+
     while (true) {
         bool busy = false;
 
         for (int i = 0; i < NUM_STREAMS_PER_GPU; ++i) {
-            if (lanes[i].in_flight) {
-                cudaError_t status = cudaStreamQuery(lanes[i].stream);
-                if (status == cudaSuccess) {
-                    std::vector<uint8_t> output_data(lanes[i].output_size);
-                    CUDA_CHECK(cudaMemcpyAsync(output_data.data(), lanes[i].d_output, lanes[i].output_size, cudaMemcpyDeviceToHost, lanes[i].stream));
-                    CUDA_CHECK(cudaStreamSynchronize(lanes[i].stream));
+            StreamLane& lane = lanes[i];
+            if (!lane.in_flight || lane.disabled) continue;
 
-                    lanes[i].current_task.promise.set_value(std::move(output_data));
-                    lanes[i].in_flight = false;
-                    busy = true;
-                }
+            const cudaError_t status = cudaStreamQuery(lane.stream);
+            if (status == cudaErrorNotReady) continue;
+            if (status != cudaSuccess) {
+                std::cerr << "[GPU Worker " << gpu_id << "] Disabling lane after asynchronous CUDA failure: "
+                          << cudaGetErrorString(status) << std::endl;
+                (void)cudaGetLastError();
+                fail_lane_task(lane);
+                lane.disabled = true;
+                continue;
+            }
+
+            try {
+                std::vector<uint8_t> output_data(lane.output_size);
+                CUDA_TASK_CHECK(cudaMemcpyAsync(output_data.data(), lane.d_output,
+                                                lane.output_size, cudaMemcpyDeviceToHost,
+                                                lane.stream));
+                CUDA_TASK_CHECK(cudaStreamSynchronize(lane.stream));
+                lane.current_task.promise.set_value(std::move(output_data));
+                lane.in_flight = false;
+                busy = true;
+            } catch (const CudaTaskError& error) {
+                std::cerr << "[GPU Worker " << gpu_id << "] Disabling lane after CUDA task failure: "
+                          << error.what() << std::endl;
+                fail_lane_task(lane);
+                lane.disabled = true;
+                (void)cudaGetLastError();
+            } catch (const std::exception& error) {
+                std::cerr << "[GPU Worker " << gpu_id << "] Inference result handling failed: "
+                          << error.what() << std::endl;
+                fail_lane_task(lane);
             }
         }
 
         for (int i = 0; i < NUM_STREAMS_PER_GPU; ++i) {
-            if (!lanes[i].in_flight) {
-                InferenceTask task;
-                if (queue.try_pop(task)) {
-                    auto model = ModelManager::instance().getModel(task.model_id);
-                    if (!model || task.input_payload.size() != model->total_input_bytes) {
-                        task.promise.set_value({});
-                        continue;
-                    }
+            StreamLane& lane = lanes[i];
+            if (lane.in_flight || lane.disabled) continue;
 
-                    if (lanes[i].active_model_id != task.model_id || !lanes[i].context) {
-                        lanes[i].context.reset(model->engine->createExecutionContext());
-                        lanes[i].active_model_id = task.model_id;
-                    }
+            InferenceTask task;
+            if (!queue.try_pop(task)) continue;
+            lane.current_task = std::move(task);
 
-                    if (lanes[i].input_cap < model->total_input_bytes) {
-                        if (lanes[i].d_input) cudaFree(lanes[i].d_input);
-                        CUDA_CHECK(cudaMalloc(&lanes[i].d_input, model->total_input_bytes));
-                        lanes[i].input_cap = model->total_input_bytes;
-                    }
-                    if (lanes[i].output_cap < model->total_output_bytes) {
-                        if (lanes[i].d_output) cudaFree(lanes[i].d_output);
-                        CUDA_CHECK(cudaMalloc(&lanes[i].d_output, model->total_output_bytes));
-                        lanes[i].output_cap = model->total_output_bytes;
-                    }
-
-                    lanes[i].output_size = model->total_output_bytes;
-                    lanes[i].current_task = std::move(task);
-
-                    CUDA_CHECK(cudaMemcpyAsync(lanes[i].d_input, lanes[i].current_task.input_payload.data(), 
-                                               model->total_input_bytes, cudaMemcpyHostToDevice, lanes[i].stream));
-
-                    for (const auto& binding : model->input_bindings) {
-                        lanes[i].context->setTensorAddress(binding.name.c_str(), lanes[i].d_input);
-                    }
-                    for (const auto& binding : model->output_bindings) {
-                        lanes[i].context->setTensorAddress(binding.name.c_str(), lanes[i].d_output);
-                    }
-
-                    lanes[i].context->enqueueV3(lanes[i].stream);
-                    lanes[i].in_flight = true;
-                    busy = true;
+            try {
+                auto model = ModelManager::instance().getModel(lane.current_task.model_id);
+                if (!model || !model->engine ||
+                    lane.current_task.input_payload.size() != model->total_input_bytes) {
+                    lane.current_task.promise.set_value({});
+                    lane.current_task = InferenceTask{};
+                    continue;
                 }
+
+                if (lane.active_model_id != lane.current_task.model_id || !lane.context) {
+                    lane.context.reset(model->engine->createExecutionContext());
+                    if (!lane.context) {
+                        throw std::runtime_error("TensorRT could not create an execution context");
+                    }
+                    lane.active_model_id = lane.current_task.model_id;
+                }
+
+                if (lane.input_cap < model->total_input_bytes) {
+                    if (lane.d_input) {
+                        CUDA_TASK_CHECK(cudaFree(lane.d_input));
+                        lane.d_input = nullptr;
+                        lane.input_cap = 0;
+                    }
+                    CUDA_TASK_CHECK(cudaMalloc(&lane.d_input, model->total_input_bytes));
+                    lane.input_cap = model->total_input_bytes;
+                }
+                if (lane.output_cap < model->total_output_bytes) {
+                    if (lane.d_output) {
+                        CUDA_TASK_CHECK(cudaFree(lane.d_output));
+                        lane.d_output = nullptr;
+                        lane.output_cap = 0;
+                    }
+                    CUDA_TASK_CHECK(cudaMalloc(&lane.d_output, model->total_output_bytes));
+                    lane.output_cap = model->total_output_bytes;
+                }
+
+                lane.output_size = model->total_output_bytes;
+                CUDA_TASK_CHECK(cudaMemcpyAsync(lane.d_input,
+                                                lane.current_task.input_payload.data(),
+                                                model->total_input_bytes,
+                                                cudaMemcpyHostToDevice, lane.stream));
+
+                for (const auto& binding : model->input_bindings) {
+                    if (!lane.context->setTensorAddress(binding.name.c_str(), lane.d_input)) {
+                        lane.disabled = true;
+                        throw std::runtime_error("TensorRT rejected an input tensor address");
+                    }
+                }
+                for (const auto& binding : model->output_bindings) {
+                    if (!lane.context->setTensorAddress(binding.name.c_str(), lane.d_output)) {
+                        lane.disabled = true;
+                        throw std::runtime_error("TensorRT rejected an output tensor address");
+                    }
+                }
+                if (!lane.context->enqueueV3(lane.stream)) {
+                    lane.disabled = true;
+                    throw std::runtime_error("TensorRT enqueueV3 rejected the inference task");
+                }
+
+                lane.in_flight = true;
+                busy = true;
+            } catch (const CudaTaskError& error) {
+                std::cerr << "[GPU Worker " << gpu_id << "] CUDA task failed: "
+                          << error.what() << std::endl;
+                fail_lane_task(lane);
+                lane.disabled = true;
+                (void)cudaGetLastError();
+            } catch (const std::exception& error) {
+                std::cerr << "[GPU Worker " << gpu_id << "] Inference task rejected: "
+                          << error.what() << std::endl;
+                fail_lane_task(lane);
             }
         }
 
@@ -377,6 +466,8 @@ int main(int argc, char* argv[]) {
             std::size_t active = g_active_clients.load(std::memory_order_relaxed);
             do {
                 if (active >= kMaxRuntimeClients) {
+                    std::cerr << "[Server] Rejecting client: runtime client limit reached ("
+                              << kMaxRuntimeClients << ")" << std::endl;
                     close(client_sock);
                     client_sock = -1;
                     break;
@@ -386,12 +477,27 @@ int main(int argc, char* argv[]) {
             if (client_sock >= 0) {
                 timeval timeout{};
                 timeout.tv_sec = kClientSocketTimeoutSeconds;
-                (void)setsockopt(client_sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-                (void)setsockopt(client_sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-                try {
+                if (setsockopt(client_sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0 ||
+                    setsockopt(client_sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) != 0) {
+                    std::cerr << "[Server] Failed to configure client socket: "
+                              << std::strerror(errno) << std::endl;
+                    close(client_sock);
+                    g_active_clients.fetch_sub(1, std::memory_order_acq_rel);
+                    client_sock = -1;
+                }
+                if (client_sock >= 0) try {
                     std::thread([client_sock, &queues, &rr_counter] {
-                        handle_client(client_sock, std::ref(queues), std::ref(rr_counter));
-                        g_active_clients.fetch_sub(1, std::memory_order_acq_rel);
+                        ActiveClientGuard active_client_guard;
+                        try {
+                            handle_client(client_sock, std::ref(queues), std::ref(rr_counter));
+                        } catch (const std::exception& error) {
+                            std::cerr << "[Client Handler] Unhandled client exception: "
+                                      << error.what() << std::endl;
+                            close(client_sock);
+                        } catch (...) {
+                            std::cerr << "[Client Handler] Unknown client exception" << std::endl;
+                            close(client_sock);
+                        }
                     }).detach();
                 } catch (...) {
                     g_active_clients.fetch_sub(1, std::memory_order_acq_rel);

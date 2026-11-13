@@ -12,6 +12,22 @@
 #include <iostream>
 #include <vector>
 
+namespace nvlink::broker {
+struct BrokerServiceTestAccess {
+    static int assign(BrokerService& service, const std::string& source) {
+        return service.get_or_assign_client_id(source);
+    }
+    static bool contains(const BrokerService& service, const std::string& source) {
+        std::lock_guard<std::mutex> lock(service.client_mutex_);
+        return service.source_to_client_.find(source) != service.source_to_client_.end();
+    }
+    static std::size_t size(const BrokerService& service) {
+        std::lock_guard<std::mutex> lock(service.client_mutex_);
+        return service.source_to_client_.size();
+    }
+};
+} // namespace nvlink::broker
+
 namespace {
 
 std::vector<uint8_t> pack_doubles(const std::array<double, 3>& values) {
@@ -42,8 +58,30 @@ std::array<double, 3> unpack_three_doubles(const std::vector<uint8_t>& payload) 
 
 } // namespace
 
+void test_source_lru_eviction() {
+    using namespace nvlink::broker;
+    BrokerServiceConfig config;
+    config.synthetic_gpu_count = 1;
+    BrokerService service(config);
+
+    const int first_id = BrokerServiceTestAccess::assign(service, "source-0");
+    for (std::size_t i = 1; i < 16384; ++i) {
+        BrokerServiceTestAccess::assign(service, "source-" + std::to_string(i));
+    }
+    assert(BrokerServiceTestAccess::size(service) == 16384);
+
+    // Touch source-0 to promote it; source-1 must become the least-recently used.
+    assert(BrokerServiceTestAccess::assign(service, "source-0") == first_id);
+    BrokerServiceTestAccess::assign(service, "source-over-capacity");
+    assert(BrokerServiceTestAccess::size(service) == 16384);
+    assert(BrokerServiceTestAccess::contains(service, "source-0"));
+    assert(!BrokerServiceTestAccess::contains(service, "source-1"));
+    assert(BrokerServiceTestAccess::contains(service, "source-over-capacity"));
+}
+
 int main() {
     using namespace nvlink::broker;
+    test_source_lru_eviction();
 
     BrokerServiceConfig config;
     config.force_cpu_fallback = true;

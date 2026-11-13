@@ -784,12 +784,54 @@ void test_broker_server_e2e_tcp() {
 
 } // namespace
 
+void test_registered_module_capacity() {
+    using namespace nvlink::wasm;
+    WasmSandboxManager manager(/*force_cpu=*/true);
+
+    WasmLifecycleRequest request;
+    request.action = WasmLifecycleAction::Prepare;
+    request.sandbox_id = "capacity-sandbox";
+    request.module_id = "module";
+    for (std::size_t i = 0; i < 1024; ++i) {
+        request.request_id = "prepare-" + std::to_string(i);
+        request.module_version = "version-" + std::to_string(i);
+        const auto response = manager.prepare_module(request);
+        require(response.status == WasmLifecycleStatus::Ok,
+                "module registration below capacity must succeed");
+    }
+
+    request.request_id = "prepare-over-cap";
+    request.module_version = "version-over-cap";
+    const auto full = manager.prepare_module(request);
+    require(full.status == WasmLifecycleStatus::Busy,
+            "module registration above capacity must return Busy");
+
+    // Existing registrations remain idempotent while the registry is full.
+    request.request_id = "prepare-existing";
+    request.module_version = "version-0";
+    const auto existing = manager.prepare_module(request);
+    require(existing.status == WasmLifecycleStatus::Ok,
+            "re-preparing an existing module at capacity must remain idempotent");
+
+    WasmLifecycleRequest release = request;
+    release.action = WasmLifecycleAction::Release;
+    release.request_id = "release-one";
+    require(manager.release_module(release).status == WasmLifecycleStatus::Ok,
+            "releasing one module must free a registry slot");
+
+    request.request_id = "prepare-after-release";
+    request.module_version = "version-after-release";
+    require(manager.prepare_module(request).status == WasmLifecycleStatus::Ok,
+            "new module registration must succeed after a slot is released");
+}
+
 int main() {
     std::cout << "Running wasm_sandbox_test...\n";
     test_big_endian_double_vectors();
     test_task_wire_format();
     test_lifecycle_wire_format();
     test_hotswap_lifecycle_flow();
+    test_registered_module_capacity();
     test_drain_with_inflight_tasks();
     test_broker_service_integration();
     test_broker_server_e2e_tcp();

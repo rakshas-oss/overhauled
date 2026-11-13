@@ -203,6 +203,9 @@ int main() {
         require(response.error == "timeout_ms exceeds maximum of 300000 ms",
                 "oversized-timeout rejection did not include the expected error");
 
+        // Keep the same TCP connection idle between complete frames. The
+        // server must use its frame deadline, not a microsecond socket timeout.
+        std::this_thread::sleep_for(std::chrono::milliseconds(25));
         request.task_id = "e2e-task-2";
         request.payload = pack_doubles({7.0, 11.0});
         require(send_request(sock, request, config.service_config.protocol_limits), "failed to send second valid request");
