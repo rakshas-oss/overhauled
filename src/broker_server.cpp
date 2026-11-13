@@ -51,6 +51,30 @@ bool read_exact(SocketHandle socket, void* buffer, std::size_t size) {
     return true;
 }
 
+bool read_exact_until(SocketHandle socket, void* buffer, std::size_t size,
+                      std::chrono::steady_clock::time_point deadline) {
+    uint8_t* out = static_cast<uint8_t*>(buffer);
+    std::size_t total = 0;
+    while (total < size) {
+        const auto remaining = deadline - std::chrono::steady_clock::now();
+        if (remaining <= std::chrono::steady_clock::duration::zero()) return false;
+        const auto micros = std::chrono::duration_cast<std::chrono::microseconds>(remaining).count();
+        timeval timeout{};
+        timeout.tv_sec = static_cast<time_t>(micros / 1000000);
+        timeout.tv_usec = static_cast<suseconds_t>(micros % 1000000);
+        if (timeout.tv_sec == 0 && timeout.tv_usec == 0) timeout.tv_usec = 1;
+        if (::setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0) return false;
+        const ssize_t received = ::recv(socket, out + total, size - total, 0);
+        if (received == 0) return false;
+        if (received < 0) {
+            if (errno == EINTR) continue;
+            return false;
+        }
+        total += static_cast<std::size_t>(received);
+    }
+    return true;
+}
+
 bool write_exact(SocketHandle socket, const void* buffer, std::size_t size) {
     const uint8_t* in = static_cast<const uint8_t*>(buffer);
     std::size_t total = 0;
@@ -386,8 +410,16 @@ private:
 
         try {
             while (running_.load(std::memory_order_acquire)) {
+                // The idle timeout only waits for the first prefix byte. Once a
+                // frame starts, its prefix and body share one absolute deadline;
+                // slow byte drips cannot extend the deadline by resetting SO_RCVTIMEO.
+                uint8_t prefix[sizeof(uint32_t)]{};
+                if (!read_exact(client_socket, prefix, 1)) break;
+                const auto frame_deadline = std::chrono::steady_clock::now() +
+                    std::chrono::milliseconds(config_.socket_timeout_ms);
+                if (!read_exact_until(client_socket, prefix + 1, sizeof(prefix) - 1, frame_deadline)) break;
                 uint32_t frame_len_be = 0;
-                if (!read_exact(client_socket, &frame_len_be, sizeof(frame_len_be))) break;
+                std::memcpy(&frame_len_be, prefix, sizeof(frame_len_be));
                 const std::size_t frame_len = ntohl(frame_len_be);
                 if (frame_len == 0 || frame_len > config_.service_config.protocol_limits.max_frame_bytes) {
                     send_error("", "frame length violates protocol limits", false, 0);
@@ -395,7 +427,7 @@ private:
                 }
 
                 std::vector<uint8_t> frame(frame_len);
-                if (!read_exact(client_socket, frame.data(), frame.size())) break;
+                if (!read_exact_until(client_socket, frame.data(), frame.size(), frame_deadline)) break;
 
                 const bool use_brk2 = frame.size() >= 4 &&
                     frame[0] == 'B' && frame[1] == 'R' && frame[2] == 'K' && frame[3] == '2';
