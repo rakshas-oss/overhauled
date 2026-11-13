@@ -9,6 +9,7 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include <mutex>
 #include <cuda_runtime.h>
 #include <NvInfer.h>
 #include <NvOnnxParser.h>
@@ -74,7 +75,7 @@ public:
             binding.name = name;
             binding.is_input = (mode == nvinfer1::TensorIOMode::kINPUT);
             binding.dtype = trtTypeToAdi(dt);
-            
+
             size_t count = 1;
             for (int d = 0; d < shape.nbDims; ++d) {
                 int64_t dim = shape.d[d] < 0 ? 1 : shape.d[d];
@@ -128,17 +129,20 @@ public:
         );
 
         instance->inspectBindings();
+        std::lock_guard<std::mutex> lock(mutex_);
         models_[model_id] = instance;
         std::cout << "[ModelManager] Loaded Model ID: " << model_id << " (" << onnx_path << ")" << std::endl;
         return true;
     }
 
     std::shared_ptr<TrtModelInstance> getModel(uint32_t model_id) {
+        std::lock_guard<std::mutex> lock(mutex_);
         auto it = models_.find(model_id);
         if (it != models_.end()) return it->second;
         return nullptr;
     }
 
 private:
+    mutable std::mutex mutex_;
     std::unordered_map<uint32_t, std::shared_ptr<TrtModelInstance>> models_;
 };

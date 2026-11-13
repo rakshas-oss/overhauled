@@ -100,6 +100,9 @@ std::string get_gpu_name(int gpu_idx) noexcept;
 
 template <typename QueueDepthFn>
 int Placer::place(int client_id, QueueDepthFn queue_depth) const {
+    if (topo_.num_gpus() <= 0) {
+        throw NVLinkError("Placer requires a topology with at least one GPU.");
+    }
     std::lock_guard<std::mutex> lock(affinity_mutex_);
     auto it = affinity_.find(client_id);
     int home = (it != affinity_.end()) ? it->second : -1;
