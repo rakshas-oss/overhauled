@@ -14,6 +14,8 @@
 #include <condition_variable>
 #include <cstring>
 #include <deque>
+#include <functional>
+#include <algorithm>
 #include <mutex>
 #include <stdexcept>
 #include <thread>
@@ -131,8 +133,37 @@ public:
         if (config_.port < 1 || config_.port > 65535) {
             throw std::invalid_argument("broker server port must be in range 1..65535");
         }
-        if (config_.max_inflight_per_client == 0) {
-            throw std::invalid_argument("max_inflight_per_client must be greater than zero");
+        if (config_.max_inflight_per_client == 0 || config_.max_clients == 0) {
+            throw std::invalid_argument("client and in-flight limits must be greater than zero");
+        }
+        const std::size_t hw = std::max<std::size_t>(1, std::thread::hardware_concurrency());
+        const std::size_t pool_size = config_.worker_threads == 0
+            ? std::min<std::size_t>(256, std::max<std::size_t>(4, hw * 2))
+            : config_.worker_threads;
+        if (pool_size == 0 || pool_size > 256) {
+            throw std::invalid_argument("worker_threads must be between 1 and 256 (or zero for auto)");
+        }
+        const std::size_t requested_queue = config_.max_clients >
+            (65536 / config_.max_inflight_per_client)
+            ? 65536
+            : config_.max_clients * config_.max_inflight_per_client;
+        max_queued_tasks_ = std::max<std::size_t>(64, std::min<std::size_t>(65536, requested_queue));
+
+        try {
+            workers_.reserve(pool_size);
+            for (std::size_t i = 0; i < pool_size; ++i) {
+                workers_.emplace_back([this] { worker_loop(); });
+            }
+        } catch (...) {
+            {
+                std::lock_guard<std::mutex> lock(queue_mutex_);
+                workers_stopping_ = true;
+            }
+            queue_cv_.notify_all();
+            for (auto& worker : workers_) {
+                if (worker.joinable()) worker.join();
+            }
+            throw;
         }
     }
 
@@ -160,18 +191,22 @@ public:
     }
 
     void stop() noexcept {
-        if (!running_.exchange(false)) {
-            return;
-        }
+        const bool was_running = running_.exchange(false);
+        if (was_running) {
+            shutdown_socket(listener_socket_);
+            close_socket(listener_socket_);
+            listener_socket_ = kInvalidSocket;
 
-        shutdown_socket(listener_socket_);
-        close_socket(listener_socket_);
-        listener_socket_ = kInvalidSocket;
-
-        std::lock_guard<std::mutex> lock(client_mutex_);
-        for (SocketHandle socket : client_sockets_) {
-            shutdown_socket(socket);
+            std::lock_guard<std::mutex> lock(client_mutex_);
+            for (SocketHandle socket : client_sockets_) {
+                shutdown_socket(socket);
+            }
         }
+        {
+            std::lock_guard<std::mutex> lock(queue_mutex_);
+            workers_stopping_ = true;
+        }
+        queue_cv_.notify_all();
     }
 
     bool is_running() const noexcept {
@@ -183,6 +218,51 @@ private:
         std::thread thread;
         std::shared_ptr<std::atomic<bool>> done;
     };
+
+    struct SessionInflight {
+        std::mutex mutex;
+        std::condition_variable cv;
+        std::size_t count = 0;
+
+        void finish() noexcept {
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                if (count > 0) --count;
+            }
+            cv.notify_one();
+        }
+    };
+
+    struct InflightCompletion {
+        std::shared_ptr<SessionInflight> state;
+        ~InflightCompletion() { if (state) state->finish(); }
+    };
+
+    void worker_loop() noexcept {
+        for (;;) {
+            std::function<void()> task;
+            {
+                std::unique_lock<std::mutex> lock(queue_mutex_);
+                queue_cv_.wait(lock, [this] { return workers_stopping_ || !task_queue_.empty(); });
+                if (workers_stopping_ && task_queue_.empty()) return;
+                task = std::move(task_queue_.front());
+                task_queue_.pop_front();
+            }
+            try { if (task) task(); } catch (...) {
+                // A task must never terminate the worker pool.
+            }
+        }
+    }
+
+    bool enqueue_task(std::function<void()> task) {
+        {
+            std::lock_guard<std::mutex> lock(queue_mutex_);
+            if (workers_stopping_ || task_queue_.size() >= max_queued_tasks_) return false;
+            task_queue_.push_back(std::move(task));
+        }
+        queue_cv_.notify_one();
+        return true;
+    }
 
     void open_listener() {
         listener_socket_ = ::socket(AF_INET, SOCK_STREAM, 0);
@@ -274,75 +354,48 @@ private:
     }
 
     void session_loop(SocketHandle client_socket) {
-        struct PendingResponse {
-            std::thread thread;
-            std::shared_ptr<std::atomic<bool>> done;
-        };
-
-        auto reap_finished = [](std::deque<PendingResponse>* pending, bool join_all) {
-            auto it = pending->begin();
-            while (it != pending->end()) {
-                const bool finished = it->done != nullptr && it->done->load(std::memory_order_acquire);
-                if (join_all || finished) {
-                    if (it->thread.joinable()) {
-                        it->thread.join();
-                    }
-                    it = pending->erase(it);
-                } else {
-                    ++it;
-                }
-            }
-        };
-
-        std::deque<PendingResponse> pending_responses;
+        auto inflight = std::make_shared<SessionInflight>();
         std::mutex write_mutex;
         auto writes_enabled = std::make_shared<std::atomic<bool>>(true);
 
-        auto write_response = [&](const BrokerResponse& response, bool use_brk2, uint64_t request_id) {
-            if (!writes_enabled->load(std::memory_order_acquire)) {
-                return false;
-            }
-            const std::vector<uint8_t> response_frame = use_brk2
+        auto write_response = [this, client_socket, &write_mutex, writes_enabled]
+            (const BrokerResponse& response, bool use_brk2, uint64_t request_id) {
+            if (!writes_enabled->load(std::memory_order_acquire)) return false;
+            const auto response_frame = use_brk2
                 ? encode_brk2_response_body(response, request_id, config_.service_config.protocol_limits)
                 : encode_response_frame(response, config_.service_config.protocol_limits);
-            const uint32_t response_len_be = htonl(static_cast<uint32_t>(response_frame.size()));
-            std::lock_guard<std::mutex> write_lock(write_mutex);
-            if (!writes_enabled->load(std::memory_order_acquire)) {
-                return false;
-            }
-            return write_exact(client_socket, &response_len_be, sizeof(response_len_be)) &&
+            const uint32_t len_be = htonl(static_cast<uint32_t>(response_frame.size()));
+            std::lock_guard<std::mutex> lock(write_mutex);
+            if (!writes_enabled->load(std::memory_order_acquire)) return false;
+            return write_exact(client_socket, &len_be, sizeof(len_be)) &&
                    write_exact(client_socket, response_frame.data(), response_frame.size());
         };
 
-        auto send_protocol_error_locked = [&](const std::string& task_id, const std::string& error) {
-            if (!writes_enabled->load(std::memory_order_acquire)) {
-                return;
+        auto send_error = [this, client_socket, &write_mutex, writes_enabled]
+            (const std::string& task_id, const std::string& error, bool use_brk2, uint64_t request_id) {
+            std::lock_guard<std::mutex> lock(write_mutex);
+            if (!writes_enabled->load(std::memory_order_acquire)) return;
+            if (use_brk2) {
+                send_brk2_protocol_error(client_socket, request_id, error,
+                                          config_.service_config.protocol_limits);
+            } else {
+                send_protocol_error(client_socket, task_id, error,
+                                    config_.service_config.protocol_limits);
             }
-            std::lock_guard<std::mutex> write_lock(write_mutex);
-            if (!writes_enabled->load(std::memory_order_acquire)) {
-                return;
-            }
-            send_protocol_error(client_socket, task_id, error, config_.service_config.protocol_limits);
         };
 
         try {
             while (running_.load(std::memory_order_acquire)) {
-                reap_finished(&pending_responses, false);
                 uint32_t frame_len_be = 0;
-                if (!read_exact(client_socket, &frame_len_be, sizeof(frame_len_be))) {
-                    break;
-                }
-
+                if (!read_exact(client_socket, &frame_len_be, sizeof(frame_len_be))) break;
                 const std::size_t frame_len = ntohl(frame_len_be);
                 if (frame_len == 0 || frame_len > config_.service_config.protocol_limits.max_frame_bytes) {
-                    send_protocol_error_locked("", "frame length violates protocol limits");
+                    send_error("", "frame length violates protocol limits", false, 0);
                     break;
                 }
 
                 std::vector<uint8_t> frame(frame_len);
-                if (!read_exact(client_socket, frame.data(), frame.size())) {
-                    break;
-                }
+                if (!read_exact(client_socket, frame.data(), frame.size())) break;
 
                 const bool use_brk2 = frame.size() >= 4 &&
                     frame[0] == 'B' && frame[1] == 'R' && frame[2] == 'K' && frame[3] == '2';
@@ -352,52 +405,54 @@ private:
                 bool decoded = false;
                 if (use_brk2) {
                     if (frame.size() >= 20) {
-                        for (std::size_t i = 12; i < 20; ++i) request_id = (request_id << 8) | frame[i];
+                        for (std::size_t i = 12; i < 20; ++i)
+                            request_id = (request_id << 8) | frame[i];
                     }
                     decoded = decode_brk2_request_body(frame, &request, &request_id,
-                                                       &decode_error, config_.service_config.protocol_limits);
+                        &decode_error, config_.service_config.protocol_limits);
                 } else {
                     decoded = decode_request_frame(frame, &request, &decode_error,
-                                                   config_.service_config.protocol_limits);
+                        config_.service_config.protocol_limits);
                 }
                 if (!decoded) {
-                    if (use_brk2) {
-                        std::lock_guard<std::mutex> write_lock(write_mutex);
-                        if (writes_enabled->load(std::memory_order_acquire))
-                            send_brk2_protocol_error(client_socket, request_id, decode_error,
-                                                     config_.service_config.protocol_limits);
-                    } else {
-                        send_protocol_error_locked(request.task_id, decode_error);
-                    }
+                    send_error(request.task_id, decode_error, use_brk2, request_id);
                     continue;
                 }
 
-                if (pending_responses.size() >= config_.max_inflight_per_client) {
-                    if (use_brk2) {
-                        std::lock_guard<std::mutex> write_lock(write_mutex);
-                        if (writes_enabled->load(std::memory_order_acquire))
-                            send_brk2_protocol_error(client_socket, request_id,
-                                "too many inflight requests for client", config_.service_config.protocol_limits);
-                    } else {
-                        send_protocol_error_locked(request.task_id, "too many inflight requests for client");
+                bool admitted = false;
+                {
+                    std::lock_guard<std::mutex> lock(inflight->mutex);
+                    if (inflight->count < config_.max_inflight_per_client) {
+                        ++inflight->count;
+                        admitted = true;
                     }
+                }
+                if (!admitted) {
+                    send_error(request.task_id, "too many inflight requests for client",
+                               use_brk2, request_id);
                     continue;
                 }
 
-                auto done = std::make_shared<std::atomic<bool>>(false);
-                pending_responses.push_back(PendingResponse{
-                    std::thread([this, request, write_response, done, use_brk2, request_id] {
+                auto completion = std::make_shared<InflightCompletion>();
+                completion->state = inflight;
+                const bool queued = enqueue_task(
+                    [this, request = std::move(request), write_response, completion,
+                     use_brk2, request_id]() mutable {
                         try {
                             BrokerResponse response = service_.handle_request(request);
                             (void)write_response(response, use_brk2, request_id);
-                        } catch (const std::exception&) {
+                        } catch (...) {
+                            // Completion guard releases the per-session slot on every exit.
                         }
-                        done->store(true, std::memory_order_release);
-                    }),
-                    done,
-                });
+                    });
+                if (!queued) {
+                    completion.reset();
+                    send_error(request.task_id, "broker worker queue is full", use_brk2, request_id);
+                    break;
+                }
             }
-        } catch (const std::exception&) {
+        } catch (...) {
+            // Socket/session failures are isolated to this client.
         }
 
         writes_enabled->store(false, std::memory_order_release);
@@ -406,7 +461,10 @@ private:
             client_sockets_.erase(client_socket);
         }
         shutdown_socket(client_socket);
-        reap_finished(&pending_responses, true);
+        {
+            std::unique_lock<std::mutex> lock(inflight->mutex);
+            inflight->cv.wait(lock, [&inflight] { return inflight->count == 0; });
+        }
         close_socket(client_socket);
     }
 
@@ -430,12 +488,27 @@ private:
         close_socket(listener_socket_);
         listener_socket_ = kInvalidSocket;
         reap_finished_sessions(true);
+        {
+            std::lock_guard<std::mutex> lock(queue_mutex_);
+            workers_stopping_ = true;
+        }
+        queue_cv_.notify_all();
+        for (auto& worker : workers_) {
+            if (worker.joinable()) worker.join();
+        }
+        workers_.clear();
     }
 
     BrokerServerConfig config_;
     BrokerService service_;
     std::atomic<bool> running_{false};
     SocketHandle listener_socket_ = kInvalidSocket;
+    std::size_t max_queued_tasks_ = 4096;
+    std::mutex queue_mutex_;
+    std::condition_variable queue_cv_;
+    std::deque<std::function<void()>> task_queue_;
+    bool workers_stopping_ = false;
+    std::vector<std::thread> workers_;
     std::vector<SessionState> session_threads_;
     std::unordered_set<SocketHandle> client_sockets_;
     mutable std::mutex client_mutex_;
