@@ -62,8 +62,7 @@ bool valid_utf8(const uint8_t* p,std::size_t n){
         else return false;
         if(extra>n-i)return false;
         for(std::size_t j=0;j<extra;++j){const uint8_t d=p[i++];if((d&0xc0)!=0x80)return false;cp=(cp<<6)|(d&0x3f);}
-        if((extra==1&&cp<0x80)||(extra==2&&cp<0x800)||(extra==3&&cp<0x10000)||
-           cp>0x10ffff||(cp>=0xd800&&cp<=0xdfff))return false;
+        if((extra==1&&cp<0x80)||(extra==2&&cp<0x800)||(extra==3&&cp<0x10000)||cp>0x10ffff||(cp>=0xd800&&cp<=0xdfff))return false;
     }
     return true;
 }
@@ -94,24 +93,17 @@ bool decode_brk2_request_body(const std::vector<uint8_t>& body,BrokerRequest* ou
     if(body[4]!=2)return fail("unsupported BRK2 major version");
     if(read16(body.data()+6)!=BRK2_HEADER_BYTES)return fail("invalid BRK2 header length");
     if(read16(body.data()+8)!=MSG_REQUEST)return fail("unexpected BRK2 message type");
-    const uint16_t flags=read16(body.data()+10);
-    if(flags != 0)return fail("unsupported BRK2 request flags");
+    if(read16(body.data()+10)!=0)return fail("unsupported BRK2 request flags");
     if(read16(body.data()+26)!=0)return fail("BRK2 reserved field must be zero");
     const std::size_t payload_len=read32(body.data()+28);
     if(payload_len>limits.max_payload_bytes||payload_len!=body.size()-BRK2_HEADER_BYTES)return fail("BRK2 payload length mismatch or limit exceeded");
     if(read32(body.data()+20)!=BRK2_SCHEMA_REQUEST||read16(body.data()+24)!=1)return fail("unsupported BRK2 request schema");
     *request_id=read64(body.data()+12);
     std::vector<FieldView> fs;if(!parse_fields(body,&fs,error))return false;
-    for (const auto& f : fs) {
-        const bool known = f.id >= 1 && f.id <= 10;
-        if (!known && (f.flags & FIELD_CRITICAL)) return fail("unknown critical BRK2 field");
-    }
+    for (const auto& f : fs) if (!(f.id >= 1 && f.id <= 10) && (f.flags & FIELD_CRITICAL)) return fail("unknown critical BRK2 field");
     BrokerRequest req;
-    if(!get_string(fs,1,&req.task_id,error)||!get_string(fs,2,&req.source,error)||
-       !get_string(fs,3,&req.destination,error)||!get_string(fs,4,&req.kind,error))return false;
-    for (const auto* value : {&req.task_id, &req.source, &req.destination, &req.kind}) {
-        if (value->size() > limits.max_string_bytes) return fail("BRK2 string exceeds configured limit");
-    }
+    if(!get_string(fs,1,&req.task_id,error)||!get_string(fs,2,&req.source,error)||!get_string(fs,3,&req.destination,error)||!get_string(fs,4,&req.kind,error))return false;
+    for (const auto* value : {&req.task_id, &req.source, &req.destination, &req.kind}) if (value->size() > limits.max_string_bytes) return fail("BRK2 string exceeds configured limit");
     const uint8_t *p=nullptr;
     if(!get_fixed(fs,5,WT_U8,1,&p,error))return false;req.priority=p[0];
     if(!get_fixed(fs,6,WT_U32,4,&p,error))return false;req.timeout_ms=read32(p);
@@ -120,9 +112,6 @@ bool decode_brk2_request_body(const std::vector<uint8_t>& body,BrokerRequest* ou
     req.payload.assign(payload->data,payload->data+payload->size);
     if(const auto* key=find(fs,8)){if(key->type!=WT_UUID||key->size!=16)return fail("invalid BRK2 idempotency key");}
     if(const auto* deadline=find(fs,9)){if(deadline->type!=WT_U64||deadline->size!=8)return fail("invalid BRK2 deadline");}
-    // Optional field 10: device_preference, UTF-8, non-critical so old
-    // servers ignore it. Reject unknown values rather than silently
-    // misrouting a task to the wrong backend.
     if(const auto* pref=find(fs,10)){
         if(pref->type!=WT_UTF8)return fail("invalid BRK2 device_preference type");
         std::string value(reinterpret_cast<const char*>(pref->data),pref->size);
@@ -130,21 +119,18 @@ bool decode_brk2_request_body(const std::vector<uint8_t>& body,BrokerRequest* ou
         req.device_preference=value;
     }
     if(req.timeout_ms==0||req.timeout_ms>BROKER_MAX_TIMEOUT_MS)return fail("BRK2 timeout_ms outside 1..300000");
-    if(body.size()>limits.max_frame_bytes)return fail("BRK2 frame exceeds limit");
     *out=std::move(req);return true;
 }
 
 std::vector<uint8_t> encode_brk2_response_body(const BrokerResponse& r,uint64_t request_id,const ProtocolLimits& limits){
     if(r.result.size()>limits.max_payload_bytes)throw std::runtime_error("BRK2 response payload exceeds limit");
-    if(r.task_id.size()>limits.max_string_bytes||r.error.size()>limits.max_string_bytes)
-        throw std::runtime_error("BRK2 response string exceeds configured limit");
+    if(r.task_id.size()>limits.max_string_bytes)throw std::runtime_error("BRK2 response task_id exceeds configured limit");
+    std::string bounded_error=r.error;
+    if(bounded_error.size()>limits.max_string_bytes) bounded_error.resize(limits.max_string_bytes);
     std::vector<uint8_t> p;
     field_str(p,1,r.task_id);field_u8(p,2,static_cast<uint8_t>(r.status));
     field_i64(p,3,static_cast<int64_t>(r.selected_gpu));field_u64(p,4,r.latency_ms);
-    field_bytes(p,5,r.result);field_str(p,6,r.error);
-    // Optional field 7: backend, so a client can verify it actually ran
-    // on the backend it requested instead of silently accepting a CPU
-    // fallback as an NPU result. Old clients ignore unknown optional fields.
+    field_bytes(p,5,r.result);field_str(p,6,bounded_error);
     field_str(p,7,backend_name(r.backend));
     if(p.size()>limits.max_payload_bytes||BRK2_HEADER_BYTES+p.size()>limits.max_frame_bytes)throw std::runtime_error("BRK2 response exceeds frame limit");
     return envelope(MSG_RESPONSE,FLAG_RESPONSE|FLAG_END_STREAM,request_id,BRK2_SCHEMA_RESPONSE,p);
