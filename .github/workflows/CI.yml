@@ -1,0 +1,36 @@
+name: Overhauled CI
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  verify-asan:
+    name: Verify Overhauled (C++ ASan & UBSan)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libssl-dev
+
+      - name: Configure CMake with Sanitizers
+        run: |
+          cmake -S . -B build-asan \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DENABLE_CUDA=OFF \
+            -DENABLE_TENSORRT=OFF \
+            -DBUILD_BROKER=ON \
+            -DBUILD_TESTING=ON
+
+      - name: Build with Parallel Jobs
+        run: cmake --build build-asan --parallel $(nproc)
+
+      - name: Run CTest Conformance Suite
+        run: ctest --test-dir build-asan --output-on-failure
