@@ -29,15 +29,46 @@ void require(bool condition, const char* message) {
 }
 
 std::vector<uint8_t> pack_doubles(const std::vector<double>& values) {
+    static_assert(sizeof(double) == sizeof(uint64_t), "requires 64-bit double");
     std::vector<uint8_t> out(values.size() * sizeof(double));
-    std::memcpy(out.data(), values.data(), out.size());
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        uint64_t bits = 0;
+        std::memcpy(&bits, &values[i], sizeof(bits));
+        for (std::size_t b = 0; b < sizeof(double); ++b) {
+            out[i * sizeof(double) + b] =
+                static_cast<uint8_t>(bits >> ((sizeof(double) - b - 1) * 8));
+        }
+    }
     return out;
 }
 
 std::vector<double> unpack_doubles(const std::vector<uint8_t>& bytes) {
+    require(bytes.size() % sizeof(double) == 0, "double payload has partial element");
     std::vector<double> out(bytes.size() / sizeof(double));
-    std::memcpy(out.data(), bytes.data(), bytes.size());
+    for (std::size_t i = 0; i < out.size(); ++i) {
+        uint64_t bits = 0;
+        for (std::size_t b = 0; b < sizeof(double); ++b) {
+            bits = (bits << 8) | bytes[i * sizeof(double) + b];
+        }
+        std::memcpy(&out[i], &bits, sizeof(bits));
+    }
     return out;
+}
+
+void test_big_endian_double_vectors() {
+    const std::vector<uint8_t> one_be{0x3f, 0xf0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    const std::vector<uint8_t> minus_two_point_five_be{
+        0xc0, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+    require(pack_doubles({1.0}) == one_be, "1.0 must encode as IEEE-754 big-endian");
+    require(pack_doubles({-2.5}) == minus_two_point_five_be,
+            "-2.5 must encode as IEEE-754 big-endian");
+    const auto decoded = unpack_doubles(one_be);
+    require(decoded.size() == 1 && decoded[0] == 1.0,
+            "fixed big-endian 1.0 vector must decode exactly");
+    const auto decoded_negative = unpack_doubles(minus_two_point_five_be);
+    require(decoded_negative.size() == 1 && decoded_negative[0] == -2.5,
+            "fixed big-endian -2.5 vector must decode exactly");
 }
 
 void test_task_wire_format() {
@@ -754,6 +785,7 @@ void test_broker_server_e2e_tcp() {
 
 int main() {
     std::cout << "Running wasm_sandbox_test...\n";
+    test_big_endian_double_vectors();
     test_task_wire_format();
     test_lifecycle_wire_format();
     test_hotswap_lifecycle_flow();
