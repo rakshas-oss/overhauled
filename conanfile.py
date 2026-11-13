@@ -8,7 +8,7 @@ from conan.tools.files import copy
 
 class NVLinkPlacementConan(ConanFile):
     name = "nvlink_placement"
-    version = "1.1.1"
+    version = "1.1.2"
     package_type = "library"
     description = "NVLink-aware GPU task placement and broker runtime"
     author = "rakshas-oss"
