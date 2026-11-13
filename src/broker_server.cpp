@@ -433,6 +433,7 @@ private:
                     continue;
                 }
 
+                const std::string rejected_task_id = request.task_id;
                 auto completion = std::make_shared<InflightCompletion>();
                 completion->state = inflight;
                 const bool queued = enqueue_task(
@@ -447,7 +448,7 @@ private:
                     });
                 if (!queued) {
                     completion.reset();
-                    send_error(request.task_id, "broker worker queue is full", use_brk2, request_id);
+                    send_error(rejected_task_id, "broker worker queue is full", use_brk2, request_id);
                     break;
                 }
             }
