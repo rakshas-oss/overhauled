@@ -64,6 +64,8 @@ private:
     std::unique_ptr<GpuTopology> topology_;
     std::unique_ptr<Placer> placer_;
     std::vector<std::size_t> gpu_inflight_;
+    // Payload-weighted load used only for placement; request count remains the admission limit.
+    std::vector<std::size_t> gpu_weighted_inflight_;
     mutable std::mutex inflight_mutex_;
 
     mutable std::mutex client_mutex_;
