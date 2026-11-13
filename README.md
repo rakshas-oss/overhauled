@@ -1,6 +1,6 @@
 # Overhauled v1.1.1
 
-Overhauled is a C++17 placement and execution library with an interoperable broker service. It provides topology-aware GPU scheduling and broker dispatch for CPU, GPU, and optional NPU execution. It is the execution plane, not a replacement for a control plane such as [YuKKi-OS](https://github.com/rakshas-oss/YuKKi-OS).
+Overhauled is a C++17 placement and execution library with an interoperable broker service. It provides topology-aware GPU scheduling and broker dispatch for CPU, GPU, and optional NPU execution.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
@@ -18,7 +18,7 @@ Overhauled is a C++17 placement and execution library with an interoperable brok
 
 ## Control-plane interoperability
 
-YuKKi-OS remains the control plane; Overhauled owns broker execution and accelerator placement. YuKKi-OS uses the BRK1 or BRK2 binary broker envelope for the Overhauled endpoint. Its separate generic JSON broker client is not compatible with this listener. BRK2 request field `device_preference` (field 10) can request `cpu`, `gpu`, or `npu`; response field `backend` (field 7) reports which backend actually handled the request. A preference is not a hardware guarantee. See [docs/YUKKI_INTEROP.md](docs/YUKKI_INTEROP.md) for the cross-repository boundary and hardware qualifications.
+YuKKi-OS remains the control plane; Overhauled owns broker execution and accelerator placement. YuKKi-OS uses the BRK1 or BRK2 binary broker envelope for the Overhauled endpoint. Its separate generic broker JSON transport is not interchangeable with BRK1/BRK2.
 
 ## Quick start: CPU-only broker
 
@@ -35,18 +35,14 @@ ctest --test-dir build --output-on-failure
 ./build/broker_server 9090 --cpu-only
 ```
 
-This mode is useful for CI, development, and non-GPU hosts. The service uses bounded broker framing, but the protocol is not an authentication layer; deploy it only on a trusted network or behind an independently secured proxy.
+This mode is useful for CI, development, and non-GPU hosts. The service uses bounded broker framing, but the protocol is not an authentication layer; deploy it only on a trusted network or behind an authenticated transport.
 
 ## Optional Ethos-U85 Linux DRM backend
 
 Physical NPU execution is opt-in and requires Linux with a kernel exposing the mainline Ethos-U DRM UAPI, plus a compatible Vela-generated bundle. Configure and build with:
 
 ```bash
-cmake -S . -B build \
-  -DENABLE_ETHOSU_DRM=ON \
-  -DENABLE_CUDA=OFF \
-  -DENABLE_TENSORRT=OFF \
-  -DBUILD_BROKER=ON
+cmake -S . -B build -DENABLE_ETHOSU_DRM=ON -DENABLE_CUDA=OFF -DENABLE_TENSORRT=OFF -DBUILD_BROKER=ON
 cmake --build build -j"$(nproc)"
 ctest --test-dir build --output-on-failure
 ```
@@ -55,11 +51,10 @@ Then launch using a `YU85BND1` model bundle:
 
 ```bash
 ./build/broker_server 9090 --npu-ethosu-bundle model.yu85
-# Optional explicit DRM render node:
 ./build/broker_server 9090 --npu-ethosu-bundle model.yu85 --ethosu-device /dev/dri/renderD128
 ```
 
-`--npu-simulated` is CPU emulation for CI/conformance, not hardware acceleration. A successful build, parser test, or simulator run does not establish physical-board inference. See [docs/ETHOSU_U85_BUNDLE.md](docs/ETHOSU_U85_BUNDLE.md) for bundle layout and validation limits.
+`--npu-simulated` is CPU emulation for CI/conformance, not hardware acceleration. See [docs/ETHOSU_U85_BUNDLE.md](docs/ETHOSU_U85_BUNDLE.md).
 
 ## Other build modes
 
@@ -71,6 +66,10 @@ cmake -S . -B build -DENABLE_CUDA=ON -DENABLE_TENSORRT=OFF
 cmake -S . -B build -DENABLE_CUDA=ON -DENABLE_TENSORRT=ON -DTENSORRT_ROOT=/path/to/tensorrt
 ```
 
+## Security hardening
+
+Placement validates non-empty GPU topology, model registry access is synchronized, and the optional TensorRT runtime enforces bounded framed input handling. The BRK2 response encoder caps error text to configured limits. These checks do not provide transport authentication. Review [docs/SECURITY_HARDENING_NOTES.md](docs/SECURITY_HARDENING_NOTES.md) and deploy network services behind an authenticated transport boundary.
+
 ## Documentation
 
 - [Broker protocol](docs/BROKER_PROTOCOL.md) · [BRK2 conformance](docs/BRK2_CONFORMANCE_V1.md) · [Executable BRK corpus](docs/BRK_CONFORMANCE_V1.md)
@@ -79,6 +78,7 @@ cmake -S . -B build -DENABLE_CUDA=ON -DENABLE_TENSORRT=ON -DTENSORRT_ROOT=/path/
 - [Architecture](docs/ARCHITECTURE.md) · [Library guide](docs/LIBRARY.md)
 - [System administration](docs/SYSADMIN_HOWTO.md) · [Operations runbook](OPERATIONS_RUNBOOK.md) · [Deployment guide](DEPLOYMENT_GUIDE.md)
 - [Publishing](docs/PUBLISHING.md) · [Release notes](docs/RELEASE_NOTES.md) · [Benchmarks](docs/BENCHMARK_RESULTS.md)
+- [Security hardening notes](docs/SECURITY_HARDENING_NOTES.md)
 
 ## License
 

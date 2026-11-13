@@ -110,6 +110,9 @@ if(BUILD_BROKER)
     list(APPEND OVERHAULED_INSTALL_TARGETS broker_service)
 
     if(ENABLE_INTEROP_ENCRYPTION)
+        if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/interop_encryption.cpp")
+            message(FATAL_ERROR "ENABLE_INTEROP_ENCRYPTION=ON requested, but src/interop_encryption.cpp is not present in this tree.")
+        endif()
         add_library(interop_encryption src/interop_encryption.cpp)
         add_library(Overhauled::interop_encryption ALIAS interop_encryption)
         target_include_directories(interop_encryption PUBLIC

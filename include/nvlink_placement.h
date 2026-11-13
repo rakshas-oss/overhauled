@@ -21,20 +21,15 @@ public:
     explicit NVLinkError(const std::string& msg) : std::runtime_error(msg) {}
 };
 
-enum class LinkType {
-    SELF,       ///< Same device
-    NVLINK,     ///< Direct NVLink interconnect
-    PCIE,       ///< PCIe peer access
-    NONE        ///< No peer access
-};
+enum class LinkType { SELF, NVLINK, PCIE, NONE };
 
 inline const char* link_type_name(LinkType lt) {
     switch (lt) {
-        case LinkType::SELF:   return "SELF";
+        case LinkType::SELF: return "SELF";
         case LinkType::NVLINK: return "NVLINK";
-        case LinkType::PCIE:   return "PCIE";
-        case LinkType::NONE:   return "NONE";
-        default:               return "UNKNOWN";
+        case LinkType::PCIE: return "PCIE";
+        case LinkType::NONE: return "NONE";
+        default: return "UNKNOWN";
     }
 }
 
@@ -71,18 +66,14 @@ class Placer {
 public:
     explicit Placer(const GpuTopology& topo, size_t backlog_threshold = 32);
     ~Placer() = default;
-
     Placer(const Placer&) = delete;
     Placer& operator=(const Placer&) = delete;
     Placer(Placer&&) noexcept = default;
     Placer& operator=(Placer&&) noexcept = default;
-
     int assign_home(int client_id);
     int home_of(int client_id) const;
-
     template <typename QueueDepthFn>
     int place(int client_id, QueueDepthFn queue_depth) const;
-
     void release_client(int client_id) noexcept;
     size_t num_clients() const noexcept;
 
@@ -106,31 +97,18 @@ int Placer::place(int client_id, QueueDepthFn queue_depth) const {
     std::lock_guard<std::mutex> lock(affinity_mutex_);
     auto it = affinity_.find(client_id);
     int home = (it != affinity_.end()) ? it->second : -1;
-
     if (home < 0 || home >= topo_.num_gpus()) {
-        home = static_cast<int>(
-            rr_counter_.fetch_add(1, std::memory_order_relaxed) % topo_.num_gpus()
-        );
+        home = static_cast<int>(rr_counter_.fetch_add(1, std::memory_order_relaxed) % topo_.num_gpus());
     }
-
     size_t home_depth = queue_depth(home);
-    if (home_depth < backlog_threshold_) {
-        return home;
-    }
-
+    if (home_depth < backlog_threshold_) return home;
     int best_peer = topo_.best_peer(home);
-    if (best_peer >= 0 && queue_depth(best_peer) < backlog_threshold_) {
-        return best_peer;
-    }
-
+    if (best_peer >= 0 && queue_depth(best_peer) < backlog_threshold_) return best_peer;
     int best = home;
     size_t best_depth = home_depth;
     for (int i = 0; i < topo_.num_gpus(); ++i) {
         size_t d = queue_depth(i);
-        if (d < best_depth) {
-            best_depth = d;
-            best = i;
-        }
+        if (d < best_depth) { best_depth = d; best = i; }
     }
     return best;
 }
