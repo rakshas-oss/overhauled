@@ -1,0 +1,48 @@
+name: Overhauled ASan/UBSan
+
+on:
+  push:
+    branches: ["main", "copilot/**"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: asan-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sanitize:
+    name: ASan + UBSan validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libssl-dev
+
+      - name: Configure CMake with ASan/UBSan
+        run: |
+          cmake -S . -B build-asan \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined" \
+            -DENABLE_CUDA=OFF \
+            -DENABLE_TENSORRT=OFF \
+            -DBUILD_BROKER=ON \
+            -DBUILD_EXAMPLES=OFF \
+            -DBUILD_TESTING=ON
+
+      - name: Build with parallel jobs
+        run: cmake --build build-asan --parallel "$(nproc)"
+
+      - name: Run CTest with sanitizer instrumentation
+        run: ctest --test-dir build-asan --output-on-failure --timeout 180
