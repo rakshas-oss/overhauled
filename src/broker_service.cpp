@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <climits>
 #include <cstring>
 #include <exception>
 #include <limits>
@@ -468,12 +469,35 @@ int BrokerService::get_or_assign_client_id(const std::string& source) {
     std::lock_guard<std::mutex> lock(client_mutex_);
     const auto it = source_to_client_.find(source);
     if (it != source_to_client_.end()) {
-        return it->second;
+        client_lru_.splice(client_lru_.begin(), client_lru_, it->second);
+        return it->second->second;
     }
 
-    const int client_id = next_client_id_.fetch_add(1, std::memory_order_relaxed);
-    source_to_client_.emplace(source, client_id);
-    placer_->assign_home(client_id);
+    if (source_to_client_.size() >= kMaxTrackedSources && !client_lru_.empty()) {
+        const auto evicted = client_lru_.back();
+        source_to_client_.erase(evicted.first);
+        client_lru_.pop_back();
+        if (placer_ != nullptr) {
+            placer_->release_client(evicted.second);
+        }
+    }
+
+    // IDs stay positive and are not reused while an LRU entry still owns them.
+    int client_id = next_client_id_.load(std::memory_order_relaxed);
+    for (;;) {
+        const int next_id = client_id >= INT_MAX ? 1 : client_id + 1;
+        next_client_id_.store(next_id, std::memory_order_relaxed);
+        const bool in_use = std::any_of(client_lru_.begin(), client_lru_.end(),
+            [client_id](const auto& entry) { return entry.second == client_id; });
+        if (client_id > 0 && !in_use) break;
+        client_id = next_id;
+    }
+
+    client_lru_.emplace_front(source, client_id);
+    source_to_client_.emplace(source, client_lru_.begin());
+    if (placer_ != nullptr) {
+        placer_->assign_home(client_id);
+    }
     return client_id;
 }
 
