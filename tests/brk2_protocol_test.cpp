@@ -27,7 +27,7 @@ std::vector<uint8_t> request_body(){
 std::vector<uint8_t> request_body_with_field_count(std::size_t target_count){
     auto body=request_body();
     constexpr std::size_t base_fields=8;
-    assert(target_count>=base_fields && target_count<=4096);
+    assert(target_count>=base_fields && target_count<=4097);
     for(std::size_t i=0;i<target_count-base_fields;++i){
         const uint16_t id=static_cast<uint16_t>(1000+i);
         u16(body,id);body.push_back(1);body.push_back(0);u32(body,1);body.push_back(0x5a);
