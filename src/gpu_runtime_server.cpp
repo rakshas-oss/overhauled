@@ -12,6 +12,9 @@
 #include <atomic>
 #include <cstring>
 #include <cerrno>
+#include <cstdlib>
+#include <filesystem>
+#include <system_error>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -184,9 +187,40 @@ bool write_exact_bytes(int fd, const void* src, std::size_t len) {
 }
 
 bool is_safe_model_path(const std::string& path) {
-    return path.size() > 5 && path.find('\0') == std::string::npos &&
-           path.find("..") == std::string::npos &&
-           path.compare(path.size() - 5, 5, ".onnx") == 0;
+    if (path.size() <= 5 || path.find('\0') != std::string::npos ||
+        path.compare(path.size() - 5, 5, ".onnx") != 0) {
+        return false;
+    }
+
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const char* configured_dir = std::getenv("OVERHAULED_MODEL_DIR");
+    const fs::path configured_base =
+        (configured_dir != nullptr && *configured_dir != '\0')
+            ? fs::path(configured_dir)
+            : fs::path("/var/cache/overhauled/models");
+    const fs::path base = fs::weakly_canonical(configured_base, ec);
+    if (ec || base.empty() || !fs::is_directory(base, ec) || ec) {
+        return false;
+    }
+
+    const fs::path supplied(path);
+    const fs::path candidate = fs::weakly_canonical(
+        supplied.is_absolute() ? supplied : (base / supplied), ec);
+    if (ec || candidate.extension() != ".onnx" ||
+        !fs::is_regular_file(candidate, ec) || ec) {
+        return false;
+    }
+
+    // Compare path components, not string prefixes (models-evil must not be
+    // accepted as a child of models). weakly_canonical resolves symlinks.
+    auto base_it = base.begin();
+    auto candidate_it = candidate.begin();
+    for (; base_it != base.end() && candidate_it != candidate.end();
+         ++base_it, ++candidate_it) {
+        if (*base_it != *candidate_it) return false;
+    }
+    return base_it == base.end() && candidate_it != candidate.end();
 }
 
 } // namespace
