@@ -15,6 +15,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstring>
+#include <cstdint>
 #include <iostream>
 #include <thread>
 #include <vector>
