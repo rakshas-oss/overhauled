@@ -58,6 +58,16 @@ struct DrmJob {
 };
 struct DrmSubmit { std::uint64_t jobs; std::uint32_t job_count, pad; };
 struct DrmGemClose { std::uint32_t handle, pad; };
+struct DrmVersion {
+    int version_major, version_minor, version_patchlevel;
+    std::size_t name_len;
+    char* name;
+    std::size_t date_len;
+    char* date;
+    std::size_t desc_len;
+    char* desc;
+};
+constexpr unsigned long kIoctlVersion = _IOWR('d', 0x00, DrmVersion);
 constexpr unsigned long kIoctlGemClose = _IOW('d', 0x09, DrmGemClose);
 struct GemHandle {
     int fd = -1;
@@ -198,6 +208,15 @@ int open_ethosu(const std::string& path) {
     if (path.empty()) return -1;
     const int fd = ::open(path.c_str(), O_RDWR | O_CLOEXEC);
     if (fd < 0) return -1;
+    char driver_name[16]{};
+    DrmVersion version{};
+    version.name_len = sizeof(driver_name) - 1;
+    version.name = driver_name;
+    if (::ioctl(fd, kIoctlVersion, &version) < 0 ||
+        std::strcmp(driver_name, "ethosu") != 0) {
+        ::close(fd);
+        return -1;
+    }
     DrmNpuInfo info{};
     DrmDevQuery query{0, sizeof(info), reinterpret_cast<std::uint64_t>(&info)};
     if (::ioctl(fd, kIoctlQuery, &query) < 0) { ::close(fd); return -1; }

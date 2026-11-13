@@ -14,7 +14,7 @@ namespace nvlink::geospatial {
 constexpr uint32_t NXR1_MAGIC = 0x4E585231U;
 
 /// Current NXR1 wire format version.
-constexpr uint16_t NXR1_VERSION = 1;
+constexpr uint8_t NXR1_VERSION = 1;
 
 /// Default cap on the opaque trailing payload carried inside an NXR1 frame.
 constexpr std::size_t NXR1_DEFAULT_MAX_PAYLOAD_BYTES = 512 * 1024;
@@ -24,17 +24,19 @@ constexpr const char* kGeospatialFrameKind = "geospatial.frame.v1";
 
 /// In-memory representation of an NXR1 geospatial frame.
 ///
-/// All numeric fields are transmitted as big-endian IEEE-754 doubles and must
-/// be finite (no NaN/Inf) on both encode and decode.
+/// Numeric fields use the canonical NXR1 v1 wire widths: six big-endian
+/// IEEE-754 doubles, two big-endian IEEE-754 floats, and one big-endian double.
+/// All floating-point values must be finite (no NaN/Inf) on encode and decode.
 struct GeospatialFrame {
+    uint64_t seq_id = 0;
     double latitude = 0.0;
     double longitude = 0.0;
     double altitude = 0.0;
     double velocity_x = 0.0;
     double velocity_y = 0.0;
     double velocity_z = 0.0;
-    double fluidity = 0.0;
-    double drag = 0.0;
+    float fluidity = 0.0F;
+    float drag = 0.0F;
     double divergence = 0.0;
     std::vector<uint8_t> payload;
 };

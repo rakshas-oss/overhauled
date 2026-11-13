@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -58,16 +59,21 @@ bool read_exact_until(SocketHandle socket, void* buffer, std::size_t size,
     while (total < size) {
         const auto remaining = deadline - std::chrono::steady_clock::now();
         if (remaining <= std::chrono::steady_clock::duration::zero()) return false;
-        const auto micros = std::chrono::duration_cast<std::chrono::microseconds>(remaining).count();
-        timeval timeout{};
-        timeout.tv_sec = static_cast<time_t>(micros / 1000000);
-        timeout.tv_usec = static_cast<suseconds_t>(micros % 1000000);
-        if (timeout.tv_sec == 0 && timeout.tv_usec == 0) timeout.tv_usec = 1;
-        if (::setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0) return false;
+        const auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count();
+        pollfd pfd{};
+        pfd.fd = socket;
+        pfd.events = POLLIN;
+        const int poll_ms = static_cast<int>(std::min<long long>(millis + 1, 60000));
+        const int ready = ::poll(&pfd, 1, poll_ms);
+        if (ready < 0) {
+            if (errno == EINTR) continue;
+            return false;
+        }
+        if (ready == 0 || (pfd.revents & (POLLERR | POLLNVAL)) != 0) return false;
         const ssize_t received = ::recv(socket, out + total, size - total, 0);
         if (received == 0) return false;
         if (received < 0) {
-            if (errno == EINTR) continue;
+            if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
             return false;
         }
         total += static_cast<std::size_t>(received);

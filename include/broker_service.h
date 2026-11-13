@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <list>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -69,7 +70,9 @@ private:
     mutable std::mutex inflight_mutex_;
 
     mutable std::mutex client_mutex_;
-    std::unordered_map<std::string, int> source_to_client_;
+    static constexpr std::size_t kMaxTrackedSources = 16384;
+    std::list<std::pair<std::string, int>> client_lru_;
+    std::unordered_map<std::string, std::list<std::pair<std::string, int>>::iterator> source_to_client_;
     std::atomic<int> next_client_id_{1};
 
     std::shared_ptr<nvlink::wasm::WasmSandboxManager> wasm_manager_;

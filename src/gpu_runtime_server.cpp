@@ -359,8 +359,13 @@ int main(int argc, char* argv[]) {
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port = htons(port);
 
-    bind(server_fd, (struct sockaddr*)&addr, sizeof(addr));
-    listen(server_fd, 64);
+    if (bind(server_fd, (struct sockaddr*)&addr, sizeof(addr)) != 0 ||
+        listen(server_fd, 64) != 0) {
+        std::cerr << "[Server] Failed to bind/listen on port " << port
+                  << ": " << std::strerror(errno) << std::endl;
+        close(server_fd);
+        return 1;
+    }
 
     std::cout << "[Server] Listening on port " << port << " across " << num_gpus << " GPUs." << std::endl;
 
