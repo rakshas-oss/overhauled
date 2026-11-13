@@ -2,6 +2,7 @@
 #include "brk2_protocol.h"
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <limits>
 #include <stdexcept>
@@ -14,6 +15,7 @@ constexpr uint16_t FLAG_RESPONSE = 1;
 constexpr uint16_t FLAG_END_STREAM = 4;
 constexpr uint8_t WT_U8 = 1, WT_U32 = 3, WT_U64 = 4, WT_I64 = 5, WT_UTF8 = 8, WT_BYTES = 9, WT_UUID = 12;
 constexpr uint8_t FIELD_CRITICAL = 1;
+constexpr std::size_t kMaxBrk2Fields = 4096; // Matches YuKKi-OS brk2::MAX_FIELDS
 struct FieldView { uint16_t id; uint8_t type; uint8_t flags; const uint8_t* data; std::size_t size; };
 
 uint16_t read16(const uint8_t* p) { return static_cast<uint16_t>((uint16_t(p[0]) << 8) | p[1]); }
@@ -34,8 +36,11 @@ void field_i64(std::vector<uint8_t>& p,uint16_t id,int64_t v){std::vector<uint8_
 void field_bytes(std::vector<uint8_t>& p,uint16_t id,const std::vector<uint8_t>& v){put_field(p,id,WT_BYTES,v.data(),v.size());}
 
 bool parse_fields(const std::vector<uint8_t>& body,std::vector<FieldView>* fields,std::string* error){
+    // 65,536-bit stack bitset gives constant-time duplicate detection for uint16_t IDs.
+    std::array<uint64_t, 1024> seen_ids{};
     std::size_t pos=BRK2_HEADER_BYTES;
     while(pos<body.size()){
+        if(fields->size()>=kMaxBrk2Fields){if(error)*error="too many BRK2 TLV fields";return false;}
         if(body.size()-pos<8){if(error)*error="truncated BRK2 TLV header";return false;}
         FieldView f{read16(body.data()+pos),body[pos+2],body[pos+3],nullptr,read32(body.data()+pos+4)};
         pos+=8;
@@ -43,9 +48,12 @@ bool parse_fields(const std::vector<uint8_t>& body,std::vector<FieldView>* field
         if(f.type<1||f.type>12){if(error)*error="unknown BRK2 wire type";return false;}
         if(f.size>body.size()-pos){if(error)*error="truncated BRK2 TLV value";return false;}
         f.data=body.data()+pos;pos+=f.size;
-        if(std::any_of(fields->begin(),fields->end(),[&](const FieldView& x){return x.id==f.id;})){
+        const std::size_t word = static_cast<std::size_t>(f.id) >> 6;
+        const uint64_t mask = uint64_t{1} << (f.id & 63U);
+        if((seen_ids[word] & mask) != 0){
             if(error)*error="duplicate BRK2 singular field";return false;
         }
+        seen_ids[word] |= mask;
         fields->push_back(f);
     }
     return true;
