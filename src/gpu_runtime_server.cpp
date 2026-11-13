@@ -29,6 +29,10 @@
 #define MAGIC_ADI1 0x41444931
 constexpr uint32_t kMaxFrameBytes = 16U * 1024U * 1024U;
 constexpr std::size_t kMaxQueueDepth = 1024;
+constexpr std::size_t kMaxRuntimeClients = 128;
+constexpr int kClientSocketTimeoutSeconds = 5;
+std::atomic<std::size_t> g_active_clients{0};
+std::mutex g_model_load_mutex;
 
 #define CUDA_CHECK(call) \
     do { \
@@ -253,8 +257,13 @@ void handle_client(int sock, std::vector<std::unique_ptr<TaskQueue<InferenceTask
                 const uint32_t model_id = ntohl(model_id_be);
                 const std::string onnx_path(reinterpret_cast<const char*>(payload.data() + sizeof(uint32_t)),
                                              payload.size() - sizeof(uint32_t));
-                const bool ok = is_safe_model_path(onnx_path) &&
-                                ModelManager::instance().loadOnnxModel(model_id, onnx_path);
+                // Serialize expensive TensorRT builds. Path validation alone does
+                // not prevent concurrent requests from exhausting host/GPU memory.
+                bool ok = false;
+                if (is_safe_model_path(onnx_path)) {
+                    std::lock_guard<std::mutex> load_lock(g_model_load_mutex);
+                    ok = ModelManager::instance().loadOnnxModel(model_id, onnx_path);
+                }
 
                 ResponseHeader resp{};
                 resp.sequence_id = htonl(sequence_id++);
@@ -360,7 +369,30 @@ int main(int argc, char* argv[]) {
         socklen_t clen = sizeof(caddr);
         int client_sock = accept(server_fd, (struct sockaddr*)&caddr, &clen);
         if (client_sock >= 0) {
-            std::thread(handle_client, client_sock, std::ref(queues), std::ref(rr_counter)).detach();
+            std::size_t active = g_active_clients.load(std::memory_order_relaxed);
+            do {
+                if (active >= kMaxRuntimeClients) {
+                    close(client_sock);
+                    client_sock = -1;
+                    break;
+                }
+            } while (!g_active_clients.compare_exchange_weak(
+                active, active + 1, std::memory_order_acq_rel, std::memory_order_relaxed));
+            if (client_sock >= 0) {
+                timeval timeout{};
+                timeout.tv_sec = kClientSocketTimeoutSeconds;
+                (void)setsockopt(client_sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+                (void)setsockopt(client_sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+                try {
+                    std::thread([client_sock, &queues, &rr_counter] {
+                        handle_client(client_sock, std::ref(queues), std::ref(rr_counter));
+                        g_active_clients.fetch_sub(1, std::memory_order_acq_rel);
+                    }).detach();
+                } catch (...) {
+                    g_active_clients.fetch_sub(1, std::memory_order_acq_rel);
+                    close(client_sock);
+                }
+            }
         }
     }
 
