@@ -60,7 +60,6 @@ std::array<double, 3> unpack_three_doubles(const std::vector<uint8_t>& payload) 
 
 void test_source_lru_eviction() {
     using namespace nvlink::broker;
-    test_source_lru_eviction();
     BrokerServiceConfig config;
     config.synthetic_gpu_count = 1;
     BrokerService service(config);
@@ -82,6 +81,7 @@ void test_source_lru_eviction() {
 
 int main() {
     using namespace nvlink::broker;
+    test_source_lru_eviction();
 
     BrokerServiceConfig config;
     config.force_cpu_fallback = true;
