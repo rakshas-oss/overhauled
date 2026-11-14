@@ -1,5 +1,9 @@
 # Overhauled v1.1.2
 
+> **Route workloads by topology, not guesswork.**
+>
+> Turn GPU interconnect awareness into higher throughput, better tail latency, and more effective use of accelerator infrastructure.
+
 Overhauled is a C++17 placement and execution library with an interoperable broker service. It provides topology-aware GPU scheduling and broker dispatch for CPU, GPU, and optional NPU execution.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -15,6 +19,20 @@ Overhauled is a C++17 placement and execution library with an interoperable brok
 - A shared Rust/C++ protocol conformance corpus and CPU-only test suite.
 - Opt-in mainline Linux DRM Ethos-U85 executor, with a documented Vela-generated `YU85BND1` bundle format.
 - Optional CUDA/TensorRT GPU runtime features; deterministic CPU-only broker operation remains available.
+
+## Throughput and energy-efficiency model
+
+The documented four-GPU A100 benchmark at eight concurrent clients reports 87.3 ops/s for NVLink-aware placement versus 58.4 ops/s for blind round-robin placement—approximately **49.5% higher throughput** in that workload.
+
+A conditional energy-per-operation estimate can be derived from those throughput figures: **if average total system power is equal in both runs**, the higher-throughput configuration would use approximately **33.1% less energy per completed operation** (1 − 58.4 / 87.3). This is a normalized model, not a measured power reduction or a guaranteed electricity-bill saving. The benchmark does not report wall power, GPU-board power, host power, workload duty cycle, or facility overhead. Actual OPEX depends on measured system power, operating hours, utilization, and the local electricity tariff.
+
+For a deployment, estimate annual energy cost as:
+
+`annual kWh = average system kW × operating hours`
+
+`annual electricity cost = annual kWh × tariff per kWh`
+
+Compare both schedulers on the same hardware and workload while recording wall power and completed work. See [docs/BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) for the benchmark context.
 
 ## Control-plane interoperability
 
