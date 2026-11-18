@@ -101,6 +101,16 @@ The broker routes certain `kind` values before the default numeric compute path:
 
 These paths are separate contracts. A client must not send an NXR1 or MED1 payload as if it were a packed-double inference payload. See [WASM_INTEROP.md](WASM_INTEROP.md) and the relevant protocol sections.
 
+### WASM task and lifecycle boundary
+
+The WASM integration is a broker protocol and version-lifecycle manager, **not a Wasm runtime**. YuKKi-OS owns bytecode validation, Wasmtime compilation, guest instantiation, linear-memory limits and host imports. Overhauled does not receive or compile a guest module during `Prepare`.
+
+The C++ `WasmSandboxManager::prepare_module` records the sandbox/module/version identity, state, lease and optional GPU assignment. It does not parse `.wasm` bytes or retain a compiled artifact. `handle_task` checks the registered version and in-flight state, then calls an application-supplied `ComputeFn` when provided; otherwise it uses the broker's reference numeric compute path for packed binary64 payloads or echoes other payloads. The task payload is work input, not executable Wasm code.
+
+The manager tracks active tasks, rejects work for draining/stopped versions, and refuses release while tasks remain in flight. Actual guest compilation, linking, instantiation and any code composition remain on the YuKKi-OS host. WSM1 lifecycle operations do not merge multiple Wasm modules or policy functions into a compiled artifact.
+
+TensorRT is a separate optional `gpu_runtime_server` target; it is not an automatic execution engine behind every WSM1 task. The Ethos-U85 path is also opt-in and accepts its documented Vela bundle contract. See [WASM_INTEROP.md](WASM_INTEROP.md) for the wire boundary and [SYSADMIN_HOWTO.md](SYSADMIN_HOWTO.md) for deployment configuration.
+
 ## 7. Concurrency, limits, and lifecycle
 
 The server uses a bounded worker pool, per-client sessions, a bounded in-flight request count, a global queued-task ceiling, a default maximum of 128 connected clients, a default per-connection in-flight cap of 32, and a default socket timeout of 5 seconds. Worker count is auto-selected and capped at 256 unless configured through the C++ API.
