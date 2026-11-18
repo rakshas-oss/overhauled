@@ -63,7 +63,7 @@ git fetch --tags origin
 For a release deployment, check out the approved release tag after it exists:
 
 ```bash
-git checkout v1.1.3
+git checkout v1.1.4
 ```
 
 If the tag has not yet been created, use the reviewed release commit or the intended branch supplied by your release process. Do not assume an open pull request is already part of `main` or a published release.
@@ -285,7 +285,35 @@ For a simple foreground-managed process, use your organization's service supervi
 
 Do not copy a generic unit file without adapting binary path, user/group, environment, device permissions, and hardening directives to the host.
 
-## 14. Verify a deployment
+## 14. Verify the decision heuristics before tuning
+
+Complete the CPU-only test first. Then enable one accelerator at a time and
+verify the response backend instead of inferring it from command-line flags.
+
+1. Record the build configuration, available device list, CMake summary,
+   broker version, and test results.
+2. Run CPU-only and confirm responses report backend cpu and selected_gpu=-1.
+3. For CUDA, use a separate ENABLE_CUDA=ON build and compare identical
+   workloads. The default data-parallel byte threshold is 1 MiB; the
+   in-process FLOP threshold is disabled at zero unless explicitly set.
+   The default placement backlog threshold is 32.
+4. For NPU conformance, launch --npu-simulated and send BRK2
+   device_preference=npu. Treat this as CPU emulation only. For hardware,
+   use the opt-in Linux Ethos-U DRM build and a compatible Vela bundle.
+5. Compare the returned backend and selected device with p50/p95/p99 latency,
+   throughput, queue depth, in-flight count, and wall power on the same
+   hardware and dataset. Tune one threshold at a time and keep BRK conformance
+   tests enabled.
+6. Exercise both fallback-safe and fallback-unsafe failure cases. Never mark a
+   non-idempotent or side-effecting request fallback-safe solely to obtain a
+   CPU retry.
+
+A preference is a request, not an execution guarantee. In particular,
+--default-backend npu is accepted by the CLI but does not auto-route
+profile-less requests to NPU. Use a BRK2 device_preference=npu or an
+in-process inference profile and ensure a concrete NPU executor is enabled.
+
+## 15. Verify a deployment
 
 Run the checks in order:
 
@@ -306,7 +334,7 @@ ctest --test-dir BUILD_DIR --output-on-failure \
 
 There is no built-in HTTP health endpoint or metrics endpoint. Add host-level monitoring or proxy-level health checks appropriate to your environment; do not configure probes against undocumented `/health` or `/metrics` routes.
 
-## 15. Upgrade and rollback
+## 16. Upgrade and rollback
 
 1. Keep the current known-good binary and build directory.
 2. Build the new release in a separate directory.
@@ -318,7 +346,7 @@ There is no built-in HTTP health endpoint or metrics endpoint. Add host-level mo
 
 Coordinate any BRK wire-format or payload-contract change with the control-plane client before rollout.
 
-## 16. Troubleshooting
+## 17. Troubleshooting
 
 ### CMake configures CPU-only despite ENABLE_CUDA=ON
 
