@@ -16,7 +16,8 @@ Overhauled is a C++17 placement and execution library with an interoperable brok
 ## Capabilities
 
 - NVLink-aware topology detection, sticky home-GPU affinity, and queue-aware placement.
-- Broker dispatch for CPU, GPU, and NPU preferences, with the selected backend returned to clients.
+- Heuristic backend dispatch: forced/safety-sensitive work remains CPU-first; eligible NPU inference requires an available executor, and data-parallel GPU work must meet the configured offload threshold.
+- Broker responses report the backend actually selected; a BRK2 device preference is a request, not proof of hardware execution.
 - BRK1/v1 compatibility and BRK2/v2 TLV framing on the same TCP listener.
 - A shared Rust/C++ protocol conformance corpus and CPU-only test suite.
 - Opt-in mainline Linux DRM Ethos-U85 executor, with a documented Vela-generated `YU85BND1` bundle format.
@@ -95,6 +96,7 @@ Placement validates non-empty GPU topology, model registry access is synchronize
 - [Broker protocol](docs/BROKER_PROTOCOL.md) · [BRK2 conformance](docs/BRK2_CONFORMANCE_V1.md) · [Executable BRK corpus](docs/BRK_CONFORMANCE_V1.md)
 - [YuKKi-OS interoperability](docs/YUKKI_INTEROP.md) · [WASM interoperability](docs/WASM_INTEROP.md)
 - [Ethos-U85 bundle and hardware boundary](docs/ETHOSU_U85_BUNDLE.md)
+- [Architecture and runtime decision model](docs/ARCHITECTURE.md) · [Heuristic and backend-selection verification](docs/SYSADMIN_HOWTO.md) · [Versioning](docs/VERSIONING.md)
 - [Architecture](docs/ARCHITECTURE.md) · [Library guide](docs/LIBRARY.md)
 - [System administration](docs/SYSADMIN_HOWTO.md) · [Operations runbook](OPERATIONS_RUNBOOK.md) · [Deployment guide](DEPLOYMENT_GUIDE.md)
 - [Publishing](docs/PUBLISHING.md) · [Release notes](docs/RELEASE_NOTES.md) · [Benchmarks](docs/BENCHMARK_RESULTS.md) · [Dataset-driven BRK2 workloads](docs/DATASET_BROKER_BENCHMARK.md)
