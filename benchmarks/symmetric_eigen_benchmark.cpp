@@ -9,10 +9,12 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <iomanip>
 #include <iostream>
 #include <limits>
 #include <mutex>
+#include <utility>
 #include <string>
 #include <thread>
 #include <vector>
@@ -128,9 +130,10 @@ int main(int argc, char** argv) {
     }
 
     std::sort(durations_ns.begin(), durations_ns.end());
+    long double duration_sum = 0.0L;
+    for (uint64_t value : durations_ns) duration_sum += static_cast<long double>(value);
     const double mean_us = durations_ns.empty() ? 0.0 :
-        static_cast<double>(std::accumulate(durations_ns.begin(), durations_ns.end(), uint64_t{0})) /
-        static_cast<double>(durations_ns.size()) / 1000.0;
+        static_cast<double>(duration_sum / static_cast<long double>(durations_ns.size()) / 1000.0L);
     const std::size_t p95_index = durations_ns.empty() ? 0 :
         static_cast<std::size_t>(std::ceil(0.95 * static_cast<double>(durations_ns.size()))) - 1;
     const double p95_us = durations_ns.empty() ? 0.0 :
