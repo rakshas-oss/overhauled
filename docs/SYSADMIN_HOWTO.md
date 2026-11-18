@@ -1,79 +1,264 @@
-# Sysadmin How-To: broker_server with YuKKi-OS
+# User and Sysadmin How-To: Configure, Build, Run, and Verify Overhauled
 
-This guide is for Linux administrators deploying `broker_server` from this repository as the overhauled execution plane behind an external authenticated control plane such as `rakshas-oss/YuKKi-OS`.
+This guide walks through a clean setup of the Overhauled broker and its optional execution backends. Commands assume a Linux host and a shell. Replace example paths, addresses, ports, and service names with values from your environment.
 
-## 1. What this component is
+Overhauled is the execution/placement plane. YuKKi-OS or another control plane remains a separate application and connects over the broker's binary TCP protocol. The broker itself does not provide TLS, authentication, HTTP endpoints, or a web dashboard.
 
-- `overhauled`: GPU topology, placement, and execution plane
-- `YuKKi-OS`: external authenticated control plane
-- interoperability boundary: raw TCP carrying versioned `BRK1` / `BRK2` broker frames (BRK1/v1 and BRK2/v2) documented in [BROKER_PROTOCOL.md](BROKER_PROTOCOL.md)
+## 1. Choose the configuration you need
 
-This repository does **not** embed YuKKi-OS and does **not** provide built-in TLS, authentication, or an HTTP health API for the broker.
+Start with the smallest working configuration:
 
-## 2. Prerequisites
+| Profile | Build options | Runtime | Intended use |
+|---|---|---|---|
+| CPU-only broker | `ENABLE_CUDA=OFF`, `ENABLE_TENSORRT=OFF`, `BUILD_BROKER=ON` | `--cpu-only` | First install, CI, non-GPU hosts |
+| CUDA-aware broker | `ENABLE_CUDA=ON`, `ENABLE_TENSORRT=OFF` | default or `--default-backend gpu` | GPU topology and eligible GPU workloads |
+| TensorRT runtime | CUDA ON, TensorRT ON, valid `TENSORRT_ROOT` | `gpu_runtime_server` | Separate TensorRT runtime target |
+| NPU simulator | broker build | `--npu-simulated` | CI/conformance only; CPU emulation |
+| Ethos-U85 hardware | Linux, `ENABLE_ETHOSU_DRM=ON` | `--npu-ethosu-bundle FILE` | Compatible physical Ethos-U device and Vela bundle |
 
-Required:
+Do not begin with optional accelerators. Prove the CPU-only path first, then enable one backend at a time.
 
-- Linux host
-- CMake 3.18+
-- C++17 compiler
-- POSIX sockets / pthread-capable runtime
+## 2. Install prerequisites
 
-Optional for GPU-enabled placement:
+Required for the broker:
 
-- NVIDIA GPU(s)
-- CUDA toolkit/runtime detectable by CMake (`-DENABLE_CUDA=ON`)
+- Linux (the broker uses POSIX sockets and pthreads)
+- CMake 3.18 or newer
+- A C++17-capable compiler and standard library
+- Git and a build tool supported by CMake (for example, Ninja or Make)
 
-Optional for packaging / installation:
+Optional:
 
-- root or package-build access for `make install`
+- CUDA compiler/toolkit and NVIDIA driver for GPU topology and CUDA-aware placement
+- TensorRT headers and libraries for the separate TensorRT target
+- Linux kernel and device exposing the mainline Ethos-U DRM UAPI for physical NPU execution
+- A Vela-generated `YU85BND1` bundle compatible with the attached Ethos-U target
 
-## 3. Build and install
-
-Repository-root build, CPU-only:
+Check the basic tools:
 
 ```bash
-cd /home/runner/work/overhauled/overhauled
-cmake -S . -B build \
+cmake --version
+c++ --version
+git --version
+```
+
+For CUDA deployments, also verify the driver/toolkit with the vendor tools installed on that host (commonly `nvidia-smi` and `nvcc --version`). CMake's successful CUDA detection does not replace checking that the runtime driver can see the intended GPUs.
+
+## 3. Get the source and select a version
+
+```bash
+git clone https://github.com/rakshas-oss/overhauled.git
+cd overhauled
+git fetch --tags origin
+```
+
+For a release deployment, check out the approved release tag after it exists:
+
+```bash
+git checkout v1.1.3
+```
+
+If the tag has not yet been created, use the reviewed release commit or the intended branch supplied by your release process. Do not assume an open pull request is already part of `main` or a published release.
+
+## 4. Configure a CPU-only broker build (recommended first run)
+
+From the repository root:
+
+```bash
+cmake -S . -B build-cpu \
   -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_BROKER=ON \
+  -DBUILD_EXAMPLES=OFF \
   -DENABLE_CUDA=OFF \
   -DENABLE_TENSORRT=OFF
-cmake --build build -j"$(nproc)"
 ```
 
-Repository-root build, GPU-enabled when CUDA is available:
+Review CMake's summary and ensure the broker target is configured. Then build:
 
 ```bash
-cd /home/runner/work/overhauled/overhauled
-cmake -S . -B build \
+cmake --build build-cpu --parallel
+```
+
+Run the complete configured test suite:
+
+```bash
+ctest --test-dir build-cpu --output-on-failure
+```
+
+Expected result: the build completes and all registered tests pass. If a test fails, stop here and diagnose it before enabling hardware-specific options.
+
+## 5. Verify the command-line interface
+
+```bash
+./build-cpu/broker_server --help
+```
+
+The broker CLI supports:
+
+- `[port]` (default `9090`)
+- `--cpu-only`
+- `--default-backend cpu|gpu|npu`
+- `--gpu-offload-threshold BYTES`
+- `--npu-enabled`
+- `--npu-simulated`
+- `--npu-ethosu-bundle FILE`
+- `--ethosu-device /dev/dri/renderD*`
+
+Important: `--npu-enabled` only enables the service-side NPU gate. It does not create an NPU executor. Use `--npu-simulated` for CPU-emulated tests or `--npu-ethosu-bundle` with an actual supported device. The simulated executor is not hardware acceleration. Although `--default-backend npu` is accepted by the CLI, it does not auto-route profile-less requests to NPU under the current dispatcher policy. For a wire client, use BRK2 `device_preference=npu` and configure a concrete executor.
+
+## 6. Start the CPU-only broker and check the listener
+
+Run in the foreground for the first verification:
+
+```bash
+./build-cpu/broker_server 9090 --cpu-only
+```
+
+In a second terminal:
+
+```bash
+ss -ltnp | grep ':9090'
+```
+
+The server binds to all interfaces (`0.0.0.0`), not just loopback. Do not expose this listener directly to an untrusted network. Stop the foreground server with Ctrl-C after verification.
+
+There is no built-in HTTP health route or metrics endpoint. A successful TCP listener check confirms the socket is listening; it does not prove end-to-end YuKKi-OS interoperability.
+
+## 7. Optional: configure CUDA-aware GPU placement
+
+Install and verify a compatible NVIDIA driver and CUDA toolkit first. Configure a separate build directory so the CPU-only build remains available for rollback:
+
+```bash
+cmake -S . -B build-cuda \
   -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_BROKER=ON \
   -DENABLE_CUDA=ON \
   -DENABLE_TENSORRT=OFF
-cmake --build build -j"$(nproc)"
+cmake --build build-cuda --parallel
+ctest --test-dir build-cuda --output-on-failure
 ```
 
-Optional install into the default prefix:
+CMake probes for a CUDA compiler and toolkit. If it cannot find a usable CUDA toolchain, it reports that it is building CPU-only; read the configure output rather than assuming GPU support is active.
+
+Start with CPU-safe default dispatch:
 
 ```bash
-cd /home/runner/work/overhauled/overhauled/build
-sudo cmake --install .
+./build-cuda/broker_server 9090
 ```
 
-Installed artifacts of interest:
+GPU selection requires eligible request metadata and an available GPU. For workloads without profile metadata, an operator may explicitly choose a GPU default:
 
-- broker binary: `bin/broker_server`
-- libraries/headers: installed by CMake for embedding or packaging
+```bash
+./build-cuda/broker_server 9090 --default-backend gpu
+```
 
-## 4. Suggested service account and filesystem layout
+The `--gpu-offload-threshold BYTES` option changes the byte threshold for data-parallel work. It is not a guarantee that every request will use a GPU. Confirm the actual response backend and selected GPU. CPU results normally report `selected_gpu = -1`.
 
-Illustrative example values:
+For topology diagnostics on the host, use the NVIDIA tooling appropriate to the installed driver (for example, `nvidia-smi -L` and `nvidia-smi topo -m`). NVLink is optional; PCIe-only systems can still use the available GPU placement path.
 
-- service account: `overhauled`
-- install root: `/opt/overhauled`
-- runtime working directory: `/var/lib/overhauled`
-- log capture directory (if your supervisor redirects stdout/stderr): `/var/log/overhauled`
+## 8. Optional: configure the NPU simulator for conformance
 
-Minimal setup example:
+The simulator is CPU emulation and must not be described as an NPU performance test. It is useful to exercise backend-selection and protocol paths without physical hardware.
+
+```bash
+./build-cpu/broker_server 9090 --npu-simulated
+```
+
+A BRK2 client can request `device_preference=npu`; verify the response's reported backend rather than inferring execution from the request. The simulator's numeric behavior is a test implementation and is not a model-specific inference result.
+
+## 9. Optional: build and run the physical Ethos-U85 backend
+
+Only use this section on Linux with a kernel exposing the mainline Ethos-U DRM UAPI, a supported device, access permissions for its render node, and a Vela-generated `YU85BND1` bundle compatible with that device.
+
+Build in a separate directory:
+
+```bash
+cmake -S . -B build-ethosu \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_BROKER=ON \
+  -DENABLE_CUDA=OFF \
+  -DENABLE_TENSORRT=OFF \
+  -DENABLE_ETHOSU_DRM=ON
+cmake --build build-ethosu --parallel
+ctest --test-dir build-ethosu --output-on-failure
+```
+
+Check that the intended render node exists and that the service account can open it. Then start with the model bundle:
+
+```bash
+./build-ethosu/broker_server 9090 \
+  --npu-ethosu-bundle /path/to/model.yu85
+```
+
+To pin a particular node:
+
+```bash
+./build-ethosu/broker_server 9090 \
+  --npu-ethosu-bundle /path/to/model.yu85 \
+  --ethosu-device /dev/dri/renderD128
+```
+
+Alternatively, set `ETHOSU_DRM_DEVICE` for device discovery. The bundle layout, quantization rules, and device requirements are documented in [ETHOSU_U85_BUNDLE.md](ETHOSU_U85_BUNDLE.md).
+
+A successful compile or parser test is not proof of physical inference. Hardware qualification requires a successful inference on the target board using a bundle compiled for that device, with correct input/output tensor dimensions and quantization.
+
+## 10. Optional: build the TensorRT runtime target
+
+TensorRT is separate from the broker's basic GPU placement path. It requires CUDA plus user-installed TensorRT headers and libraries:
+
+```bash
+cmake -S . -B build-tensorrt \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DENABLE_CUDA=ON \
+  -DENABLE_TENSORRT=ON \
+  -DTENSORRT_ROOT=/path/to/tensorrt
+cmake --build build-tensorrt --parallel
+```
+
+CMake fails configuration if TensorRT was requested but the required headers or libraries cannot be found. When built, the separate executable is `gpu_runtime_server`; do not assume it is the same listener or protocol as `broker_server`.
+
+## 11. Connect YuKKi-OS or another client
+
+Configure the control plane to connect to the broker's host and TCP port through the authenticated proxy or private network boundary.
+
+Protocol requirements:
+
+1. Use the YuKKi-OS BRK1/BRK2 binary adapter. The generic JSON `BrokerTask` / `BrokerResult` transport is not wire-compatible with this server.
+2. Send a four-byte big-endian body length followed by the BRK1 or BRK2 frame body.
+3. Keep required identifiers (`task_id`, `source`, `destination`, `kind`) non-empty and `timeout_ms` within the protocol range of 1..300000 ms.
+4. Use a stable `source` value when sticky client-to-GPU affinity is desired.
+5. For BRK2, use `device_preference` to request `cpu`, `gpu`, or `npu`; the response indicates the backend actually selected. BRK1 carries no such backend preference field.
+6. Keep frame, payload, and string sizes within the documented protocol limits.
+7. Treat `selected_gpu = -1` as CPU execution, not as proof of failure.
+
+The broker does not negotiate protocol versions or accept JSON HELLO messages. A TCP proxy must forward the raw byte stream unchanged; do not insert HTTP framing.
+
+See [YUKKI_INTEROP.md](YUKKI_INTEROP.md), [BROKER_PROTOCOL.md](BROKER_PROTOCOL.md), and [BRK_CONFORMANCE_V1.md](BRK_CONFORMANCE_V1.md).
+
+## 12. Secure the network boundary
+
+The broker listens on all interfaces and does not provide built-in TLS or authentication. Before production use:
+
+1. Place the broker on a private subnet or bind access through a host/network firewall.
+2. Permit inbound TCP only from the authenticated gateway, service mesh, or proxy.
+3. Terminate mTLS/client identity at that gateway.
+4. Forward the raw BRK1/BRK2 TCP stream unchanged to the broker.
+5. Do not expose port 9090 publicly.
+
+Illustrative UFW rules (replace the example source address with the real gateway address):
+
+```bash
+sudo ufw allow from 192.0.2.10 to any port 9090 proto tcp
+sudo ufw deny 9090/tcp
+```
+
+Check your firewall's rule ordering and existing policy before applying rules on a remote host.
+
+## 13. Run as a service (example only)
+
+The broker has no built-in config file. Runtime settings are command-line arguments and process environment, plus the external proxy/firewall configuration.
+
+Create a restricted service account and directories if your deployment policy calls for them:
 
 ```bash
 sudo useradd --system --home /var/lib/overhauled --shell /usr/sbin/nologin overhauled
@@ -81,177 +266,72 @@ sudo install -d -o overhauled -g overhauled /var/lib/overhauled
 sudo install -d -o overhauled -g overhauled /var/log/overhauled
 ```
 
-The broker itself does not require a writable config file or database. Keep filesystem permissions minimal and treat logs as stdout/stderr capture owned by your local process supervisor policy.
+For a simple foreground-managed process, use your organization's service supervisor (systemd, container runtime, or equivalent) with:
 
-## 5. CPU-only and GPU-enabled operation
+- executable: absolute path to `broker_server`
+- arguments: selected port and backend flags
+- user/group: restricted service identity
+- restart policy: defined by local operations policy
+- stdout/stderr: captured by the supervisor
+- network policy: only authenticated gateway sources allowed
 
-CPU-only mode is explicit and safe on hosts without CUDA:
+Do not copy a generic unit file without adapting binary path, user/group, environment, device permissions, and hardening directives to the host.
 
-```bash
-cd /home/runner/work/overhauled/overhauled
-./build/broker_server 9090 --cpu-only
-```
+## 14. Verify a deployment
 
-GPU-enabled mode uses detected topology automatically:
+Run the checks in order:
 
-```bash
-cd /home/runner/work/overhauled/overhauled
-./build/broker_server 9090
-```
+1. **Build and unit/integration tests:** `ctest --test-dir BUILD_DIR --output-on-failure`.
+2. **CLI:** `BUILD_DIR/broker_server --help`.
+3. **Listener:** `ss -ltnp | grep ':9090'` (replace the port if changed).
+4. **Logs:** check supervisor stdout/stderr for startup errors and clean shutdown.
+5. **Protocol:** run the repository's BRK1/BRK2 conformance tests and a real client-to-broker integration test.
+6. **Backend:** send a request eligible for the chosen backend and inspect the response backend and selected GPU. Do not infer accelerator use from build flags alone.
+7. **Security:** confirm a host outside the permitted gateway path cannot connect.
 
-Behavior notes:
-
-- `--cpu-only` disables GPU topology detection and always reports `selected_gpu = -1`.
-- Without `--cpu-only`, the broker detects GPU topology if GPUs are present, but execution is CPU-first: requests choose the GPU backend (then `Placer`: home GPU -> NVLink peer -> least-loaded GPU) only when task profile metadata or `--default-backend gpu` justifies it. Requests without profile metadata run on CPU. See README "Backend selection".
-- NVLink is an optimization, not a requirement. On non-NVLink systems the placement logic still runs and falls back to PCIe / least-loaded choices.
-- The current broker executable accepts `[port] [--cpu-only] [--default-backend cpu|gpu|npu] [--gpu-offload-threshold BYTES] [--npu-enabled] [--help]`.
-
-## 6. Binding, listening, and firewall guidance
-
-Current implementation details:
-
-- listener address: all interfaces (`0.0.0.0`)
-- default port: `9090` if omitted
-- socket timeout: 5000 ms
-- concurrent client cap: 128 by default
-
-Because the broker binds all interfaces, protect it with host and network policy. Example with illustrative values:
+Useful targeted tests from the build directory:
 
 ```bash
-# allow only the authenticated proxy or mesh ingress address
-sudo ufw allow from 192.0.2.10 to any port 9090 proto tcp
-sudo ufw deny 9090/tcp
+ctest --test-dir BUILD_DIR --output-on-failure \
+  -R 'brk2_protocol_test|brk_conformance_test|broker_protocol_test|broker_service_test|backend_dispatch_test|broker_server_e2e_test'
 ```
 
-If you cannot restrict the port at the host firewall, place the process on a private network segment reachable only by your proxy/service-mesh layer.
+There is no built-in HTTP health endpoint or metrics endpoint. Add host-level monitoring or proxy-level health checks appropriate to your environment; do not configure probes against undocumented `/health` or `/metrics` routes.
 
-## 7. Starting the process safely
+## 15. Upgrade and rollback
 
-Foreground, for initial verification:
+1. Keep the current known-good binary and build directory.
+2. Build the new release in a separate directory.
+3. Run the full test suite and protocol conformance checks.
+4. Verify the new binary's CLI and backend response behavior in staging.
+5. Switch the supervisor to the new binary and restart during the approved window.
+6. Confirm listener, logs, protocol integration, and backend selection.
+7. Roll back by stopping the new process and restoring the previous binary/build path if verification fails.
 
-```bash
-cd /home/runner/work/overhauled/overhauled
-./build/broker_server 9090 --cpu-only
-```
+Coordinate any BRK wire-format or payload-contract change with the control-plane client before rollout.
 
-Illustrative background example without inventing a service manager:
+## 16. Troubleshooting
 
-```bash
-cd /home/runner/work/overhauled/overhauled
-nohup ./build/broker_server 9090 --cpu-only \
-  >/var/log/overhauled/broker.stdout.log \
-  2>/var/log/overhauled/broker.stderr.log &
-echo $! >/var/lib/overhauled/broker_server.pid
-```
+### CMake configures CPU-only despite ENABLE_CUDA=ON
 
-Use your standard supervisor/process-control tooling if you already have one; adapt ownership, logging, and restart policy to local standards.
+Read the CMake configure output. Confirm the CUDA compiler and toolkit are installed and discoverable. If they are not, use the CPU build or correct the toolchain path before expecting GPU selection.
 
-## 8. Put it behind authenticated transport
+### Broker fails to start
 
-`broker_server` speaks raw TCP and performs protocol validation only. For production, terminate identity and encryption **before** traffic reaches the broker:
+Check port range (1..65535), whether the port is already in use, service-account permissions, and supervisor logs. Confirm that `BUILD_BROKER=ON` was used.
 
-- mTLS sidecar or service mesh
-- TCP reverse proxy/load balancer with client authentication
-- private network plus authenticated gateway
+### BRK requests are rejected
 
-Operational expectation:
+Check the four-byte big-endian frame prefix, BRK1/BRK2 magic/version, required non-empty identifiers, timeout range, and configured frame/payload/string limits. Do not send JSON request bodies to the binary broker.
 
-- YuKKi-OS should open TCP connections only to the authenticated proxy/gateway address.
-- The proxy/gateway should forward the raw broker byte stream unchanged to `broker_server`.
-- Do not insert HTTP framing or application-layer translation unless you are deliberately implementing a separate protocol adapter.
+### Response reports CPU / selected_gpu = -1
 
-## 9. YuKKi-OS interoperability expectations
+This is expected with `--cpu-only`, no usable GPU topology, a CPU preference, a request without GPU-eligible metadata, or an unavailable accelerator. Confirm the response backend and host device visibility before changing thresholds.
 
-YuKKi-OS should treat overhauled as an external broker target and send versioned `BRK1` / v1 requests. In practice:
+### NPU preference falls back to CPU
 
-- use a stable `source` value per caller/tenant/session grouping if you want sticky GPU affinity to be meaningful
-- set `destination` to the logical overhauled target your control plane expects
-- set `kind` to the operation class your workload understands
-- keep `timeout_ms > 0`
-- keep frame, payload, and string sizes within broker limits
-- treat `selected_gpu = -1` as CPU fallback rather than an error by itself
+Confirm the broker was started with `--npu-simulated` for conformance or with an Ethos-U bundle in a build configured with `ENABLE_ETHOSU_DRM=ON`. `--npu-enabled` alone does not instantiate an executor. For physical hardware, check the kernel driver, render-node permissions, bundle compatibility, and device selection.
 
-Current repository behavior to account for:
+### Client connects but times out or disconnects
 
-- malformed or oversized frames receive a structured `Rejected` response when possible
-- the default compute path used by repository tests expects a payload that decodes as a packed `double[]` and returns doubled values
-- payload semantics above framing/validation are workload-specific and should be versioned between YuKKi-OS and the service using the broker
-- YuKKi-OS async clients may pipeline requests over one TCP connection and correlate responses by `task_id`; broker enforces a bounded per-connection in-flight limit (`max_inflight_per_client`, default `32`).
-- If a YuKKi-OS client still emits JSON `BrokerTask` / `BrokerResult` request bodies, add a versioned adapter before the broker because `broker_server` accepts BRK1/v1 binary frames only.
-
-## 10. Verification, health, and logging
-
-What exists today:
-
-- startup log to stdout, including port and optional `cpu-only mode`
-- clean shutdown log to stdout
-- startup failure message to stderr
-- no native HTTP health endpoint
-- no built-in metrics endpoint
-
-Safe verification steps:
-
-1. Check the binary advertises its supported CLI:
-
-```bash
-cd /home/runner/work/overhauled/overhauled
-./build/broker_server --help
-```
-
-2. Run broker-related tests after building:
-
-```bash
-cd /home/runner/work/overhauled/overhauled/build
-ctest --output-on-failure -R 'broker_(protocol|service|server_e2e|async_latency_benchmark)_test'
-```
-
-3. Confirm a listener exists on the chosen port (illustrative port `9090`):
-
-```bash
-ss -ltnp | grep ':9090'
-```
-
-4. Review stdout/stderr capture from your shell or supervisor.
-
-## 11. Upgrades and rollback
-
-Conservative sequence:
-
-1. build the new tree in a separate build directory
-2. run the broker tests in that build
-3. stop existing `broker_server`
-4. switch the deployed binary or install prefix
-5. start the new process and verify listener/tests/logs
-
-Rollback is simply the inverse: stop the new binary, restore the previous known-good binary/install prefix, and restart. Because the broker contract is a versioned wire protocol rather than an embedded library dependency, coordinate any protocol changes with the external control plane before rollout.
-
-## 12. Troubleshooting
-
-### `broker_server --help` or startup fails
-
-- verify you built `BUILD_BROKER=ON` (default)
-- verify the binary exists at `/home/runner/work/overhauled/overhauled/build/broker_server` or your install prefix
-
-### CPU-only mode works, GPU-enabled mode does not
-
-- rebuild with `-DENABLE_CUDA=ON`
-- confirm the CUDA toolkit/runtime is visible to CMake and the host can enumerate GPUs
-- use CPU-only mode as a safe temporary fallback while fixing the GPU stack
-
-### Broker is reachable but YuKKi-OS requests are rejected
-
-- confirm YuKKi-OS is sending `BRK1` / version `1` frames
-- confirm `task_id`, `source`, `destination`, and `kind` are non-empty
-- confirm `timeout_ms` is non-zero
-- confirm frame/payload/string lengths are within bounds
-
-### Connections close unexpectedly
-
-- check that the upstream proxy forwards raw TCP bytes unchanged
-- check for idle or stalled clients hitting the 5 second socket timeout
-- check whether you exceeded the default 128 concurrent client limit
-
-### Results are successful but `selected_gpu = -1`
-
-- that is expected in `--cpu-only` mode
-- in non-CPU-only mode, it also means no usable GPU topology was initialized on startup
+Check proxy TCP pass-through, the default 5-second socket timeout, client in-flight cap (32), maximum concurrent clients (128), and whether the client is sending complete frames. Increasing a client timeout does not preempt work already executing on the broker.
