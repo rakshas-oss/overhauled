@@ -1,4 +1,4 @@
-# Overhauled v1.1.2
+# Overhauled v1.1.3
 
 > **Route workloads by topology, not guesswork.**
 >
@@ -8,7 +8,7 @@ Overhauled is a C++17 placement and execution library with an interoperable brok
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
-[![Release](https://img.shields.io/badge/Release-v1.1.2-blueviolet)](#)
+[![Release](https://img.shields.io/badge/Release-v1.1.3-blueviolet)](#)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2FBRK2-orange)](#)
 
 ## Capabilities
