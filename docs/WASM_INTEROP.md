@@ -1,6 +1,6 @@
-# GPU-Backed WASM Sandbox Interoperability Specification
+# WASM Host-to-Broker Task and Lifecycle Interoperability (WSM1)
 
-This document defines the wire contract, lifecycle operations, and host/broker interface for executing GPU-backed WebAssembly (WASM) sandbox tasks from **YuKKi-OS** (`rakshas-oss/YuKKi-OS`) on **overhauled** (`rakshas-oss/overhauled`).
+This document defines the WSM1 task and module-version lifecycle contract between **YuKKi-OS** (`rakshas-oss/YuKKi-OS`) and **Overhauled** (`rakshas-oss/overhauled`). YuKKi-OS is responsible for compiling and running WebAssembly guests with Wasmtime. Overhauled receives host-mediated task data and version-lifecycle messages; it is not the guest runtime or a Wasm JIT compiler.
 
 ---
 
@@ -41,9 +41,19 @@ This document defines the wire contract, lifecycle operations, and host/broker i
 - Task execution on CUDA-capable GPUs or deterministic CPU fallback.
 
 ### Explicit Limitations and Non-Goals
-1. **WASM Bytecode Execution**: overhauled is **not** a WebAssembly runtime. It does not parse, validate, or execute WASM bytecode or JIT compilation. WASM execution remains solely the responsibility of the YuKKi-OS host (e.g. Wasmtime).
-2. **Sandbox Isolation**: overhauled does not enforce WASM linear memory bounds, memory sandboxing, or capability tokens. The YuKKi-OS host adapter must validate sandbox memory before handing data descriptors to overhauled.
-3. **No Unsafe Live GPU State Migration**: During module hotswaps, overhauled does **not** attempt to migrate raw CUDA pointers, texture memory, or live device context across module versions. The sandbox/host must initialize state in the new module version. overhauled ensures old tasks drain safely and releases device placement resources when instructed.
+1. **WASM Bytecode Execution**: Overhauled is **not** a WebAssembly runtime. It does not parse, validate, compile, JIT, link, merge, instantiate, or execute WASM bytecode. WASM execution remains solely the responsibility of the YuKKi-OS host (e.g. Wasmtime).
+2. **Sandbox Isolation**: Overhauled does not enforce WASM linear-memory bounds, memory sandboxing, or capability tokens. The YuKKi-OS host adapter must validate guest memory and payload sizes before handing data descriptors to Overhauled.
+3. **No Unsafe Live GPU State Migration**: During module hot-swaps, Overhauled does **not** attempt to migrate raw CUDA pointers, texture memory, or live device context across module versions. The sandbox/host must initialize state in the new module version. Overhauled tracks in-flight tasks and releases broker-side resources only after drainage.
+
+### What Prepare, Task, Drain and Release mean in the current broker
+
+The C++ `WasmSandboxManager` implements a registry and task-lifecycle state machine. Its `Prepare` request carries identifiers and placement preference; the current `prepare_module` implementation does not consume the request payload as Wasm bytecode, compile code, instantiate a guest, or create a compiled-module cache. It records the version and returns a lease token and optional assigned GPU.
+
+A `TaskRequest` names that registered version and carries its task payload and buffer descriptors. The broker checks version state, increments the in-flight count, and executes either the configured `ComputeFn` or its built-in reference numeric/echo path. No WASM instructions are interpreted in this step. Consequently, task payloads must be treated as host-prepared workload data, not as a way to upload executable modules.
+
+`Drain` prevents new tasks from entering a draining version and tracks work already in flight. `Release` is rejected while the in-flight count is non-zero. These operations make the broker-side resource/version lifecycle safe; they do not replace the YuKKi-OS host's own module compilation, instantiation, application-state handoff or routing policy.
+
+There is no multi-module linker or merge-compilation operation in WSM1. A host may compile and validate replacement bytecode with Wasmtime, then use the lifecycle protocol to coordinate version registration and drainage. Any composition of multiple Wasm modules or policy functions must be implemented by the host before the broker sees task data.
 
 ---
 

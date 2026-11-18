@@ -18,6 +18,14 @@ Start with the smallest working configuration:
 
 Do not begin with optional accelerators. Prove the CPU-only path first, then enable one backend at a time.
 
+### WASM task integration is host-side
+
+Overhauled does not build or run the Wasm guest. Do not upload a `.wasm` file to the broker expecting it to compile or execute it. Build and validate the guest in YuKKi-OS, instantiate it with the YuKKi-OS Wasmtime host, and send only the host-mediated task input and lifecycle messages to this broker.
+
+For YuKKi-OS, the WSM1 adapter is opt-in and configured in the **YuKKi-OS process**, not here: set `YUKKI_GPU_ADAPTER_ENABLED=true`, set `YUKKI_GPU_USE_WSM1=true` when using the WSM1 task/lifecycle wire mode, and point `YUKKI_GPU_BROKER_ENDPOINT` at this broker. See [YuKKi-OS SYSADMIN_HOWTO](https://github.com/rakshas-oss/YuKKi-OS/blob/main/docs/SYSADMIN_HOWTO.md) for guest compilation, Wasmtime limits, host authentication, and module version lifecycle.
+
+The broker's `Prepare` operation registers a module/version identity and placement lease; it does not receive the executable artifact or compile it. The broker's `TaskRequest` carries application task data and is dispatched to the configured compute callback or broker reference path. Wasm bytecode compilation, multi-module linking/merge compilation, guest-memory isolation and guest instantiation stay in YuKKi-OS.
+
 ## 2. Install prerequisites
 
 Required for the broker:
