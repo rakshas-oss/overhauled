@@ -229,7 +229,7 @@ Before each release:
 - [ ] Update version in `vcpkg.json`
 - [ ] Regenerate the Homebrew formula URL and SHA-256 from the final v1.1.4 release archive, then update `nvlink-placement.rb`
 - [ ] Update `README.md` with latest features
-- [ ] Create a release tag for the version in `CMakeLists.txt` (the current 1.1.4 release tag is `v1.1.4`)
+- [ ] Create a release tag for the version in `CMakeLists.txt` (the v1.1.4 candidate tag has not yet been created; it will be `v1.1.4` only after the release commit is approved and published)
 - [ ] After merge, create and push the `v1.1.4` tag from the intended release commit
 - [ ] Verify the release workflow and GitHub release assets; do not assume publication is automatic
 - [ ] Submit PRs to Conan Center Index
