@@ -35,7 +35,7 @@ cp /path/to/nvlink_placement/conanfile.py recipes/nvlink_placement/all/
 # 3. Create config file
 cat > recipes/nvlink_placement/config.yml << 'EOF'
 versions:
-  "1.1.3":
+  "1.1.4":
     folder: all
 EOF
 
@@ -44,7 +44,7 @@ conan create . --build=missing
 
 # 5. Push and create PR
 git add recipes/nvlink_placement/
-git commit -m "Add nvlink_placement/1.1.3"
+git commit -m "Add nvlink_placement/1.1.4"
 git push origin nvlink_placement
 # Create PR on GitHub
 ```
@@ -54,7 +54,7 @@ git push origin nvlink_placement
 ```cpp
 // conanfile.txt
 [requires]
-nvlink_placement/1.1.3
+nvlink_placement/1.1.4
 
 [generators]
 CMakeDeps
@@ -94,7 +94,7 @@ cp /path/to/nvlink_placement/vcpkg-portfile.cmake ports/nvlink-placement/portfil
 cat > ports/nvlink-placement/vcpkg.json << 'EOF'
 {
   "name": "nvlink-placement",
-  "version": "1.1.3"
+  "version": "1.1.4"
 }
 EOF
 
@@ -174,7 +174,7 @@ Create PPA:
 mkdir -p debian
 
 # Upload to PPA
-dput ppa:your-username/nvlink-placement nvlink-placement_1.1.3_source.changes
+dput ppa:your-username/nvlink-placement nvlink-placement_1.1.4_source.changes
 ```
 
 Usage:
@@ -203,6 +203,20 @@ sudo dnf install nvlink-placement-devel
 
 ---
 
+## Candidate packaging boundary for v1.1.4
+
+The v1.1.4 candidate aligns CMake and Conan metadata. Do not copy the current
+vcpkg or Homebrew packaging files into a registry submission yet:
+
+- The in-repository vcpkg manifest/portfile remains pinned to the last
+  published source until the v1.1.4 tag exists. After the release archive is
+  created, update the vcpkg manifest and portfile together and compute the
+  exact SHA512 for that archive.
+- The Homebrew formula is currently pinned to an older release. Update its
+  URL, version and SHA256 only from the final v1.1.4 archive.
+- External registries are not updated by merging this repository PR. Verify
+  each registry's submitted package independently.
+
 ## Release Checklist
 
 > **Publication boundary:** Updating this repository's manifests and examples does not publish packages to Conan Center, vcpkg, Homebrew, apt, or dnf. Submit and verify each external registry update separately. The Homebrew formula must use the checksum of the actual tagged source archive.
@@ -213,10 +227,10 @@ Before each release:
 - [ ] Update version in `CMakeLists.txt`
 - [ ] Update version in `conanfile.py`
 - [ ] Update version in `vcpkg.json`
-- [ ] Regenerate the Homebrew formula URL and SHA-256 from the final v1.1.3 release archive, then update `nvlink-placement.rb`
+- [ ] Regenerate the Homebrew formula URL and SHA-256 from the final v1.1.4 release archive, then update `nvlink-placement.rb`
 - [ ] Update `README.md` with latest features
-- [ ] Create a release tag for the version in `CMakeLists.txt` (the current 1.1.3 release tag is `v1.1.3`)
-- [ ] After merge, create and push the `v1.1.3` tag from the intended release commit
+- [ ] Create a release tag for the version in `CMakeLists.txt` (the current 1.1.4 release tag is `v1.1.4`)
+- [ ] After merge, create and push the `v1.1.4` tag from the intended release commit
 - [ ] Verify the release workflow and GitHub release assets; do not assume publication is automatic
 - [ ] Submit PRs to Conan Center Index
 - [ ] Submit PRs to vcpkg
@@ -231,8 +245,8 @@ After publishing to each package manager:
 
 ### Conan
 ```bash
-conan search nvlink_placement/1.1.3@
-conan install --requires=nvlink_placement/1.1.3
+conan search nvlink_placement/1.1.4@
+conan install --requires=nvlink_placement/1.1.4
 ```
 
 ### vcpkg
