@@ -34,3 +34,8 @@ jobs:
 
       - name: Run CTest Conformance Suite
         run: ctest --test-dir build-asan --output-on-failure
+
+      - name: Validate dataset-driven BRK2 benchmark adapter
+        run: |
+          python3 -m py_compile benchmarks/dataset_broker_bench.py tests/test_dataset_broker_bench.py
+          python3 tests/test_dataset_broker_bench.py
