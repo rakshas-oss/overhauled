@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+"""Unit tests for the BRK2 dataset workload adapter (no broker required)."""
+import importlib.util
+import pathlib
+import socket
+import struct
+import tempfile
+import threading
+import unittest
+
+MODULE_PATH = pathlib.Path(__file__).resolve().parents[1] / "benchmarks" / "dataset_broker_bench.py"
+SPEC = importlib.util.spec_from_file_location("dataset_broker_bench", MODULE_PATH)
+bench = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(bench)
+
+
+def recv_exact(connection, size):
+    result = bytearray()
+    while len(result) < size:
+        part = connection.recv(size - len(result))
+        if not part:
+            raise ConnectionError("unexpected EOF in fake broker")
+        result.extend(part)
+    return bytes(result)
+
+
+class DatasetBrokerBenchmarkTests(unittest.TestCase):
+    def test_brg2_request_contains_stable_header_and_framed_payload(self):
+        record = (17, 123456789, [1.25, -2.5])
+        encoded = bench.request_frame(99, "fixture", record, "cpu")
+        frame_size = struct.unpack_from("!I", encoded, 0)[0]
+        frame = encoded[4:]
+        self.assertEqual(frame_size, len(frame))
+        self.assertEqual(frame[:4], bench.MAGIC)
+        self.assertEqual(struct.unpack_from("!Q", frame, 12)[0], 99)
+        self.assertEqual(bench.HEADER.size, 32)
+
+    def test_manifest_dataset_and_profile_drive_dry_run(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            (root / "rows.jsonl").write_text(
+                '{"seq":1,"ts":10,"x":1.0,"y":2.0}\n'
+                '{"seq":2,"ts":20,"x":2.0,"y":3.0}\n'
+                '{"seq":3,"ts":30,"x":3.0,"y":4.0}\n',
+                encoding="utf-8",
+            )
+            spec = {
+                "id": "fixture",
+                "source": "rows.jsonl",
+                "sequence_field": "seq",
+                "timestamp_ns_field": "ts",
+                "feature_fields": ["x", "y"],
+            }
+            _, rows = bench.load_dataset(root, spec)
+            warmup, sample = bench.select_sample(rows, {
+                "warmup_records": 1, "sample_records": 2,
+            })
+            result = bench.run_profile(
+                "127.0.0.1", 9090, "fixture", rows,
+                {
+                    "id": "latency",
+                    "objective": "latency",
+                    "warmup_records": 1,
+                    "sample_records": 2,
+                    "batch_sizes": [1, 2],
+                    "worker_counts": [1, 2],
+                },
+                1.0, True, "cpu",
+            )
+            self.assertEqual(len(warmup), 1)
+            self.assertEqual(len(sample), 2)
+            self.assertEqual(result["sampled_records"], 2)
+            self.assertEqual(len(result["candidates"]), 4)
+            self.assertEqual(result["status"], "dry_run_not_measured")
+
+    def test_live_candidate_measures_mock_broker_round_trip(self):
+        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        port = listener.getsockname()[1]
+        errors = []
+
+        def serve():
+            try:
+                connection, _ = listener.accept()
+                with connection:
+                    for _ in range(2):
+                        size = struct.unpack("!I", recv_exact(connection, 4))[0]
+                        frame = recv_exact(connection, size)
+                        request_id = struct.unpack_from("!Q", frame, 12)[0]
+                        response = bytearray(32)
+                        response[:4] = bench.MAGIC
+                        struct.pack_into("!Q", response, 12, request_id)
+                        connection.sendall(struct.pack("!I", len(response)) + response)
+            except Exception as error:  # surfaced in the test thread
+                errors.append(error)
+            finally:
+                listener.close()
+
+        server = threading.Thread(target=serve, daemon=True)
+        server.start()
+        metrics = bench.run_candidate(
+            "127.0.0.1", port, "fixture",
+            [(1, 10, [1.0]), (2, 20, [2.0])],
+            batch_size=2, workers=1, timeout=2.0, device="cpu",
+        )
+        server.join(timeout=3.0)
+        self.assertFalse(server.is_alive())
+        self.assertFalse(errors, errors)
+        self.assertEqual(metrics["requests"], 2)
+        self.assertGreater(metrics["requests_per_second"], 0.0)
+        self.assertGreaterEqual(metrics["p95_request_ms"], 0.0)
+
+
+if __name__ == "__main__":
+    unittest.main()
