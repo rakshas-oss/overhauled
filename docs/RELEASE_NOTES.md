@@ -2,6 +2,43 @@
 
 Repository: rakshas-oss/overhauled
 
+## v1.1.4 (release candidate; tag pending)
+Date: 2026-11-18
+
+### Highlights
+
+- **Architecture heuristic audit**: Documented the actual backend-selection
+  order, the distinction between BRK2 preferences and proven execution, the
+  CPU safety rules, fallback-safety requirements, and the default GPU
+  offload/backlog thresholds.
+- **Topology interpretation**: Clarified that the detector's 100/90/10
+  peer-link values are relative placement hints derived from CUDA peer
+  attributes, not measured bandwidth or portable latency guarantees.
+- **NPU execution boundary**: Aligned the interface comments and operations
+  guidance with the CPU-emulated conformance executor and optional Linux
+  Ethos-U DRM implementation. A service enable flag alone does not create an
+  executor; simulator results are not hardware performance evidence.
+- **WASM host/broker boundary**: Preserved the documented rule that YuKKi-OS
+  compiles, links, instantiates and composes Wasm programs, while Overhauled
+  accepts host-mediated task data and module lifecycle metadata.
+- **Step-by-step operations guide**: Added a measured heuristic-verification
+  sequence for CPU, GPU and NPU configurations, including fallback-safe and
+  fallback-unsafe checks.
+
+### Compatibility and release boundary
+
+- This is a documentation and release-metadata maintenance candidate. No
+  BRK1/BRK2 or WSM1 wire format, public C++ API, or broker runtime behavior is
+  intentionally changed.
+- CMake and Conan metadata are aligned at 1.1.4. The vcpkg source pin and
+  Homebrew archive formula remain post-tag packaging tasks: their source
+  archive digest must be generated from the final tagged archive rather than
+  guessed in this candidate.
+- Do not create the v1.1.4 tag or publish package-manager artifacts until the
+  release PR is merged and the intended release commit is verified.
+
+---
+
 ## v1.1.3
 Date: 2026-11-18
 

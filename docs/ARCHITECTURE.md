@@ -146,6 +146,42 @@ Tune one decision boundary at a time, using the benchmark harness and representa
 
 The benchmark values in [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md) are workload-specific observations, not universal guarantees. Do not copy a threshold from one GPU topology or dataset into production without rerunning the workload.
 
+## Heuristic values and interpretation
+
+The dispatcher uses explicit task metadata rather than treating a requested
+device as proof of hardware execution:
+
+- Forced CPU ("--cpu-only" or BRK2 device_preference=cpu) wins first.
+- Exact-precision, verification-sensitive and cryptographic profiles remain
+  on CPU unless the profile explicitly marks an accelerator path verified.
+- NPU is selected for inference profiles only when the NPU gate is enabled and
+  the configured executor reports available. --npu-enabled alone is only
+  the gate; --npu-simulated installs CPU emulation, while
+  ENABLE_ETHOSU_DRM=ON plus a compatible YU85BND1 bundle enables the
+  optional physical Linux path.
+- GPU is selected for data-parallel profiles when the GPU is available and
+  the configured byte threshold (default 1 MiB) or non-zero FLOP threshold is
+  met. A zero FLOP threshold disables that criterion.
+- Without a task profile, only an operator-configured GPU default can
+  auto-offload; a profile-less --default-backend npu request still resolves
+  to CPU. A BRK2 device_preference=npu supplies an inference profile, but
+  the response's selected backend remains authoritative.
+
+The dispatcher and service implementation have different sources of profile
+metadata: in-process callers supply TaskProfile, while the BRK2 adapter maps
+wire-level device_preference to a basic profile when no in-process profile
+exists. That wire preference path marks the generic numeric request as
+fallback-safe; application-specific, side-effecting operations should not be
+declared fallback-safe unless CPU re-execution is actually idempotent.
+
+GPU placement is a second stage after GPU backend selection. The current
+topology detector converts CUDA peer performance-rank/native-atomic signals
+into relative link hints (100/90 for preferred peer links and 10 for PCIe).
+Those values are ordinal heuristic scores, not measured GB/s, latency, or
+a portable physical bandwidth guarantee. Re-profile on each target system.
+
+For the full operational sequence, use [System administration](SYSADMIN_HOWTO.md).
+
 ## 10. Source-of-truth implementation map
 
 | Concern | Implementation |

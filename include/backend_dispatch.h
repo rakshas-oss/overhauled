@@ -91,8 +91,10 @@ inline BackendKind select_backend(const BackendPolicy& policy,
     return BackendKind::Cpu;
 }
 
-// Concrete NPU backends implement this. None ships today; when none is
-// configured the dispatcher never selects the NPU.
+// Concrete NPU executors implement this interface. The broker can install
+// the CPU-emulated simulator for conformance or the optional Linux Ethos-U DRM
+// executor; the dispatcher selects NPU only when the service gate is enabled
+// and the configured executor reports available.
 class NpuExecutor {
 public:
     virtual ~NpuExecutor() = default;
