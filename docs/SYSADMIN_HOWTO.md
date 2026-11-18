@@ -104,7 +104,7 @@ The broker CLI supports:
 - `--npu-ethosu-bundle FILE`
 - `--ethosu-device /dev/dri/renderD*`
 
-Important: `--npu-enabled` only enables the service-side NPU gate. It does not create an NPU executor. Use `--npu-simulated` for CPU-emulated tests or `--npu-ethosu-bundle` with an actual supported device. The simulated executor is not hardware acceleration.
+Important: `--npu-enabled` only enables the service-side NPU gate. It does not create an NPU executor. Use `--npu-simulated` for CPU-emulated tests or `--npu-ethosu-bundle` with an actual supported device. The simulated executor is not hardware acceleration. Although `--default-backend npu` is accepted by the CLI, it does not auto-route profile-less requests to NPU under the current dispatcher policy. For a wire client, use BRK2 `device_preference=npu` and configure a concrete executor.
 
 ## 6. Start the CPU-only broker and check the listener
 
