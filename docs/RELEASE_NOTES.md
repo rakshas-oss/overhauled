@@ -2,6 +2,23 @@
 
 Repository: rakshas-oss/overhauled
 
+## v1.1.3
+Date: 2026-11-18
+
+### Highlights
+
+- **Release metadata alignment**: Synchronized the CMake project version, Conan recipe, vcpkg manifest, README release badge, and deployment instructions at 1.1.3.
+- **Documentation maintenance**: Corrected stale release and publishing guidance so downstream packagers can distinguish repository metadata from packages that have actually been submitted or published.
+- **Compatibility**: No BRK1/BRK2 wire-format, public API, or runtime behavior changes are introduced by this maintenance release.
+
+### Upgrade notes
+
+- Source builds identify the project as 1.1.3 through CMake package metadata and CPack package versioning.
+- Rebuild downstream packages from the v1.1.3 source tag after it is created; do not assume that package-manager registries have been updated by this repository change.
+- The Homebrew formula checksum must be regenerated from the final v1.1.3 release archive before publishing the formula update.
+
+---
+
 ## v1.1.2
 Date: 2026-11-13
 
