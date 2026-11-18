@@ -45,10 +45,10 @@ brew install nvlink-placement
 
 ## Status
 
-| Manager | Status | Version |
-|---------|--------|----------|
-| Conan | Ready | 1.1.1 |
-| vcpkg | Ready | 1.1.1 |
-| Homebrew | Ready | 1.1.1 |
-| apt (Ubuntu) | In Progress | 1.1.1 |
-| dnf (Fedora) | In Progress | 1.1.1 |
+| Manager | Repository state | Version / next step |
+|---------|-------------------|----------------------|
+| Conan | Recipe aligned; registry submission not verified | 1.1.3 |
+| vcpkg | Manifest aligned; registry submission not verified | 1.1.3 |
+| Homebrew | Formula checksum refresh required after tag creation | Pending |
+| apt (Ubuntu) | Not published | Pending |
+| dnf (Fedora) | Not published | Pending |
