@@ -95,7 +95,7 @@ Placement validates non-empty GPU topology, model registry access is synchronize
 - [Ethos-U85 bundle and hardware boundary](docs/ETHOSU_U85_BUNDLE.md)
 - [Architecture](docs/ARCHITECTURE.md) · [Library guide](docs/LIBRARY.md)
 - [System administration](docs/SYSADMIN_HOWTO.md) · [Operations runbook](OPERATIONS_RUNBOOK.md) · [Deployment guide](DEPLOYMENT_GUIDE.md)
-- [Publishing](docs/PUBLISHING.md) · [Release notes](docs/RELEASE_NOTES.md) · [Benchmarks](docs/BENCHMARK_RESULTS.md)
+- [Publishing](docs/PUBLISHING.md) · [Release notes](docs/RELEASE_NOTES.md) · [Benchmarks](docs/BENCHMARK_RESULTS.md) · [Dataset-driven BRK2 workloads](docs/DATASET_BROKER_BENCHMARK.md)
 - [Security hardening notes](docs/SECURITY_HARDENING_NOTES.md)
 
 ## License
