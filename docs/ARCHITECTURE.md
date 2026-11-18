@@ -54,7 +54,7 @@ The effective decision order is:
 4. **GPU-eligible data-parallel work:** GPU selection requires an available GPU and data-parallel classification. The default byte threshold is 1 MiB; an optional FLOP threshold is available to in-process callers.
 5. **CPU baseline:** requests that do not meet a selection rule run on CPU.
 
-BRK2 `device_preference=gpu|npu` supplies a profile when the wire request has no in-process profile. GPU preference therefore still requires GPU availability; NPU preference still requires an enabled, available executor. If the requested accelerator is unavailable, the dispatcher uses CPU rather than claiming that accelerator execution occurred.
+BRK2 `device_preference=gpu|npu` supplies a profile when the wire request has no in-process profile. GPU preference therefore still requires GPU availability; NPU preference still requires an enabled, available executor. If the requested accelerator is unavailable, the dispatcher uses CPU rather than claiming that accelerator execution occurred. The CLI accepts `--default-backend npu`, but the current profile-less default-selection rule only auto-offloads to GPU; use BRK2 `device_preference=npu` (or an in-process inference profile) to request NPU work.
 
 Accelerator failure is retried on CPU only when the request is declared `fallback_safe`. Otherwise the broker returns an execution error. Do not mark a non-idempotent or side-effecting operation fallback-safe unless repeating it on CPU is genuinely safe.
 
