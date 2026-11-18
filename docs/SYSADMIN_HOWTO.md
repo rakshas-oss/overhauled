@@ -60,11 +60,13 @@ cd overhauled
 git fetch --tags origin
 ```
 
-For a release deployment, check out the approved release tag after it exists:
+For the currently published baseline, check out the v1.1.3 tag:
 
 ```bash
-git checkout v1.1.4
+git checkout v1.1.3
 ```
+
+Use `git checkout v1.1.4` only after the v1.1.4 candidate has passed review, merged, and its release tag has actually been created.
 
 If the tag has not yet been created, use the reviewed release commit or the intended branch supplied by your release process. Do not assume an open pull request is already part of `main` or a published release.
 
