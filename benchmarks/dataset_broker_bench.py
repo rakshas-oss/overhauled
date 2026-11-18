@@ -164,7 +164,7 @@ def recv_response(sock):
     return struct.unpack_from("!Q", response, 12)[0]
 
 
-def run_worker(host, port, dataset_id, records, batch_size, timeout):
+def run_worker(host, port, dataset_id, records, batch_size, timeout, device):
     latencies = []
     with socket.create_connection((host, port), timeout=timeout) as connection:
         connection.settimeout(timeout)
@@ -175,7 +175,7 @@ def run_worker(host, port, dataset_id, records, batch_size, timeout):
             for record in batch:
                 request_id = next(REQUEST_IDS)
                 sent_at[request_id] = time.perf_counter_ns()
-                frames.append(request_frame(request_id, dataset_id, record))
+                frames.append(request_frame(request_id, dataset_id, record, device))
             connection.sendall(b"".join(frames))
             for _ in batch:
                 response_id = recv_response(connection)
@@ -188,7 +188,7 @@ def run_worker(host, port, dataset_id, records, batch_size, timeout):
     return latencies
 
 
-def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout):
+def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout, device):
     if not records:
         raise ValueError("candidate has no records")
     active_workers = min(workers, len(records))
@@ -197,7 +197,7 @@ def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout)
     latencies_ns = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=active_workers) as pool:
         futures = [
-            pool.submit(run_worker, host, port, dataset_id, part, batch_size, timeout)
+            pool.submit(run_worker, host, port, dataset_id, part, batch_size, timeout, device)
             for part in partitions if part
         ]
         for future in concurrent.futures.as_completed(futures):
@@ -222,7 +222,7 @@ def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout)
     }
 
 
-def run_profile(host, port, dataset_id, rows, profile, timeout, dry_run):
+def run_profile(host, port, dataset_id, rows, profile, timeout, dry_run, device):
     objective = profile.get("objective")
     if objective not in ("latency", "throughput"):
         return None
@@ -255,10 +255,10 @@ def run_profile(host, port, dataset_id, rows, profile, timeout, dry_run):
         }
 
     if warmup:
-        run_candidate(host, port, dataset_id, warmup, 1, 1, timeout)
+        run_candidate(host, port, dataset_id, warmup, 1, 1, timeout, device)
 
     candidates = [
-        run_candidate(host, port, dataset_id, sample, batch, workers, timeout)
+        run_candidate(host, port, dataset_id, sample, batch, workers, timeout, device)
         for batch in batch_sizes for workers in worker_counts
     ]
     limit = profile.get("max_p95_request_ms")
@@ -292,6 +292,7 @@ def main():
     parser.add_argument("--dataset", default="all")
     parser.add_argument("--profile", default="all")
     parser.add_argument("--timeout", type=float, default=20.0)
+    parser.add_argument("--device", choices=("cpu", "gpu", "npu"), default="cpu", help="execution preference passed through BRK2")
     parser.add_argument("--output", type=pathlib.Path)
     parser.add_argument("--dry-run", action="store_true", help="validate dataset/profile and show candidate workload without network I/O")
     args = parser.parse_args()
@@ -322,7 +323,7 @@ def main():
             if applicable is not None and dataset.get("domain") not in applicable:
                 continue
             result = run_profile(
-                args.host, args.port, dataset["id"], rows, profile, args.timeout, args.dry_run
+                args.host, args.port, dataset["id"], rows, profile, args.timeout, args.dry_run, args.device
             )
             if result is not None:
                 result["dataset_sha256"] = sha256_file(source_path)
@@ -333,7 +334,7 @@ def main():
     report = {
         "manifest_version": manifest["version"],
         "manifest_sha256": sha256_file(args.manifest),
-        "broker": {"host": args.host, "port": args.port, "protocol": "BRK2"},
+        "broker": {"host": args.host, "port": args.port, "protocol": "BRK2", "device_preference": args.device},
         "measured": not args.dry_run,
         "results": results,
     }
