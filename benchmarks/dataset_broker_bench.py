@@ -393,6 +393,12 @@ def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout,
             return 0.0
         index = min(len(latencies_ms) - 1, math.ceil((len(latencies_ms) - 1) * p))
         return latencies_ms[index]
+    def percentile_of(values, p):
+        ordered = sorted(values)
+        if not ordered:
+            return None
+        index = min(len(ordered) - 1, math.ceil((len(ordered) - 1) * p))
+        return ordered[index]
     return {
         "batch_size": batch_size,
         "workers": active_workers,
@@ -409,9 +415,9 @@ def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout,
         "worker_class": worker_class,
         "worker_telemetry_requests": worker_telemetry_requests,
         "mean_queue_wait_us": statistics.fmean(queue_wait_samples) if queue_wait_samples else None,
-        "p95_queue_wait_us": percentile(sorted(queue_wait_samples)) if queue_wait_samples else None,
+        "p95_queue_wait_us": percentile_of(queue_wait_samples, 0.95),
         "mean_service_time_us": statistics.fmean(service_time_samples) if service_time_samples else None,
-        "p95_service_time_us": percentile(sorted(service_time_samples)) if service_time_samples else None,
+        "p95_service_time_us": percentile_of(service_time_samples, 0.95),
         "worker_numa_nodes": sorted(numa_nodes),
     }
 
