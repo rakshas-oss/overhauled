@@ -136,9 +136,9 @@ class DatasetBrokerBenchmarkTests(unittest.TestCase):
         ))
         frame = bench.HEADER.pack(bench.MAGIC, 2, 0, 32, 4, 5, 7, 2, 1, 0, len(payload)) + payload
         with self.assertRaises(RuntimeError):
-            bench.decode_response(frame, 7, "dataset-benchmark", "cpu")
+            bench.decode_response(frame, 7, "dataset-benchmark", "cpu", 0)
         with self.assertRaises(ValueError):
-            bench.decode_response(frame, 8, "dataset-benchmark", "cpu")
+            bench.decode_response(frame, 8, "dataset-benchmark", "cpu", 0)
 
     def test_dataset_symlink_cannot_escape_manifest_directory(self):
         with tempfile.TemporaryDirectory() as temporary:
