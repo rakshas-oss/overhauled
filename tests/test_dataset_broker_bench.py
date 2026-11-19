@@ -92,10 +92,10 @@ class DatasetBrokerBenchmarkTests(unittest.TestCase):
                         request_id = struct.unpack_from("!Q", frame, 12)[0]
                         payload = b"".join((
                             bench.tlv(1, 8, 0, b"dataset-benchmark"),
-                            bench.tlv(2, 1, 0, b"\\x00"),
+                            bench.tlv(2, 1, 0, b"\x00),
                             bench.tlv(3, 5, 0, struct.pack("!q", -1)),
                             bench.tlv(4, 4, 0, struct.pack("!Q", 1)),
-                            bench.tlv(5, 9, 0, struct.pack("!d", 2.0)),
+                            bench.tlv(5, 9, 0, struct.pack("!3d", 2.0, 20.0, 2.0)),
                             bench.tlv(6, 8, 0, b""),
                             bench.tlv(7, 8, 0, b"cpu"),
                         ))
@@ -127,7 +127,7 @@ class DatasetBrokerBenchmarkTests(unittest.TestCase):
     def test_response_decoder_rejects_non_ok_status_and_bad_correlation(self):
         payload = b"".join((
             bench.tlv(1, 8, 0, b"dataset-benchmark"),
-            bench.tlv(2, 1, 0, b"\\x01"),
+            bench.tlv(2, 1, 0, b"\x01),
             bench.tlv(3, 5, 0, struct.pack("!q", -1)),
             bench.tlv(4, 4, 0, struct.pack("!Q", 1)),
             bench.tlv(5, 9, 0, b""),
