@@ -24,7 +24,6 @@ struct BrokerServerConfig {
     std::size_t throughput_worker_threads = 0; // 0 = use legacy/automatic budget
     std::size_t exact_cpu_worker_threads = 1;
     std::size_t inference_worker_threads = 1;
-    std::size_t max_queued_tasks_per_class = 0; // 0 = derive from client limits
     bool verbose = false;
     BrokerServiceConfig service_config{};
 };
