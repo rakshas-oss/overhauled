@@ -166,7 +166,7 @@ BrokerResponse BrokerService::handle_request(const BrokerRequest& request) {
     // CPU request, not just a default.
     std::optional<TaskProfile> effective_profile = request.profile;
     bool fallback_safe = request.profile.has_value() && request.profile->fallback_safe;
-    if (!effective_profile.has_value()) {
+    if (!effective_profile.has_value() && request.worker_class_explicit) {
         TaskProfile derived;
         derived.estimated_bytes = request.payload.size();
         switch (request.worker_class) {
