@@ -238,18 +238,37 @@ public:
                  std::optional<uint64_t> affinity_key,
                  std::optional<uint32_t> preferred_node,
                  Task task) {
+        return enqueue_with_deadline(worker_class, affinity_key, preferred_node,
+                                     std::nullopt, std::move(task));
+    }
+
+    bool enqueue_with_deadline(
+        WorkerClass worker_class,
+        std::optional<uint64_t> affinity_key,
+        std::optional<uint32_t> preferred_node,
+        std::optional<Clock::time_point> deadline,
+        Task task) {
         if (!task) return false;
         const std::size_t index = class_index(worker_class);
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (stopping_) return false;
-            // All classes are FIFO by the monotonic enqueue timestamp: the
-            // earliest accepted call in a class is always dispatched first.
-            // std::deque grows on demand; allocation failure rejects only this
-            // enqueue and never terminates the broker worker thread.
+            QueuedTask queued_task{
+                Clock::now(), affinity_key, preferred_node, deadline, std::move(task)};
+            // Realtime spatial work is deadline ordered within its isolated
+            // queue. Equal deadlines retain FIFO order; requests without a
+            // deadline remain behind deadline-bearing work.
             try {
-                queues_[index].push_back(QueuedTask{
-                    Clock::now(), affinity_key, preferred_node, std::move(task)});
+                auto& queue = queues_[index];
+                if (worker_class == WorkerClass::RealtimeSpatial && deadline) {
+                    const auto position = std::find_if(queue.begin(), queue.end(),
+                        [&deadline](const QueuedTask& existing) {
+                            return !existing.deadline || *deadline < *existing.deadline;
+                        });
+                    queue.insert(position, std::move(queued_task));
+                } else {
+                    queue.push_back(std::move(queued_task));
+                }
             } catch (const std::bad_alloc&) {
                 return false;
             }
@@ -289,6 +308,7 @@ private:
         Clock::time_point enqueued_at;
         std::optional<uint64_t> affinity_key;
         std::optional<uint32_t> preferred_node;
+        std::optional<Clock::time_point> deadline;
         Task task;
     };
 
