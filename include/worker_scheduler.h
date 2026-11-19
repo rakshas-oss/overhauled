@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 
 namespace nvlink::broker {
@@ -27,6 +28,28 @@ struct WorkerExecutionContext {
 struct WorkerPoolConfig {
     // One independently bounded FIFO and worker pool per workload class.
     std::array<std::size_t, kWorkerClassCount> workers{{1, 1, 4, 1, 1}};
+};
+
+
+/// Process-wide admission budget for dynamically growing class queues.
+/// Requests hold a slot and their payload-byte reservation until completion,
+/// including after the client socket disconnects.
+class WorkerAdmissionBudget {
+public:
+    WorkerAdmissionBudget(std::size_t max_outstanding_requests,
+                          std::size_t max_payload_bytes);
+
+    bool try_acquire(std::size_t payload_bytes) noexcept;
+    void release(std::size_t payload_bytes) noexcept;
+    std::size_t outstanding_requests() const noexcept;
+    std::size_t outstanding_payload_bytes() const noexcept;
+
+private:
+    const std::size_t max_outstanding_requests_;
+    const std::size_t max_payload_bytes_;
+    mutable std::mutex mutex_;
+    std::size_t outstanding_requests_ = 0;
+    std::size_t outstanding_payload_bytes_ = 0;
 };
 
 class ClassWorkerPool {
