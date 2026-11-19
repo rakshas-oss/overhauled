@@ -100,7 +100,7 @@ set(OVERHAULED_INSTALL_TARGETS nvlink_placement adi_server)
 if(BUILD_BROKER)
     add_library(broker_service
         src/broker_protocol.cpp src/brk2_protocol.cpp src/broker_service.cpp
-        src/broker_server.cpp src/geospatial_frame.cpp src/media_stream.cpp
+        src/broker_server.cpp src/worker_scheduler.cpp src/geospatial_frame.cpp src/media_stream.cpp
         src/wasm_sandbox.cpp)
     add_library(Overhauled::broker_service ALIAS broker_service)
     target_include_directories(broker_service PUBLIC
@@ -151,7 +151,7 @@ if(BUILD_EXAMPLES)
 endif()
 
 if(BUILD_TESTING AND BUILD_BROKER)
-    foreach(test_name IN ITEMS brk2_protocol brk_conformance broker_protocol broker_service backend_dispatch broker_server_e2e broker_async_latency_benchmark geospatial_frame media_stream wasm_sandbox)
+    foreach(test_name IN ITEMS brk2_protocol brk_conformance broker_protocol broker_service backend_dispatch broker_server_e2e broker_async_latency_benchmark worker_scheduler geospatial_frame media_stream wasm_sandbox)
         add_executable(${test_name}_test tests/${test_name}_test.cpp)
         target_link_libraries(${test_name}_test PRIVATE broker_service Threads::Threads)
         add_test(NAME ${test_name}_test COMMAND ${test_name}_test)
