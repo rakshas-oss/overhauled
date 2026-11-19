@@ -36,6 +36,33 @@ class DatasetBrokerBenchmarkTests(unittest.TestCase):
         self.assertEqual(struct.unpack_from("!Q", frame, 12)[0], 99)
         self.assertEqual(bench.HEADER.size, 32)
 
+    def test_worker_directive_fields_are_optional_and_typed(self):
+        record = (17, 123456789, [1.25, -2.5])
+        encoded = bench.request_frame(
+            99, "fixture", record, "cpu",
+            worker_class="realtime-spatial",
+            spatial_affinity_key=0x1122334455667788,
+            preferred_numa_node=3,
+            deadline_ms=1000,
+        )
+        frame = encoded[4:]
+        fields = {}
+        offset = bench.HEADER.size
+        while offset < len(frame):
+            field_id, wire_type, flags, length = struct.unpack_from("!HBBI", frame, offset)
+            offset += 8
+            fields[field_id] = (wire_type, flags, frame[offset:offset + length])
+            offset += length
+        self.assertEqual(fields[11][0], 8)
+        self.assertEqual(fields[11][2], b"realtime-spatial")
+        self.assertEqual(fields[12][0], 4)
+        self.assertEqual(struct.unpack("!Q", fields[12][2])[0], 0x1122334455667788)
+        self.assertEqual(fields[13][0], 3)
+        self.assertEqual(struct.unpack("!I", fields[13][2])[0], 3)
+        self.assertGreater(struct.unpack("!Q", fields[9][2])[0], 0)
+        with self.assertRaises(ValueError):
+            bench.request_frame(99, "fixture", record, worker_class="realtime-spatial")
+
     def test_manifest_dataset_and_profile_drive_dry_run(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
@@ -98,6 +125,11 @@ class DatasetBrokerBenchmarkTests(unittest.TestCase):
                             bench.tlv(5, 9, 0, struct.pack("!3d", 2.0, 20.0, 2.0)),
                             bench.tlv(6, 8, 0, b""),
                             bench.tlv(7, 8, 0, b"cpu"),
+                            bench.tlv(8, 8, 0, b"throughput"),
+                            bench.tlv(9, 4, 0, struct.pack("!Q", 100)),
+                            bench.tlv(10, 4, 0, struct.pack("!Q", 200)),
+                            bench.tlv(11, 3, 0, struct.pack("!I", 512)),
+                            bench.tlv(12, 3, 0, struct.pack("!I", 0)),
                         ))
                         response = bench.HEADER.pack(
                             bench.MAGIC, 2, 0, 32, 4, 5, request_id, 2, 1, 0, len(payload)
@@ -123,6 +155,11 @@ class DatasetBrokerBenchmarkTests(unittest.TestCase):
         self.assertGreaterEqual(metrics["p95_request_ms"], 0.0)
         self.assertEqual(metrics["actual_backend_counts"], {"cpu": 2})
         self.assertEqual(metrics["fallback_requests"], 0)
+        self.assertEqual(metrics["worker_class"], "throughput")
+        self.assertEqual(metrics["worker_telemetry_requests"], 2)
+        self.assertEqual(metrics["mean_queue_wait_us"], 100)
+        self.assertEqual(metrics["mean_service_time_us"], 200)
+        self.assertEqual(metrics["worker_numa_nodes"], [0])
 
     def test_response_decoder_rejects_non_ok_status_and_bad_correlation(self):
         payload = b"".join((
