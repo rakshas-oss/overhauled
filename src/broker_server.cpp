@@ -511,6 +511,7 @@ private:
                                 response.error = "request deadline exceeded";
                             }
                             response.worker_class = context.worker_class;
+                            response.worker_telemetry_available = true;
                             response.queue_wait_us = context.queue_wait_us;
                             const auto service_us = std::chrono::duration_cast<std::chrono::microseconds>(
                                 service_ended - service_started).count();
