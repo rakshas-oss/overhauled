@@ -2,7 +2,41 @@
 
 Repository: rakshas-oss/overhauled
 
-## v1.1.4 (release candidate; tag pending)
+## v1.1.5 (release candidate; tag pending)
+Date: 2026-11-19
+
+### Highlights
+
+- **Dataset benchmark input hardening**: validates manifest root type, dataset
+  and profile object/ID shape, duplicate IDs, uint64 sequence/timestamp bounds,
+  sampling controls, dataset file containment and documented size ceilings.
+- **BRK2 response telemetry validation**: validates envelope/schema, request
+  and task correlation, status, backend identity and selected-GPU consistency.
+  Benchmark output reports actual backend counts, selected GPU IDs and CPU
+  fallback counts; requested preferences are not treated as execution proof.
+- **Cross-repository benchmark bridge**: documented YuKKi-OS browser spatial
+  WASM measurements as local Node execution plus an optional direct BRK2
+  inference leg using host-prepared numeric records. This is separate from
+  WSM1 guest task/lifecycle execution and does not send Wasm modules to broker.
+- **Architecture diagrams and ownership boundaries**: added full-colour SVG
+  and terminal diagrams clarifying the broker, host runtime, NUMA and
+  accelerator responsibility split.
+
+### Compatibility and release boundary
+
+- The work since v1.1.4 is benchmark/tooling, validation, tests and
+  documentation. It does not intentionally change broker runtime dispatch,
+  public C++ APIs, or BRK1/BRK2/WSM1 wire layouts.
+- CMake, Conan and the root vcpkg manifest are aligned to 1.1.5. The vcpkg
+  portfile checksum and Homebrew URL/SHA-256 must be refreshed from the exact
+  final release archive before registry submission.
+- v1.1.5 is a candidate only. Do not create its tag or describe package
+  registries as updated until the release commit and each registry submission
+  have been verified.
+
+---
+
+## v1.1.4 (published 2026-11-18)
 Date: 2026-11-18
 
 ### Highlights
