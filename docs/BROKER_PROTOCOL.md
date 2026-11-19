@@ -73,12 +73,8 @@ Response schema 2:
 | 4 latency_ms | U64 |
 | 5 result | bytes |
 | 6 error | UTF-8 |
-| 7 backend | UTF-8 (`cpu`, `gpu`, or `npu`) |
 
-The response header carries the original request_id. Field 7 is the
-authoritative backend identity; `selected_gpu` is non-negative for GPU
-execution and `-1` for CPU or NPU execution. Clients must not infer NPU
-execution from `selected_gpu == -1` alone. The server continues to
+The response header carries the original request_id. The server continues to
 support the existing BRK1/v1 request and response layout without translation;
 clients choose the protocol by sending the corresponding magic. BRK2 does
 not currently add a negotiation handshake, remote cancellation, compression,

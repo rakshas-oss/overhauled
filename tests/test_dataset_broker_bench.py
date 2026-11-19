@@ -90,9 +90,18 @@ class DatasetBrokerBenchmarkTests(unittest.TestCase):
                         size = struct.unpack("!I", recv_exact(connection, 4))[0]
                         frame = recv_exact(connection, size)
                         request_id = struct.unpack_from("!Q", frame, 12)[0]
-                        response = bytearray(32)
-                        response[:4] = bench.MAGIC
-                        struct.pack_into("!Q", response, 12, request_id)
+                        payload = b"".join((
+                            bench.tlv(1, 8, 0, b"dataset-benchmark"),
+                            bench.tlv(2, 1, 0, b"\\x00"),
+                            bench.tlv(3, 5, 0, struct.pack("!q", -1)),
+                            bench.tlv(4, 4, 0, struct.pack("!Q", 1)),
+                            bench.tlv(5, 9, 0, struct.pack("!d", 2.0)),
+                            bench.tlv(6, 8, 0, b""),
+                            bench.tlv(7, 8, 0, b"cpu"),
+                        ))
+                        response = bench.HEADER.pack(
+                            bench.MAGIC, 2, 0, 32, 4, 5, request_id, 2, 1, 0, len(payload)
+                        ) + payload
                         connection.sendall(struct.pack("!I", len(response)) + response)
             except Exception as error:  # surfaced in the test thread
                 errors.append(error)
@@ -112,6 +121,41 @@ class DatasetBrokerBenchmarkTests(unittest.TestCase):
         self.assertEqual(metrics["requests"], 2)
         self.assertGreater(metrics["requests_per_second"], 0.0)
         self.assertGreaterEqual(metrics["p95_request_ms"], 0.0)
+        self.assertEqual(metrics["actual_backend_counts"], {"cpu": 2})
+        self.assertEqual(metrics["fallback_requests"], 0)
+
+    def test_response_decoder_rejects_non_ok_status_and_bad_correlation(self):
+        payload = b"".join((
+            bench.tlv(1, 8, 0, b"dataset-benchmark"),
+            bench.tlv(2, 1, 0, b"\\x01"),
+            bench.tlv(3, 5, 0, struct.pack("!q", -1)),
+            bench.tlv(4, 4, 0, struct.pack("!Q", 1)),
+            bench.tlv(5, 9, 0, b""),
+            bench.tlv(6, 8, 0, b"rejected"),
+            bench.tlv(7, 8, 0, b"cpu"),
+        ))
+        frame = bench.HEADER.pack(bench.MAGIC, 2, 0, 32, 4, 5, 7, 2, 1, 0, len(payload)) + payload
+        with self.assertRaises(RuntimeError):
+            bench.decode_response(frame, 7, "dataset-benchmark", "cpu")
+        with self.assertRaises(ValueError):
+            bench.decode_response(frame, 8, "dataset-benchmark", "cpu")
+
+    def test_dataset_symlink_cannot_escape_manifest_directory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            outside = root.parent / (root.name + "-outside.jsonl")
+            outside.write_text('{"seq":1,"ts":1,"x":1.0}\\n', encoding="utf-8")
+            try:
+                (root / "escape.jsonl").symlink_to(outside)
+                spec = {
+                    "id": "escape", "source": "escape.jsonl",
+                    "sequence_field": "seq", "timestamp_ns_field": "ts",
+                    "feature_fields": ["x"],
+                }
+                with self.assertRaises(ValueError):
+                    bench.load_dataset(root, spec)
+            finally:
+                outside.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
