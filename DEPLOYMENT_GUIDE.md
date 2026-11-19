@@ -1,13 +1,13 @@
-# Overhauled GPU Runtime - Production Deployment Guide (v1.1.3)
+# Overhauled GPU Runtime - Production Deployment Guide (published v1.1.4 baseline)
 
-This guide is the canonical deployment and operations reference for Overhauled 1.1.3. It consolidates installation, configuration, deployment strategies, tuning, and troubleshooting for production use.
+This guide retains the production deployment sequence for the published v1.1.4 baseline. The current v1.1.5 benchmark/validation candidate is not a new production runtime interface; qualify and deploy it only after its release checks, tag and archive are complete. For broker-specific configuration, also consult docs/SYSADMIN_HOWTO.md.
 
 Table of contents
 1. Architecture Overview
 2. Prerequisites
-3. Installation & Build (checkout v1.1.3)
+3. Installation & Build (checkout v1.1.4)
 4. Configuration (config.yaml example)
-5. Run & Verify (v1.1.3)
+5. Run & Verify (v1.1.4)
 6. Deployment Strategies (single server, multi-GPU, load-balanced, Kubernetes)
 7. Performance Tuning
 8. Monitoring & Observability
@@ -64,16 +64,16 @@ Python client dependencies (example):
 
 ---
 
-## 3. Installation & Build (checkout v1.1.3)
+## 3. Installation & Build (checkout v1.1.4)
 
-Clone and checkout the v1.1.3 release tag (project version 1.1.3) before building:
+Clone and checkout the v1.1.4 release tag (project version 1.1.4) before building:
 
 ```bash
 git clone https://github.com/rakshas-oss/overhauled.git
 cd overhauled
-# Checkout the release tag (v1.1.3)
+# Checkout the release tag (v1.1.4)
 git fetch --tags origin
-git checkout v1.1.3
+git checkout v1.1.4
 ```
 
 Install NVIDIA stack (example notes)
@@ -90,7 +90,7 @@ sudo sh cuda_12.0.0_525.60.13_linux.run
 Build from source (example):
 
 ```bash
-# from repository root (after checkout v1.1.3)
+# from repository root (after checkout v1.1.4)
 mkdir -p build && cd build
 cmake .. \
   -DCMAKE_BUILD_TYPE=Release \
@@ -167,20 +167,20 @@ Runtime parameters (CLI overrides):
 
 ---
 
-## 5. Run & Verify (v1.1.3)
+## 5. Run & Verify (v1.1.4)
 
 Start the server and verify the version:
 
 ```bash
 # Start server in background
 ./gpu_runtime_server --port 8080 &
-# Check version (should report v1.1.3)
+# Check version (should report v1.1.4)
 ./gpu_runtime_server --version
 # Example test client
 python3 examples/test_tensor_client.py 127.0.0.1 8080
 ```
 
-Expected: `Overhauled GPU Runtime Server v1.1.3` printed by `--version`.
+Expected: `Overhauled GPU Runtime Server v1.1.4` printed by `--version`.
 
 ---
 
@@ -216,7 +216,7 @@ backend servers
 
 D. Kubernetes (hyperscale)
 - Use nodeSelectors and device plugin to request GPUs (nvidia.com/gpu)
-- Example deployment (using the 1.1.3 image):
+- Example deployment (using the 1.1.4 image):
 
 ```yaml
 apiVersion: apps/v1
@@ -237,7 +237,7 @@ spec:
         gpu: "nvidia"
       containers:
       - name: gpu-runtime-server
-        image: rakshas-oss/overhauled:v1.1.3
+        image: rakshas-oss/overhauled:v1.1.4
         args: ["--port", "8080"]
         ports:
         - containerPort: 8080
@@ -333,8 +333,8 @@ CUDA Out of Memory
 High latency variance / p99 spikes
 - Diagnosis: check `nvidia-smi -q` for throttling, monitor queue depths, and watch for host-staging in logs
 - Fixes:
-  - Increase batch size slightly or enable NVLink-aware placement (enabled by default in 1.1.3)
-  - Ensure `GpuTopology::enable_peer_access()` is called during startup (server does this in 1.1.3)
+  - Increase batch size slightly or enable NVLink-aware placement (enabled by default in 1.1.4)
+  - Ensure `GpuTopology::enable_peer_access()` is called during startup (server does this in 1.1.4)
 
 Low GPU utilization
 - Fixes:
@@ -358,7 +358,7 @@ Scaling is near-linear; measure at your payload and concurrency.
 Recommended tests before scaling production:
 - Run multi-client benchmarks from docs/BENCHMARK_RESULTS.md
 - Validate topology with `nvidia-smi topo -m`
-- Verify `./gpu_runtime_server --version` reports v1.1.3 in the deployed image
+- Verify `./gpu_runtime_server --version` reports v1.1.4 in the deployed image
 
 ---
 
