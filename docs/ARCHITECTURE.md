@@ -2,7 +2,7 @@
 
 ## 1. System boundary
 
-Overhauled is the execution and placement plane. It accepts bounded binary broker frames, validates and dispatches requests, selects an execution backend, and returns a structured result. It is designed to sit behind a separately authenticated control plane such as YuKKi-OS; it does not embed YuKKi-OS.
+Overhauled is the execution and placement plane. It accepts bounded binary broker frames, validates and dispatches requests, selects an execution backend, and returns a structured result. It is designed to sit behind a separately authenticated control plane such as YuKKi-OS; it does not embed YuKKi-OS. NUMA topology discovery, NUMA-local memory policy, and NUMA worker scheduling are deliberately outside this repository; YuKKi-OS owns system topology/locality, while Overhauled's topology and placement code concern accelerator devices and GPU interconnects.
 
 ```text
 YuKKi-OS / external client

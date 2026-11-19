@@ -104,12 +104,20 @@ predict execution cost.
 
 ## Response Fields
 
+This list describes the BRK1/v1 response members. BRK1 does not carry a
+backend-identity field; `selected_gpu = -1` means no GPU index is supplied and
+does not distinguish CPU from NPU execution.
+
 - `task_id` (string)
 - `status` (`ok`/`rejected`/`error`/`timeout`)
-- `selected_gpu` (`int32`, `-1` in CPU fallback mode)
+- `selected_gpu` (`int32`; `-1` means no GPU index is supplied)
 - `latency_ms` (`uint64`)
 - `result` (binary)
 - `error` (string)
+
+For BRK2/v2, response field 7 (`backend`) is authoritative and reports
+`cpu`, `gpu`, or `npu`; pair it with `selected_gpu` when interpreting placement.
+Do not describe BRK1 responses as carrying this field.
 
 ## Validation and Safety
 

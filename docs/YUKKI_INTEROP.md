@@ -38,6 +38,32 @@ Optionally pin the DRM node with `--ethosu-device /dev/dri/renderD128`. The bund
 
 Compilation and CPU simulator tests do not prove physical execution. Hardware qualification requires a kernel exposing the mainline Ethos-U DRM UAPI, a bundle compatible with the target board, correct input/output quantization, and a successful inference on that board. YuKKi-OS's `src/drivers/ethosu85_async.rs` is an orphaned placeholder, not a DRM driver.
 
+## Browser-WASM benchmark path (separate from WSM1)
+
+YuKKi-OS also provides an optional standalone benchmark client that runs the
+compiled spatial module locally in Node's WebAssembly runtime and sends
+host-prepared multivariate numeric records to this broker as ordinary BRK2
+inference requests. This is separate from the production YuKKi GPU adapter
+described above: it does not require YUKKI_GPU_ADAPTER_ENABLED, does not wrap
+the requests in WSM1, and does not send Wasm bytecode to Overhauled.
+
+After building the browser module and starting a CPU-only broker from this
+repository on a trusted local endpoint, run from the YuKKi-OS repository root:
+
+~~~sh
+node browser-wasm/bench/run.mjs --quick --broker-host 127.0.0.1 --broker-port 9090 --broker-device cpu --output browser-wasm-brk2.json
+~~~
+
+The report checks BRK2 request/task correlation, status, actual backend,
+selected-GPU consistency, result bounds, and deterministic CPU output. It
+reports backend counts, selected GPU IDs, fallback requests, and request
+latency. With no broker host configured, this is a local WASM benchmark only.
+The live path is a broker round-trip qualification, not a browser-rendering,
+WSM1 guest-compilation, streaming, NUMA-scheduling, or physical accelerator
+test. Keep the unauthenticated broker listener on loopback or behind a
+separately secured trusted boundary.
+
+
 ## Validation and security boundary
 
 Both language implementations run the shared BRK conformance corpus; YuKKi-OS's live interoperability workflow exercises a real CPU-only C++ broker over TCP. Such tests establish protocol and software behavior, not physical NPU qualification.
