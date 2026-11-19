@@ -189,13 +189,19 @@ public:
 
         const std::size_t hw = std::max<std::size_t>(1, std::thread::hardware_concurrency());
         const std::size_t automatic_total = std::min<std::size_t>(256, std::max<std::size_t>(5, hw * 2));
-        const std::size_t reserved =
-            config_.control_worker_threads + config_.realtime_spatial_worker_threads +
-            config_.exact_cpu_worker_threads + config_.inference_worker_threads;
-        if (config_.control_worker_threads == 0 || config_.realtime_spatial_worker_threads == 0 ||
-            config_.exact_cpu_worker_threads == 0 || config_.inference_worker_threads == 0 ||
-            reserved >= 256) {
-            throw std::invalid_argument("control, realtime, exact CPU and inference pools need at least one worker");
+        const std::array<std::size_t, 4> reserved_counts{{
+            config_.control_worker_threads,
+            config_.realtime_spatial_worker_threads,
+            config_.exact_cpu_worker_threads,
+            config_.inference_worker_threads
+        }};
+        std::size_t reserved = 0;
+        for (const std::size_t count : reserved_counts) {
+            if (count == 0 || count > 255 - reserved) {
+                throw std::invalid_argument(
+                    "control, realtime, exact CPU and inference pools each need at least one worker; total must be below 256");
+            }
+            reserved += count;
         }
         std::size_t throughput_workers = config_.throughput_worker_threads;
         if (throughput_workers == 0) {
@@ -204,7 +210,7 @@ public:
                 : std::max<std::size_t>(5, config_.worker_threads);
             throughput_workers = total_budget > reserved ? total_budget - reserved : 1;
         }
-        if (throughput_workers == 0 || reserved + throughput_workers > 256) {
+        if (throughput_workers == 0 || throughput_workers > 256 - reserved) {
             throw std::invalid_argument("class worker total must be in 1..256");
         }
         WorkerPoolConfig pool_config;
