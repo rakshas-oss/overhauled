@@ -16,6 +16,7 @@
 #include <cstring>
 #include <deque>
 #include <functional>
+#include <limits>
 #include <algorithm>
 #include <mutex>
 #include <stdexcept>
@@ -170,34 +171,42 @@ public:
             throw std::invalid_argument("socket_timeout_ms must be greater than zero");
         }
         const std::size_t hw = std::max<std::size_t>(1, std::thread::hardware_concurrency());
-        const std::size_t pool_size = config_.worker_threads == 0
-            ? std::min<std::size_t>(256, std::max<std::size_t>(4, hw * 2))
-            : config_.worker_threads;
-        if (pool_size == 0 || pool_size > 256) {
-            throw std::invalid_argument("worker_threads must be between 1 and 256 (or zero for auto)");
+        const std::size_t automatic_total = std::min<std::size_t>(256, std::max<std::size_t>(5, hw * 2));
+        const std::size_t reserved =
+            config_.control_worker_threads + config_.realtime_spatial_worker_threads +
+            config_.exact_cpu_worker_threads + config_.inference_worker_threads;
+        if (config_.control_worker_threads == 0 || config_.realtime_spatial_worker_threads == 0 ||
+            config_.exact_cpu_worker_threads == 0 || config_.inference_worker_threads == 0 ||
+            reserved >= 256) {
+            throw std::invalid_argument("control, realtime, exact CPU and inference pools need at least one worker");
+        }
+        std::size_t throughput_workers = config_.throughput_worker_threads;
+        if (throughput_workers == 0) {
+            const std::size_t total_budget = config_.worker_threads == 0
+                ? automatic_total
+                : std::max<std::size_t>(5, config_.worker_threads);
+            throughput_workers = total_budget > reserved ? total_budget - reserved : 1;
+        }
+        if (throughput_workers == 0 || reserved + throughput_workers > 256) {
+            throw std::invalid_argument("class worker total must be in 1..256");
         }
         const std::size_t requested_queue = config_.max_clients >
             (65536 / config_.max_inflight_per_client)
             ? 65536
             : config_.max_clients * config_.max_inflight_per_client;
-        max_queued_tasks_ = std::max<std::size_t>(64, std::min<std::size_t>(65536, requested_queue));
-
-        try {
-            workers_.reserve(pool_size);
-            for (std::size_t i = 0; i < pool_size; ++i) {
-                workers_.emplace_back([this] { worker_loop(); });
-            }
-        } catch (...) {
-            {
-                std::lock_guard<std::mutex> lock(queue_mutex_);
-                workers_stopping_ = true;
-            }
-            queue_cv_.notify_all();
-            for (auto& worker : workers_) {
-                if (worker.joinable()) worker.join();
-            }
-            throw;
-        }
+        const std::size_t queue_capacity = config_.max_queued_tasks_per_class == 0
+            ? std::max<std::size_t>(64, std::min<std::size_t>(65536, requested_queue))
+            : config_.max_queued_tasks_per_class;
+        WorkerPoolConfig pool_config;
+        pool_config.workers = {{
+            config_.control_worker_threads,
+            config_.realtime_spatial_worker_threads,
+            throughput_workers,
+            config_.exact_cpu_worker_threads,
+            config_.inference_worker_threads
+        }};
+        pool_config.max_queue_per_class = queue_capacity;
+        worker_pool_ = std::make_unique<ClassWorkerPool>(pool_config);
     }
 
     ~Impl() {
@@ -235,11 +244,7 @@ public:
                 shutdown_socket(socket);
             }
         }
-        {
-            std::lock_guard<std::mutex> lock(queue_mutex_);
-            workers_stopping_ = true;
-        }
-        queue_cv_.notify_all();
+        if (worker_pool_) worker_pool_->stop();
     }
 
     bool is_running() const noexcept {
@@ -271,30 +276,12 @@ private:
         ~InflightCompletion() { if (state) state->finish(); }
     };
 
-    void worker_loop() noexcept {
-        for (;;) {
-            std::function<void()> task;
-            {
-                std::unique_lock<std::mutex> lock(queue_mutex_);
-                queue_cv_.wait(lock, [this] { return workers_stopping_ || !task_queue_.empty(); });
-                if (workers_stopping_ && task_queue_.empty()) return;
-                task = std::move(task_queue_.front());
-                task_queue_.pop_front();
-            }
-            try { if (task) task(); } catch (...) {
-                // A task must never terminate the worker pool.
-            }
-        }
-    }
-
-    bool enqueue_task(std::function<void()> task) {
-        {
-            std::lock_guard<std::mutex> lock(queue_mutex_);
-            if (workers_stopping_ || task_queue_.size() >= max_queued_tasks_) return false;
-            task_queue_.push_back(std::move(task));
-        }
-        queue_cv_.notify_one();
-        return true;
+    bool enqueue_task(WorkerClass worker_class,
+                      std::optional<uint64_t> spatial_affinity_key,
+                      std::optional<uint32_t> preferred_numa_node,
+                      ClassWorkerPool::Task task) {
+        return worker_pool_ && worker_pool_->enqueue(worker_class, spatial_affinity_key,
+                                                      preferred_numa_node, std::move(task));
     }
 
     void open_listener() {
@@ -475,13 +462,63 @@ private:
                 }
 
                 const std::string rejected_task_id = request.task_id;
+                const auto admitted_at = std::chrono::steady_clock::now();
+                auto deadline = admitted_at + std::chrono::milliseconds(request.timeout_ms);
+                if (request.deadline_unix_ns) {
+                    const auto max_ns = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+                    if (*request.deadline_unix_ns <= max_ns) {
+                        const auto wall_deadline = std::chrono::system_clock::time_point(
+                            std::chrono::nanoseconds(static_cast<int64_t>(*request.deadline_unix_ns)));
+                        const auto remaining = wall_deadline - std::chrono::system_clock::now();
+                        const auto translated = remaining <= decltype(remaining)::zero()
+                            ? admitted_at
+                            : admitted_at + std::chrono::duration_cast<std::chrono::steady_clock::duration>(remaining);
+                        deadline = std::min(deadline, translated);
+                    } else {
+                        send_error(rejected_task_id, "BRK2 absolute deadline is out of range", use_brk2, request_id);
+                        continue;
+                    }
+                }
+                const WorkerClass worker_class = request.worker_class;
+                const auto affinity_key = request.spatial_affinity_key;
+                const auto preferred_node = request.preferred_numa_node;
                 auto completion = std::make_shared<InflightCompletion>();
                 completion->state = inflight;
                 const bool queued = enqueue_task(
+                    worker_class, affinity_key, preferred_node,
                     [this, request = std::move(request), write_response, completion,
-                     use_brk2, request_id]() mutable {
+                     use_brk2, request_id, admitted_at, deadline]
+                    (const WorkerExecutionContext& context) mutable {
                         try {
-                            BrokerResponse response = service_.handle_request(request);
+                            const auto service_started = std::chrono::steady_clock::now();
+                            BrokerResponse response;
+                            if (service_started >= deadline) {
+                                response.task_id = request.task_id;
+                                response.status = TaskStatus::Timeout;
+                                response.error = "request deadline expired in worker queue";
+                            } else {
+                                const auto remaining = std::chrono::ceil<std::chrono::milliseconds>(
+                                    deadline - service_started).count();
+                                request.timeout_ms = static_cast<uint32_t>(std::max<int64_t>(
+                                    1, std::min<int64_t>(request.timeout_ms, remaining)));
+                                response = service_.handle_request(request);
+                            }
+                            const auto service_ended = std::chrono::steady_clock::now();
+                            if (service_ended >= deadline) {
+                                response.status = TaskStatus::Timeout;
+                                response.result.clear();
+                                response.error = "request deadline exceeded";
+                            }
+                            response.worker_class = context.worker_class;
+                            response.queue_wait_us = context.queue_wait_us;
+                            const auto service_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                                service_ended - service_started).count();
+                            response.service_time_us = service_us > 0 ? static_cast<uint64_t>(service_us) : 0;
+                            response.worker_id = context.worker_id;
+                            response.worker_numa_node = context.numa_node;
+                            response.latency_ms = static_cast<uint64_t>(
+                                std::chrono::duration_cast<std::chrono::milliseconds>(
+                                    service_ended - admitted_at).count());
                             (void)write_response(response, use_brk2, request_id);
                         } catch (...) {
                             // Completion guard releases the per-session slot on every exit.
@@ -530,27 +567,14 @@ private:
         close_socket(listener_socket_);
         listener_socket_ = kInvalidSocket;
         reap_finished_sessions(true);
-        {
-            std::lock_guard<std::mutex> lock(queue_mutex_);
-            workers_stopping_ = true;
-        }
-        queue_cv_.notify_all();
-        for (auto& worker : workers_) {
-            if (worker.joinable()) worker.join();
-        }
-        workers_.clear();
+        if (worker_pool_) worker_pool_->stop();
     }
 
     BrokerServerConfig config_;
     BrokerService service_;
     std::atomic<bool> running_{false};
     SocketHandle listener_socket_ = kInvalidSocket;
-    std::size_t max_queued_tasks_ = 4096;
-    std::mutex queue_mutex_;
-    std::condition_variable queue_cv_;
-    std::deque<std::function<void()>> task_queue_;
-    bool workers_stopping_ = false;
-    std::vector<std::thread> workers_;
+    std::unique_ptr<ClassWorkerPool> worker_pool_;
     std::vector<SessionState> session_threads_;
     std::unordered_set<SocketHandle> client_sockets_;
     mutable std::mutex client_mutex_;
