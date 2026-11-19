@@ -65,6 +65,7 @@ struct BrokerRequest {
     // new servers map "npu" to an inference profile (see BrokerService).
     std::string device_preference;
     WorkerClass worker_class = WorkerClass::Throughput;
+    bool worker_class_explicit = false;
     std::optional<uint64_t> spatial_affinity_key;
     std::optional<uint32_t> preferred_numa_node;
     // BRK2 field 9 is an absolute Unix timestamp in nanoseconds.
