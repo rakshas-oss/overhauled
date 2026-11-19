@@ -1,10 +1,12 @@
-# Overhauled v1.1.4
+# Overhauled v1.1.4 (release candidate)
 
 > **Release candidate v1.1.4:** documentation and release-metadata alignment only; BRK1/BRK2 wire contracts and broker runtime behavior are unchanged. Do not treat this candidate as published until the release PR is merged and the tag is created.
 
 > **Route workloads by topology, not guesswork.**
 >
 > Turn GPU interconnect awareness into higher throughput, better tail latency, and more effective use of accelerator infrastructure.
+
+> **Release status:** v1.1.4 is a documentation and release-metadata candidate. Its PR must pass review and CI before merge; the version tag, release archive, and external package-manager updates have not been published.
 
 Overhauled is a C++17 placement and execution library with an interoperable broker service. It provides topology-aware GPU scheduling and broker dispatch for CPU, GPU, and optional NPU execution.
 
@@ -22,6 +24,7 @@ Overhauled is a C++17 placement and execution library with an interoperable brok
 - A shared Rust/C++ protocol conformance corpus and CPU-only test suite.
 - Opt-in mainline Linux DRM Ethos-U85 executor, with a documented Vela-generated `YU85BND1` bundle format.
 - Optional CUDA/TensorRT GPU runtime features; deterministic CPU-only broker operation remains available.
+- Bounded broker workers, per-client in-flight limits, queue backpressure, frame deadlines, and resource ceilings.
 
 ## Throughput and energy-efficiency model
 
@@ -37,9 +40,31 @@ For a deployment, estimate annual energy cost as:
 
 Compare both schedulers on the same hardware and workload while recording wall power and completed work. See [docs/BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) for the benchmark context.
 
-## Control-plane interoperability
+## Backend selection and operational boundaries
 
-YuKKi-OS remains the control plane; Overhauled owns broker execution and accelerator placement. YuKKi-OS uses the BRK1 or BRK2 binary broker envelope for the Overhauled endpoint. Its separate generic broker JSON transport is not interchangeable with BRK1/BRK2.
+The broker selects a backend before GPU placement. Forced CPU and unverified
+exact-precision, verification-sensitive, or cryptographic profiles remain on
+CPU. NPU execution requires an inference profile, the service-side enable gate,
+and an available concrete executor. `--npu-simulated` is CPU emulation for
+conformance only; physical Ethos-U execution is an opt-in Linux DRM path with
+a compatible Vela `YU85BND1` bundle. A BRK2 device preference requests a
+backend; the response is the authoritative report of what actually ran.
+
+The broker's wire preference is not a substitute for a task's real semantics.
+CPU retry after accelerator failure is only safe for operations that are
+idempotent and explicitly marked fallback-safe. Review
+[Architecture](docs/ARCHITECTURE.md) before changing dispatch policy.
+
+## Control-plane and WASM boundary
+
+YuKKi-OS remains the control plane and Wasmtime guest host; Overhauled owns
+broker execution, protocol dispatch and accelerator placement. The repositories
+communicate through BRK1/BRK2 and the documented WSM1 lifecycle/task envelope.
+Overhauled does not validate, compile, link, compose or instantiate guest Wasm
+modules. Its Prepare/Drain/Release operations track broker-side version and
+in-flight task state. YuKKi-OS performs guest compilation and multi-module
+program composition. See [WASM interoperability](docs/WASM_INTEROP.md) and
+[YuKKi-OS composition guide](https://github.com/rakshas-oss/YuKKi-OS/blob/main/docs/WASM_PROGRAM_COMPOSITION.md).
 
 ## Quick start: CPU-only broker
 
@@ -97,8 +122,8 @@ Placement validates non-empty GPU topology, model registry access is synchronize
 - [YuKKi-OS interoperability](docs/YUKKI_INTEROP.md) · [WASM interoperability](docs/WASM_INTEROP.md)
 - [Ethos-U85 bundle and hardware boundary](docs/ETHOSU_U85_BUNDLE.md)
 - [Architecture and runtime decision model](docs/ARCHITECTURE.md) · [Heuristic and backend-selection verification](docs/SYSADMIN_HOWTO.md) · [Versioning](docs/VERSIONING.md)
-- [Architecture](docs/ARCHITECTURE.md) · [Library guide](docs/LIBRARY.md)
-- [System administration](docs/SYSADMIN_HOWTO.md) · [Operations runbook](OPERATIONS_RUNBOOK.md) · [Deployment guide](DEPLOYMENT_GUIDE.md)
+- [Architecture and decision model](docs/ARCHITECTURE.md) · [Library guide](docs/LIBRARY.md) · [Versioning](docs/VERSIONING.md)
+- [System administration step-by-step](docs/SYSADMIN_HOWTO.md) · [Operations runbook](OPERATIONS_RUNBOOK.md) · [Deployment guide](DEPLOYMENT_GUIDE.md)
 - [Publishing](docs/PUBLISHING.md) · [Release notes](docs/RELEASE_NOTES.md) · [Benchmarks](docs/BENCHMARK_RESULTS.md) · [Dataset-driven BRK2 workloads](docs/DATASET_BROKER_BENCHMARK.md)
 - [Security hardening notes](docs/SECURITY_HARDENING_NOTES.md)
 
