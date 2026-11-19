@@ -207,3 +207,7 @@ For the full operational sequence, use [System administration](SYSADMIN_HOWTO.md
 | Ethos-U DRM execution | `src/ethosu_u85_drm_executor.cpp`, `include/ethosu_u85_drm_executor.h` |
 | NXR1 and MED1 handlers | `src/geospatial_frame.cpp`, `src/media_stream.cpp` |
 | WASM sandbox | `src/wasm_sandbox.cpp`, `include/wasm_sandbox.h` |
+
+## YuKKi-directed worker fabric
+
+Overhauled now has class-isolated, dynamically growing FIFO worker queues for Control, RealtimeSpatial, Throughput, ExactCpu, and Inference work. YuKKi-OS supplies optional BRK2 worker intent; Overhauled performs broker admission, Linux NUMA CPU affinity, accelerator dispatch, and telemetry. The queues do not have fixed per-class entry limits. A process-wide outstanding-request and in-flight-memory budget protects the broker from memory exhaustion, and reservations remain held after client disconnect until task completion. FIFO ordering is per class; isolated class pools intentionally do not provide a single global order. See [YUKKI_WORKER_FABRIC.md](YUKKI_WORKER_FABRIC.md) for the BRK2 field contract, ownership rules, capacity controls, NUMA behavior, and operational validation.
