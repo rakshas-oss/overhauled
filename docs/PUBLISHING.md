@@ -205,17 +205,17 @@ sudo dnf install nvlink-placement-devel
 
 ## Candidate packaging boundary for v1.1.5
 
-The v1.1.5 candidate aligns CMake and Conan metadata. Do not copy the current
-vcpkg or Homebrew packaging files into a registry submission yet:
+The v1.1.5 candidate aligns CMake, Conan and the root vcpkg manifest. The
+registry port recipes are not yet release-ready:
 
-- The in-repository vcpkg manifest/portfile remains pinned to the last
-  published source until the v1.1.5 tag exists. After the release archive is
-  created, update the vcpkg manifest and portfile together and compute the
-  exact SHA512 for that archive.
-- The Homebrew formula is currently pinned to an older release. Update its
-  URL, version and SHA256 only from the final v1.1.5 archive.
-- External registries are not updated by merging this repository PR. Verify
-  each registry's submitted package independently.
+- The root vcpkg manifest is at candidate version 1.1.5, but the portfile's
+  source reference and SHA512 still need to be refreshed from the final
+  v1.1.5 tagged archive. Compute the exact SHA512 from that archive; do not
+  substitute a guessed or stale digest.
+- The checked-in Homebrew formula still references v1.1.1. Update its URL,
+  version and SHA256 only from the final v1.1.5 archive.
+- External registries are not updated by merging this repository PR. Submit
+  and verify each package separately.
 
 ## Release Checklist
 
