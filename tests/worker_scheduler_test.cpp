@@ -101,6 +101,50 @@ int main() {
         [](const WorkerExecutionContext&) {}));
     pool.join();
 
+
+    // Real-time spatial queue is earliest-deadline-first.
+    WorkerPoolConfig deadline_config;
+    deadline_config.workers = {{1, 1, 1, 1, 1}};
+    ClassWorkerPool deadline_pool(deadline_config);
+    std::promise<void> deadline_started;
+    auto deadline_started_future = deadline_started.get_future();
+    std::promise<void> deadline_release;
+    auto deadline_release_future = deadline_release.get_future().share();
+    assert(deadline_pool.enqueue(WorkerClass::RealtimeSpatial, 0x55, std::nullopt,
+        [&deadline_started, deadline_release_future](const WorkerExecutionContext&) {
+            deadline_started.set_value();
+            deadline_release_future.wait();
+        }));
+    assert(deadline_started_future.wait_for(std::chrono::seconds(2)) == std::future_status::ready);
+
+    std::mutex deadline_mutex;
+    std::vector<int> deadline_order;
+    std::promise<void> deadline_done;
+    auto deadline_done_future = deadline_done.get_future();
+    const auto deadline_now = std::chrono::steady_clock::now();
+    auto record_deadline = [&deadline_mutex, &deadline_order, &deadline_done](int value) {
+        std::lock_guard<std::mutex> lock(deadline_mutex);
+        deadline_order.push_back(value);
+        if (deadline_order.size() == 2) deadline_done.set_value();
+    };
+    assert(deadline_pool.enqueue_with_deadline(
+        WorkerClass::RealtimeSpatial, 0x55, std::nullopt,
+        deadline_now + std::chrono::seconds(60),
+        [record_deadline](const WorkerExecutionContext&) { record_deadline(1); }));
+    assert(deadline_pool.enqueue_with_deadline(
+        WorkerClass::RealtimeSpatial, 0x55, std::nullopt,
+        deadline_now + std::chrono::seconds(30),
+        [record_deadline](const WorkerExecutionContext&) { record_deadline(2); }));
+    deadline_release.set_value();
+    assert(deadline_done_future.wait_for(std::chrono::seconds(2)) == std::future_status::ready);
+    {
+        std::lock_guard<std::mutex> lock(deadline_mutex);
+        assert(deadline_order.size() == 2);
+        assert(deadline_order[0] == 2 && deadline_order[1] == 1);
+    }
+    deadline_pool.stop();
+    deadline_pool.join();
+
     std::cout << "worker_scheduler_test passed\n";
     return 0;
 }
