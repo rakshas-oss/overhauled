@@ -223,6 +223,7 @@ public:
             stopping_ = true;
         }
         cv_.notify_all();
+        join();
     }
 
     void join() noexcept {
