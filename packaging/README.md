@@ -47,8 +47,8 @@ brew install nvlink-placement
 
 | Manager | Repository state | Version / next step |
 |---------|-------------------|----------------------|
-| Conan | Recipe aligned; registry submission not verified | 1.1.3 |
-| vcpkg | Manifest aligned; registry submission not verified | 1.1.3 |
-| Homebrew | Formula checksum refresh required after tag creation | Pending |
-| apt (Ubuntu) | Not published | Pending |
-| dnf (Fedora) | Not published | Pending |
+| Conan | Recipe aligned to 1.1.5 candidate; registry submission not verified | 1.1.5 |
+| vcpkg | Manifest aligned to 1.1.5 candidate; portfile source hash pending final archive | 1.1.5 |
+| Homebrew | Checked-in formula remains v1.1.1; URL/SHA256 refresh required from final 1.1.5 archive | Pending |
+| apt (Ubuntu) | Not published; separate submission required | Pending |
+| dnf (Fedora) | Not published; separate submission required | Pending |
