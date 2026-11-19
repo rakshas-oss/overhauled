@@ -20,6 +20,23 @@ int main() {
     assert(!parse_worker_class("unknown", &parsed));
     assert(std::string(worker_class_name(WorkerClass::RealtimeSpatial)) == "realtime-spatial");
 
+    // Dynamically growing class queues have a process-wide request/byte
+    // budget. The budget remains held until completion, not just dequeue.
+    WorkerAdmissionBudget budget(2, 10);
+    assert(budget.try_acquire(6));
+    assert(budget.try_acquire(4));
+    assert(!budget.try_acquire(1)); // request-count and byte budget are full
+    assert(budget.outstanding_requests() == 2);
+    assert(budget.outstanding_payload_bytes() == 10);
+    budget.release(6);
+    assert(budget.outstanding_requests() == 1);
+    assert(budget.outstanding_payload_bytes() == 4);
+    assert(budget.try_acquire(6));
+    budget.release(4);
+    budget.release(6);
+    assert(budget.outstanding_requests() == 0);
+    assert(budget.outstanding_payload_bytes() == 0);
+
     WorkerPoolConfig config;
     config.workers = {{1, 1, 1, 1, 1}};
     ClassWorkerPool pool(config);
