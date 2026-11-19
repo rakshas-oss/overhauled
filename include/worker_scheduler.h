@@ -27,7 +27,6 @@ struct WorkerExecutionContext {
 struct WorkerPoolConfig {
     // One independently bounded FIFO and worker pool per workload class.
     std::array<std::size_t, kWorkerClassCount> workers{{1, 1, 4, 1, 1}};
-    std::size_t max_queue_per_class = 4096;
 };
 
 class ClassWorkerPool {
@@ -46,6 +45,7 @@ public:
                  std::optional<std::chrono::steady_clock::time_point> deadline,
                  Task task);
 
+    // Queues grow dynamically; the process memory limit is the ultimate bound.
     // Stops admission, drains already queued work, and joins all class pools.
     void stop() noexcept;
     void join() noexcept;
