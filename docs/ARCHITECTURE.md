@@ -31,6 +31,17 @@ BrokerServer (default TCP port 9090)
 
 The broker is not an authentication, encryption, HTTP, or general-purpose model-serving layer. Put it on a trusted private network or behind an authenticated transport boundary.
 
+### Full-colour system map
+
+![Overhauled broker and execution architecture diagram](diagrams/overhauled-architecture.svg)
+
+A terminal-renderable ANSI-colour version is available with
+`bash docs/diagrams/print-ansi.sh`. The illustration distinguishes the
+BRK1 compatibility response (no backend-identity field) from BRK2 response
+field 7 (authoritative backend identity). It also shows the NPU simulator as
+CPU emulation, not physical acceleration.
+
+
 ## 2. Transport and protocol boundary
 
 Every TCP message is framed by a four-byte unsigned big-endian body length. The body magic selects BRK1/v1 or BRK2/v2; the same listener accepts both. The client chooses the format by sending its magic. There is no JSON HELLO negotiation.

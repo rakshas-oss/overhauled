@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="850" viewBox="0 0 1400 850" role="img" aria-labelledby="title desc">
+  <title id="title">Overhauled broker and execution architecture</title>
+  <desc id="desc">An ANSI-inspired full-colour system diagram showing external clients passing bounded BRK1 or BRK2 TCP frames to the Overhauled broker, through request validation and kind-specific dispatch to CPU, optional GPU, or optional NPU executors, with backend telemetry returned to clients.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#091320"/><stop offset=".6" stop-color="#171126"/><stop offset="1" stop-color="#0a1c20"/></linearGradient>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#00d7ff"/><stop offset=".48" stop-color="#9d7bff"/><stop offset="1" stop-color="#ffaf52"/></linearGradient>
+    <linearGradient id="broker" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#56301b"/><stop offset="1" stop-color="#2e1d20"/></linearGradient>
+    <linearGradient id="gpu" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#174b65"/><stop offset="1" stop-color="#152b4c"/></linearGradient>
+    <linearGradient id="npu" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4a286d"/><stop offset="1" stop-color="#2d1c49"/></linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="#8bb4d0" stroke-opacity=".075"/></pattern>
+    <marker id="arrowA" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0L9 3L0 6Z" fill="#55ddeb"/></marker>
+    <marker id="arrowB" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0L9 3L0 6Z" fill="#ffbd7d"/></marker>
+    <style>
+      .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+      .title{font:700 34px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;fill:#f3f7ff;letter-spacing:1px}
+      .sub{font:15px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;fill:#a8bdd1}
+      .section{font:700 17px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;fill:#dceeff;letter-spacing:1px}
+      .cardhead{font:700 17px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;fill:#fff}
+      .body{font:14px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;fill:#d2dfed}
+      .small{font:12px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;fill:#a8bdd1}
+    </style>
+  </defs>
+  <rect width="1400" height="850" rx="24" fill="url(#bg)"/>
+  <rect width="1400" height="850" rx="24" fill="url(#grid)"/>
+  <rect x="22" y="22" width="1356" height="104" rx="16" fill="#101c31" stroke="url(#header)" stroke-width="2"/>
+  <rect x="22" y="22" width="8" height="104" rx="4" fill="url(#header)"/>
+  <text x="55" y="67" class="title">OVERHAULED // BROKER + EXECUTION PLANE</text>
+  <text x="56" y="96" class="sub">C++17 · bounded binary protocols · task classification · GPU topology placement · optional NPU execution</text>
+  <text x="1325" y="62" text-anchor="end" class="mono" font-size="13" fill="#6cecf1">ANSI-COLOUR SYSTEM MAP</text>
+  <text x="1325" y="88" text-anchor="end" class="mono" font-size="12" fill="#9fb3c8">RECEIVE → VALIDATE → DISPATCH → REPORT</text>
+
+  <rect x="36" y="154" width="266" height="500" rx="18" fill="#111d2e" stroke="#47708b" stroke-width="1.5"/>
+  <text x="60" y="190" class="section">CLIENTS / CONTROL PLANE</text>
+  <rect x="58" y="216" width="222" height="96" rx="12" fill="#123d4b" stroke="#55ddeb"/>
+  <text x="78" y="248" class="cardhead">YuKKi-OS adapter</text><text x="78" y="275" class="body">BRK1 / BRK2 + WSM1</text><text x="78" y="297" class="small">optional production adapter</text>
+  <rect x="58" y="328" width="222" height="96" rx="12" fill="#3f2a54" stroke="#b59aff"/>
+  <text x="78" y="360" class="cardhead">WASM benchmark</text><text x="78" y="387" class="body">direct BRK2 inference</text><text x="78" y="409" class="small">host-prepared numeric rows</text>
+  <rect x="58" y="440" width="222" height="96" rx="12" fill="#43351d" stroke="#ffd17c"/>
+  <text x="78" y="472" class="cardhead">Other clients</text><text x="78" y="499" class="body">native / service callers</text><text x="78" y="521" class="small">application-owned input policy</text>
+  <text x="60" y="576" class="small">Secure this raw TCP boundary</text><text x="60" y="598" class="small">with trusted network / proxy.</text>
+  <text x="60" y="628" class="small">No protocol TLS or auth built in.</text>
+
+  <rect x="328" y="154" width="704" height="500" rx="18" fill="#171b2d" stroke="#ffbd7d" stroke-width="2"/>
+  <text x="354" y="190" class="section">BROKER SERVER // TCP :9090</text>
+  <rect x="354" y="214" width="652" height="82" rx="12" fill="url(#broker)" stroke="#ffbd7d"/>
+  <text x="376" y="246" class="cardhead">Framing + protocol validation</text>
+  <text x="376" y="273" class="body">4-byte BE length · BRK1/v1 compatibility · BRK2/v2 TLV · bounded fields</text>
+  <path d="M302 267H346" stroke="#55ddeb" stroke-width="3" fill="none" marker-end="url(#arrowA)"/>
+
+  <rect x="354" y="316" width="312" height="112" rx="12" fill="#173c4c" stroke="#55ddeb"/>
+  <text x="376" y="348" class="cardhead">Kind-specific handlers</text>
+  <text x="376" y="375" class="body">NXR1 geospatial · MED1 media</text>
+  <text x="376" y="398" class="body">WSM1 lifecycle · inference</text>
+  <text x="376" y="418" class="small">WASM is lifecycle + dispatch, not runtime</text>
+  <rect x="682" y="316" width="324" height="112" rx="12" fill="#3d2e52" stroke="#b59aff"/>
+  <text x="704" y="348" class="cardhead">Task classification</text>
+  <text x="704" y="375" class="body">forced CPU · safety profiles</text>
+  <text x="704" y="398" class="body">data-parallel / inference eligibility</text>
+  <text x="704" y="418" class="small">fallback only when policy says safe</text>
+
+  <rect x="354" y="448" width="204" height="142" rx="12" fill="#153f34" stroke="#65e0ac"/>
+  <text x="374" y="480" class="cardhead">CPU baseline</text>
+  <text x="374" y="507" class="body">reference compute</text>
+  <text x="374" y="530" class="body">fallback target</text>
+  <text x="374" y="562" class="small">always available</text>
+  <rect x="578" y="448" width="204" height="142" rx="12" fill="url(#gpu)" stroke="#55c7ff"/>
+  <text x="598" y="480" class="cardhead">GPU tier</text>
+  <text x="598" y="507" class="body">CUDA topology</text>
+  <text x="598" y="530" class="body">GpuTopology + Placer</text>
+  <text x="598" y="562" class="small">optional / detected</text>
+  <rect x="802" y="448" width="204" height="142" rx="12" fill="url(#npu)" stroke="#c39cff"/>
+  <text x="822" y="480" class="cardhead">NPU tier</text>
+  <text x="822" y="507" class="body">simulator: CPU emu</text>
+  <text x="822" y="530" class="body">Ethos-U85: Linux DRM</text>
+  <text x="822" y="562" class="small">opt-in executor + bundle</text>
+  <path d="M510 428V440" stroke="#ffbd7d" stroke-width="2.5" fill="none" marker-end="url(#arrowB)"/>
+  <path d="M844 428V440" stroke="#b59aff" stroke-width="2.5" fill="none" marker-end="url(#arrowB)"/>
+
+  <rect x="1056" y="154" width="308" height="500" rx="18" fill="#111b2b" stroke="#6cecf1" stroke-width="1.5"/>
+  <text x="1080" y="190" class="section">OBSERVABLE RESULT</text>
+  <rect x="1080" y="216" width="260" height="105" rx="12" fill="#18384d" stroke="#55c7ff"/>
+  <text x="1100" y="249" class="cardhead">BRK2 response</text>
+  <text x="1100" y="277" class="body">field 7: actual backend</text>
+  <text x="1100" y="300" class="body">selected_gpu + status + result</text>
+  <rect x="1080" y="337" width="260" height="105" rx="12" fill="#46371e" stroke="#ffd17c"/>
+  <text x="1100" y="370" class="cardhead">BRK1 response</text>
+  <text x="1100" y="398" class="body">no backend identity field</text>
+  <text x="1100" y="421" class="small">−1 GPU index ≠ proof of CPU/NPU</text>
+  <rect x="1080" y="458" width="260" height="138" rx="12" fill="#2a2539" stroke="#b59aff"/>
+  <text x="1100" y="490" class="cardhead">Trust boundaries</text>
+  <text x="1100" y="518" class="body">no Wasm compilation / JIT</text>
+  <text x="1100" y="541" class="body">no NUMA scheduler / discovery</text>
+  <text x="1100" y="564" class="body">no protocol TLS / auth</text>
+  <text x="1100" y="619" class="small">Requests are not execution proof.</text>
+  <path d="M1032 270H1048" stroke="#55ddeb" stroke-width="3" fill="none" marker-end="url(#arrowA)"/>
+
+  <rect x="36" y="680" width="1328" height="132" rx="16" fill="#111b2b" stroke="#62758d" stroke-width="1.2"/>
+  <text x="60" y="714" class="section">RESPONSIBILITY MAP // NO DUPLICATED CONTROL PLANE</text>
+  <path d="M60 735H1340" stroke="#34455a"/>
+  <text x="60" y="765" class="body"><tspan fill="#6cecf1" font-weight="700">YUKKI-OS</tspan><tspan>  mesh · NUMA discovery/locality · Wasmtime · stream/data semantics</tspan></text>
+  <text x="720" y="765" class="body"><tspan fill="#ffbd7d" font-weight="700">OVERHAULED</tspan><tspan>  broker · GPU topology/placement · CPU/GPU/NPU execution</tspan></text>
+  <text x="60" y="790" class="small">Physical accelerator claims require target hardware qualification. Simulator/build success is not hardware proof. Throughput alone is not a power/OPEX measurement.</text>
+</svg>
