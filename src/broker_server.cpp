@@ -190,13 +190,6 @@ public:
         if (throughput_workers == 0 || reserved + throughput_workers > 256) {
             throw std::invalid_argument("class worker total must be in 1..256");
         }
-        const std::size_t requested_queue = config_.max_clients >
-            (65536 / config_.max_inflight_per_client)
-            ? 65536
-            : config_.max_clients * config_.max_inflight_per_client;
-        const std::size_t queue_capacity = config_.max_queued_tasks_per_class == 0
-            ? std::max<std::size_t>(64, std::min<std::size_t>(65536, requested_queue))
-            : config_.max_queued_tasks_per_class;
         WorkerPoolConfig pool_config;
         pool_config.workers = {{
             config_.control_worker_threads,
@@ -205,7 +198,6 @@ public:
             config_.exact_cpu_worker_threads,
             config_.inference_worker_threads
         }};
-        pool_config.max_queue_per_class = queue_capacity;
         worker_pool_ = std::make_unique<ClassWorkerPool>(pool_config);
     }
 
