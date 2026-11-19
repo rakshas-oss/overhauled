@@ -167,23 +167,49 @@ BrokerResponse BrokerService::handle_request(const BrokerRequest& request) {
     std::optional<TaskProfile> effective_profile = request.profile;
     bool fallback_safe = request.profile.has_value() && request.profile->fallback_safe;
     if (!effective_profile.has_value()) {
-        if (request.device_preference == "npu") {
-            TaskProfile p;
-            p.is_inference = true;
-            p.fallback_safe = true;
-            p.estimated_bytes = request.payload.size();
-            effective_profile = p;
-            fallback_safe = true;
-        } else if (request.device_preference == "gpu") {
-            TaskProfile p;
-            p.is_data_parallel = true;
-            p.estimated_bytes = request.payload.size();
-            p.fallback_safe = true;
-            effective_profile = p;
-            fallback_safe = true;
-        } else if (request.device_preference == "cpu") {
-            policy.force_cpu = true;
+        TaskProfile derived;
+        derived.estimated_bytes = request.payload.size();
+        switch (request.worker_class) {
+            case WorkerClass::Control:
+            case WorkerClass::ExactCpu:
+                policy.force_cpu = true;
+                break;
+            case WorkerClass::Inference:
+                derived.is_inference = true;
+                effective_profile = derived;
+                break;
+            case WorkerClass::Throughput:
+                derived.is_data_parallel = true;
+                effective_profile = derived;
+                break;
+            case WorkerClass::RealtimeSpatial:
+                // Spatial latency is expressed by its isolated worker pool and
+                // affinity hints. Backend dispatch remains CPU unless the
+                // directive also includes an explicit device preference.
+                break;
         }
+    }
+
+    // A wire-carried backend preference refines the YuKKi worker class; it
+    // does not replace the class or its queue/NUMA policy.
+    if (request.device_preference == "npu") {
+        TaskProfile p = effective_profile.value_or(TaskProfile{});
+        p.is_inference = true;
+        p.is_data_parallel = false;
+        p.estimated_bytes = request.payload.size();
+        p.fallback_safe = true;
+        effective_profile = p;
+        fallback_safe = true;
+    } else if (request.device_preference == "gpu") {
+        TaskProfile p = effective_profile.value_or(TaskProfile{});
+        p.is_data_parallel = true;
+        p.is_inference = false;
+        p.estimated_bytes = request.payload.size();
+        p.fallback_safe = true;
+        effective_profile = p;
+        fallback_safe = true;
+    } else if (request.device_preference == "cpu") {
+        policy.force_cpu = true;
     }
     const BackendKind backend = select_backend(policy, effective_profile);
 
