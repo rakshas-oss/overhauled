@@ -126,7 +126,7 @@ bool decode_brk2_request_body(const std::vector<uint8_t>& body,BrokerRequest* ou
     if(const auto* deadline=find(fs,9)){
         if(deadline->type!=WT_U64||deadline->size!=8)return fail("invalid BRK2 deadline");
         const uint64_t value=read64(deadline->data);
-        if(value==0)return fail("BRK2 deadline must be nonzero");
+        if(value==0||value>static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))return fail("BRK2 deadline is outside the supported Unix-nanosecond range");
         req.deadline_unix_ns=value;
     }
     if(const auto* pref=find(fs,10)){
