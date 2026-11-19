@@ -17,7 +17,7 @@ BRK2 envelope version or the BRK1/BRK2/WSM1 protocol identities.
 | Class | Intended work | Local execution policy |
 |---|---|---|
 | `control` | Protocol and lifecycle coordination | Dedicated worker pool; CPU execution |
-| `realtime-spatial` | Time-sensitive spatial streams | Dedicated pool; FIFO; logical affinity and optional NUMA hint |
+| `realtime-spatial` | Time-sensitive spatial streams | Dedicated pool; earliest-deadline-first when a deadline is supplied, otherwise FIFO; logical affinity and optional NUMA hint |
 | `throughput` | Dataset, batch, and parallel workloads | Dedicated pool; normal local backend policy |
 | `exact-cpu` | Exactness, verification, and crypto-sensitive workloads | Dedicated pool; CPU forced |
 | `inference` | Model inference | Dedicated pool; local NPU/GPU policy applies |
@@ -63,10 +63,12 @@ request fields. The WSM1 payload is unchanged.
 
 ## Queue ordering, capacity, and overload protection
 
-Each class has its own dynamically growing FIFO queue and reserved worker
-pool. The earliest accepted call within a class is dequeued first. FIFO order
-is established by the queue lock's admission order; there is no deadline-based
-reordering and no cross-class global FIFO ordering. Class isolation is
+Each class has its own dynamically growing queue and reserved worker pool.
+Control, Throughput, ExactCpu, and Inference preserve FIFO admission order.
+RealtimeSpatial is FIFO when no deadline is supplied; requests with an
+absolute deadline are inserted earliest-deadline-first, with equal deadlines
+preserving admission order and deadline-bearing tasks preceding tasks with no
+deadline. There is no cross-class global ordering. Class isolation is
 intentional: a throughput backlog cannot occupy the reserved control or
 real-time workers.
 
@@ -115,7 +117,8 @@ promise of hard real-time execution.
 
 The broker computes a monotonic deadline at admission from the smaller of the
 relative request timeout and the optional absolute BRK2 Unix-nanosecond
-deadline. If the task expires while queued, it returns Timeout without
+deadline. The RealtimeSpatial queue uses that converted monotonic deadline for
+within-class earliest-deadline-first admission. If the task expires while queued, it returns Timeout without
 starting execution. The remaining deadline budget is passed into the broker
 service, and a result completed after the deadline is not returned as success.
 
