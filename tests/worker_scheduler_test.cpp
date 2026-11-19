@@ -31,7 +31,7 @@ int main() {
     std::promise<WorkerExecutionContext> observed;
     auto observed_future = observed.get_future();
 
-    assert(pool.enqueue(WorkerClass::RealtimeSpatial, 0xabc, std::nullopt,
+    assert(pool.enqueue(WorkerClass::RealtimeSpatial, 0xabc, std::nullopt, std::nullopt,
         [&started, release_future](const WorkerExecutionContext&) mutable {
             started.set_value();
             release_future.wait();
@@ -43,12 +43,12 @@ int main() {
             observed.set_value(context);
         }));
     assert(pool.queued(WorkerClass::RealtimeSpatial) == 1);
-    assert(!pool.enqueue(WorkerClass::RealtimeSpatial, std::nullopt, std::nullopt,
+    assert(!pool.enqueue(WorkerClass::RealtimeSpatial, std::nullopt, std::nullopt, std::nullopt,
         [](const WorkerExecutionContext&) {}));
     // A different class has an independent queue and remains admissible.
     std::promise<void> control_done;
     auto control_future = control_done.get_future();
-    assert(pool.enqueue(WorkerClass::Control, std::nullopt, std::nullopt,
+    assert(pool.enqueue(WorkerClass::Control, std::nullopt, std::nullopt, std::nullopt,
         [&control_done](const WorkerExecutionContext& context) {
             assert(context.worker_class == WorkerClass::Control);
             control_done.set_value();
