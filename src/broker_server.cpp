@@ -170,8 +170,8 @@ public:
         if (config_.socket_timeout_ms <= 0) {
             throw std::invalid_argument("socket_timeout_ms must be greater than zero");
         }
-        if (config_.max_inflight_payload_bytes == 0) {
-            throw std::invalid_argument("max_inflight_payload_bytes must be greater than zero");
+        if (config_.max_inflight_memory_bytes == 0) {
+            throw std::invalid_argument("max_inflight_memory_bytes must be greater than zero");
         }
         constexpr std::size_t kMaxOutstandingRequests = 65536;
         const std::size_t derived_limit =
@@ -185,7 +185,7 @@ public:
             ? derived_limit
             : std::min(config_.max_outstanding_requests, derived_limit);
         admission_budget_ = std::make_shared<WorkerAdmissionBudget>(
-            request_limit, config_.max_inflight_payload_bytes);
+            request_limit, config_.max_inflight_memory_bytes);
 
         const std::size_t hw = std::max<std::size_t>(1, std::thread::hardware_concurrency());
         const std::size_t automatic_total = std::min<std::size_t>(256, std::max<std::size_t>(5, hw * 2));
@@ -480,7 +480,10 @@ private:
                     }
                 }
 
-                const std::size_t payload_bytes = request.payload.size();
+                const std::size_t payload_bytes = request.payload.size() +
+                    request.task_id.size() + request.source.size() +
+                    request.destination.size() + request.kind.size() +
+                    sizeof(BrokerRequest) + 256;
                 // Allocate the RAII guard before taking reservations so even an
                 // allocation failure cannot strand per-client/global capacity.
                 auto completion = std::make_shared<InflightCompletion>();
