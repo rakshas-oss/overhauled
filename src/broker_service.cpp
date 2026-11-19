@@ -154,7 +154,8 @@ BrokerResponse BrokerService::handle_request(const BrokerRequest& request) {
     policy.default_backend = config_.default_backend;
     policy.gpu_offload_threshold_bytes = config_.gpu_offload_threshold_bytes;
     policy.gpu_offload_threshold_flops = config_.gpu_offload_threshold_flops;
-    policy.force_cpu = config_.force_cpu_fallback;
+    policy.force_cpu = config_.force_cpu_fallback || request.worker_class == WorkerClass::ExactCpu ||
+                       request.worker_class == WorkerClass::Control;
     policy.gpu_available = use_gpu_placement_;
     policy.npu_available = config_.npu_enabled && config_.npu_executor != nullptr &&
                            config_.npu_executor->available();
