@@ -77,7 +77,7 @@ int main() {
     // A different class has an independent queue and remains admissible.
     std::promise<void> control_done;
     auto control_future = control_done.get_future();
-    assert(pool.enqueue(WorkerClass::Control, std::nullopt, std::nullopt, std::nullopt,
+    assert(pool.enqueue(WorkerClass::Control, std::nullopt,
         [&control_done](const WorkerExecutionContext& context) {
             assert(context.worker_class == WorkerClass::Control);
             control_done.set_value();
@@ -97,7 +97,7 @@ int main() {
     assert(telemetry.queue_wait_us <= 2'000'000);
 
     pool.stop();
-    assert(!pool.enqueue(WorkerClass::Control, std::nullopt, std::nullopt, std::nullopt,
+    assert(!pool.enqueue(WorkerClass::Control, std::nullopt,
         [](const WorkerExecutionContext&) {}));
     pool.join();
 
