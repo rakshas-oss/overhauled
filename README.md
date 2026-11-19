@@ -66,6 +66,29 @@ in-flight task state. YuKKi-OS performs guest compilation and multi-module
 program composition. See [WASM interoperability](docs/WASM_INTEROP.md) and
 [YuKKi-OS composition guide](https://github.com/rakshas-oss/YuKKi-OS/blob/main/docs/WASM_PROGRAM_COMPOSITION.md).
 
+## Cross-repository multivariate benchmark bridge
+
+There are two complementary benchmark entry points, with different scopes:
+
+- YuKKi-OS's browser runner executes its local spatial module in Node's
+  WebAssembly runtime. When broker mode is enabled, it additionally submits
+  host-prepared numeric fixture records directly to this broker over BRK2.
+- This repository's dataset broker runner reads the shared version-1 dataset
+  manifest and measures native broker ingress, dispatch, worker/batch
+  concurrency, response latency, and actual backend telemetry.
+
+Neither path sends executable Wasm modules to this broker. The browser
+benchmark leg is ordinary BRK2 inference traffic, not a WSM1 guest task or
+lifecycle operation. YuKKi-OS remains authoritative for manifest semantics,
+spatial processing, NUMA discovery/locality, and the eigensolver; Overhauled
+owns broker dispatch, GPU topology/placement, and CPU/GPU/NPU execution. This
+repository deliberately does not duplicate YuKKi-OS's NUMA subsystem.
+
+See [Dataset-driven BRK2 broker benchmarks](docs/DATASET_BROKER_BENCHMARK.md),
+[YuKKi-OS benchmarking guide](https://github.com/rakshas-oss/YuKKi-OS/blob/main/docs/BENCHMARKING.md),
+and [YuKKi-OS interoperability](docs/YUKKI_INTEROP.md).
+
+
 ## Quick start: CPU-only broker
 
 ```bash
