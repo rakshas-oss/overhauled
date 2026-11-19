@@ -116,6 +116,7 @@ int main(){
     unknown_class[directive_offset + 8] = 'x';
     assert(!decode_brk2_request_body(unknown_class, &request, &id, &error, field_limits));
 
+    response.worker_telemetry_available = true;
     response.worker_class = WorkerClass::RealtimeSpatial;
     response.queue_wait_us = 1234;
     response.service_time_us = 5678;
