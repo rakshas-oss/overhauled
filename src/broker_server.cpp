@@ -104,9 +104,11 @@ bool write_exact(SocketHandle socket, const void* buffer, std::size_t size) {
     return true;
 }
 
-void send_brk2_protocol_error(SocketHandle socket, uint64_t request_id,
-                                const std::string& error, const ProtocolLimits& limits) {
+void send_brk2_protocol_error(SocketHandle socket, const std::string& task_id,
+                                uint64_t request_id, const std::string& error,
+                                const ProtocolLimits& limits) {
     BrokerResponse response;
+    response.task_id = task_id;
     response.status = TaskStatus::Rejected;
     response.error = error;
     response.selected_gpu = -1;
@@ -417,7 +419,7 @@ private:
             std::lock_guard<std::mutex> lock(write_mutex);
             if (!writes_enabled->load(std::memory_order_acquire)) return;
             if (use_brk2) {
-                send_brk2_protocol_error(client_socket, request_id, error,
+                send_brk2_protocol_error(client_socket, task_id, request_id, error,
                                           config_.service_config.protocol_limits);
             } else {
                 send_protocol_error(client_socket, task_id, error,
