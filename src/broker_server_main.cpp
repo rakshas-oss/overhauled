@@ -30,13 +30,11 @@ void print_usage(const char* argv0) {
         << "       [--gpu-offload-threshold BYTES] [--npu-enabled] [--npu-simulated]\n"
         << "       [--workers TOTAL] [--workers-control N] [--workers-realtime N]\n"
         << "       [--workers-throughput N] [--workers-exact-cpu N] [--workers-inference N]\n"
-        << "       [--queue-per-class N]\n"
         << "       [--npu-ethosu-bundle FILE] [--ethosu-device /dev/dri/renderD*]\n"
         << "  --npu-ethosu-bundle: execute a Vela-compiled YU85BND1 model via mainline DRM.\n"
         << "  --workers TOTAL: legacy total worker budget; reserved classes are allocated first.\n"
         << "  --workers-throughput N: explicitly size the throughput worker pool.\n"
         << "  --workers-control/realtime/exact-cpu/inference N: class pool sizes.\n"
-        << "  --queue-per-class N: independent bounded queue capacity for each class.\n"
         << "  --npu-simulated: enable the CPU-emulated NPU executor for\n"
         << "    conformance/CI only. It is NOT hardware acceleration.\n"
         << "Starts broker interoperability server for YuKKi-OS task dispatch.\n";
@@ -95,10 +93,6 @@ int main(int argc, char** argv) {
         }
         if (arg == "--workers-inference" && i + 1 < argc) {
             config.inference_worker_threads = std::stoull(argv[++i]);
-            continue;
-        }
-        if (arg == "--queue-per-class" && i + 1 < argc) {
-            config.max_queued_tasks_per_class = std::stoull(argv[++i]);
             continue;
         }
         if (arg == "--gpu-offload-threshold" && i + 1 < argc) {
