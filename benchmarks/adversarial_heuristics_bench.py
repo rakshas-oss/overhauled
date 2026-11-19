@@ -142,7 +142,7 @@ def adv01(host, port, attackers, clients):
 
 def adv02(host, port):
     print("\n[ADV-02] asymmetric payload skew (latency observation only)")
-    heavy = struct.pack("!65536d", *([1.25] * 65536))  # 512 KiB
+    heavy = struct.pack("!60000d", *([1.25] * 60000))  # 480,000 bytes; leaves room for BRK2 TLV overhead
     light = struct.pack("!8d", *([2.5] * 8))           # 64 B
 
     def stream(name, payload, count):
@@ -163,7 +163,7 @@ def adv02(host, port):
         heavy_b = pool.submit(stream, "heavy-b", heavy, 20)
         light = pool.submit(stream, "light-probe", light, 40)
         a, b, l = heavy_a.result(), heavy_b.result(), light.result()
-    print(f"  512 KiB streams: {stats(a + b)}")
+    print(f"  480,000-byte streams: {stats(a + b)}")
     print(f"  64 B co-tenant: {stats(l)}")
     print("  Note: selected-GPU placement requires broker telemetry; latency is not proof.")
 
