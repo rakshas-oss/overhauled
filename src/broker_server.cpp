@@ -509,8 +509,6 @@ private:
                 const WorkerClass worker_class = request.worker_class;
                 const auto affinity_key = request.spatial_affinity_key;
                 const auto preferred_node = request.preferred_numa_node;
-                auto completion = std::make_shared<InflightCompletion>();
-                completion->state = inflight;
                 const bool queued = enqueue_task(
                     worker_class, affinity_key, preferred_node,
                     [this, request = std::move(request), write_response, completion,
