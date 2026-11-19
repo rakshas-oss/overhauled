@@ -31,14 +31,14 @@ int main() {
     std::promise<WorkerExecutionContext> observed;
     auto observed_future = observed.get_future();
 
-    assert(pool.enqueue(WorkerClass::RealtimeSpatial, 0xabc, std::nullopt, std::nullopt,
+    assert(pool.enqueue(WorkerClass::RealtimeSpatial, 0xabc, std::nullopt,
         [&started, release_future](const WorkerExecutionContext&) mutable {
             started.set_value();
             release_future.wait();
         }));
     assert(started_future.wait_for(std::chrono::seconds(2)) == std::future_status::ready);
 
-    assert(pool.enqueue(WorkerClass::RealtimeSpatial, 0xabc, std::nullopt, std::nullopt,
+    assert(pool.enqueue(WorkerClass::RealtimeSpatial, 0xabc, std::nullopt,
         [&observed](const WorkerExecutionContext& context) { observed.set_value(context); }));
     assert(pool.queued(WorkerClass::RealtimeSpatial) == 1);
     // Dynamic growth admits substantially more than a formerly configured
@@ -82,8 +82,6 @@ int main() {
     pool.stop();
     assert(!pool.enqueue(WorkerClass::Control, std::nullopt, std::nullopt, std::nullopt,
         [](const WorkerExecutionContext&) {}));
-    pool.join();
-
     pool.join();
 
     std::cout << "worker_scheduler_test passed\n";
