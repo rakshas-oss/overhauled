@@ -299,7 +299,7 @@ def decode_response(
     }
 
 
-def run_worker(host, port, dataset_id, records, batch_size, timeout, device, worker_class, spatial_affinity_key, preferred_numa_node, deadline_ms):
+def run_worker(host, port, dataset_id, records, batch_size, timeout, device, worker_class="throughput", spatial_affinity_key=None, preferred_numa_node=None, deadline_ms=None):
     latencies = []
     backend_counts = {}
     selected_gpus = set()
@@ -351,7 +351,7 @@ def run_worker(host, port, dataset_id, records, batch_size, timeout, device, wor
     )
 
 
-def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout, device, worker_class, spatial_affinity_key, preferred_numa_node, deadline_ms):
+def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout, device, worker_class="throughput", spatial_affinity_key=None, preferred_numa_node=None, deadline_ms=None):
     if not records:
         raise ValueError("candidate has no records")
     active_workers = min(workers, len(records))
@@ -422,7 +422,7 @@ def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout,
     }
 
 
-def run_profile(host, port, dataset_id, rows, profile, timeout, dry_run, device, worker_class, spatial_affinity_key, preferred_numa_node, deadline_ms):
+def run_profile(host, port, dataset_id, rows, profile, timeout, dry_run, device, worker_class="throughput", spatial_affinity_key=None, preferred_numa_node=None, deadline_ms=None):
     objective = profile.get("objective")
     if objective not in ("latency", "throughput"):
         return None
