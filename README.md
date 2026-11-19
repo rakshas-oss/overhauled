@@ -89,6 +89,24 @@ See [Dataset-driven BRK2 broker benchmarks](docs/DATASET_BROKER_BENCHMARK.md),
 and [YuKKi-OS interoperability](docs/YUKKI_INTEROP.md).
 
 
+## Architecture map — full-colour ANSI palette
+
+![Overhauled broker and execution architecture diagram](docs/diagrams/overhauled-architecture.svg)
+
+Overhauled is the broker and execution tier: it validates BRK1/BRK2 frames,
+classifies requests, dispatches to the CPU baseline or optional GPU/NPU
+executors, and reports the backend actually selected in BRK2 response field 7.
+It deliberately does not duplicate YuKKi-OS's NUMA discovery/locality services
+or act as a WebAssembly runtime. WSM1 operations track broker-side task and
+module-version lifecycle; Wasmtime compilation, guest isolation and execution
+remain on the YuKKi-OS host.
+
+The accompanying terminal sketch uses 24-bit ANSI colours:
+`bash docs/diagrams/print-ansi.sh`. GitHub does not render terminal escape
+sequences inside Markdown code blocks, so the README embeds the equivalent
+full-colour SVG.
+
+
 ## Quick start: CPU-only broker
 
 ```bash
