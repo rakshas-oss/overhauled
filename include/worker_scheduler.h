@@ -7,7 +7,6 @@
 
 #include <array>
 #include <cstddef>
-#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -26,7 +25,7 @@ struct WorkerExecutionContext {
 };
 
 struct WorkerPoolConfig {
-    // One independently bounded FIFO and worker pool per workload class.
+    // One independently growing FIFO and reserved worker pool per class.
     std::array<std::size_t, kWorkerClassCount> workers{{1, 1, 4, 1, 1}};
 };
 
@@ -67,7 +66,7 @@ public:
                  std::optional<uint32_t> preferred_numa_node,
                  Task task);
 
-    // Queues grow dynamically; the process memory limit is the ultimate bound.
+    // Queues grow dynamically; BrokerServer applies a process-wide admission budget.
     // Stops admission, drains already queued work, and joins all class pools.
     void stop() noexcept;
     void join() noexcept;
