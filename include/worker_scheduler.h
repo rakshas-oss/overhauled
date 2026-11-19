@@ -8,6 +8,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -65,6 +66,16 @@ public:
                  std::optional<uint64_t> spatial_affinity_key,
                  std::optional<uint32_t> preferred_numa_node,
                  Task task);
+
+    // Real-time spatial tasks may carry an absolute monotonic deadline.
+    // Tasks with deadlines are ordered earliest-deadline-first within their
+    // isolated class queue; other classes preserve FIFO admission order.
+    bool enqueue_with_deadline(
+        WorkerClass worker_class,
+        std::optional<uint64_t> spatial_affinity_key,
+        std::optional<uint32_t> preferred_numa_node,
+        std::optional<std::chrono::steady_clock::time_point> deadline,
+        Task task);
 
     // Queues grow dynamically; BrokerServer applies a process-wide admission budget.
     // Stops admission, drains already queued work, and joins all class pools.
