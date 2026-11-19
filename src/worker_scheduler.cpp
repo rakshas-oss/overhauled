@@ -204,14 +204,24 @@ public:
     bool enqueue(WorkerClass worker_class,
                  std::optional<uint64_t> affinity_key,
                  std::optional<uint32_t> preferred_node,
+                 std::optional<Clock::time_point> deadline,
                  Task task) {
         if (!task) return false;
         const std::size_t index = class_index(worker_class);
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (stopping_ || queues_[index].size() >= max_queue_per_class_) return false;
-            queues_[index].push_back(QueuedTask{
-                Clock::now(), affinity_key, preferred_node, std::move(task)});
+            QueuedTask queued{Clock::now(), affinity_key, preferred_node, deadline, std::move(task)};
+            if (worker_class == WorkerClass::RealtimeSpatial && deadline) {
+                auto& queue = queues_[index];
+                const auto position = std::find_if(queue.begin(), queue.end(),
+                    [&deadline](const QueuedTask& existing) {
+                        return !existing.deadline || *deadline < *existing.deadline;
+                    });
+                queue.insert(position, std::move(queued));
+            } else {
+                queues_[index].push_back(std::move(queued));
+            }
         }
         cv_.notify_all();
         return true;
@@ -248,6 +258,7 @@ private:
         Clock::time_point enqueued_at;
         std::optional<uint64_t> affinity_key;
         std::optional<uint32_t> preferred_node;
+        std::optional<Clock::time_point> deadline;
         Task task;
     };
 
@@ -299,9 +310,10 @@ ClassWorkerPool::~ClassWorkerPool() = default;
 bool ClassWorkerPool::enqueue(WorkerClass worker_class,
                               std::optional<uint64_t> spatial_affinity_key,
                               std::optional<uint32_t> preferred_numa_node,
+                              std::optional<std::chrono::steady_clock::time_point> deadline,
                               Task task) {
     return impl_ && impl_->enqueue(worker_class, spatial_affinity_key,
-                                   preferred_numa_node, std::move(task));
+                                   preferred_numa_node, deadline, std::move(task));
 }
 void ClassWorkerPool::stop() noexcept { if (impl_) impl_->stop(); }
 void ClassWorkerPool::join() noexcept { if (impl_) impl_->join(); }
