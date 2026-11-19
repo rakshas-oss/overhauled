@@ -65,7 +65,7 @@ int main() {
     std::promise<void> fifo_done;
     auto fifo_done_future = fifo_done.get_future();
     for (int value = 0; value < 128; ++value) {
-        assert(pool.enqueue(WorkerClass::RealtimeSpatial, 0xabc, std::nullopt, std::nullopt,
+        assert(pool.enqueue(WorkerClass::RealtimeSpatial, 0xabc, std::nullopt,
             [&fifo, &fifo_mutex, &fifo_done, value](const WorkerExecutionContext&) {
                 std::lock_guard<std::mutex> lock(fifo_mutex);
                 fifo.push_back(value);
