@@ -4,6 +4,7 @@
 #pragma once
 
 #include "broker_service.h"
+#include "worker_scheduler.h"
 
 #include <atomic>
 #include <memory>
@@ -15,7 +16,15 @@ struct BrokerServerConfig {
     int socket_timeout_ms = 5000;
     std::size_t max_clients = 128;
     std::size_t max_inflight_per_client = 32;
-    std::size_t worker_threads = 0; // 0 = auto-detect, bounded to 256 workers
+    // Legacy total worker budget. When set, dedicated class workers are
+    // reserved first and the remainder is assigned to throughput workers.
+    std::size_t worker_threads = 0; // 0 = auto-detect
+    std::size_t control_worker_threads = 1;
+    std::size_t realtime_spatial_worker_threads = 1;
+    std::size_t throughput_worker_threads = 0; // 0 = use legacy/automatic budget
+    std::size_t exact_cpu_worker_threads = 1;
+    std::size_t inference_worker_threads = 1;
+    std::size_t max_queued_tasks_per_class = 0; // 0 = derive from client limits
     bool verbose = false;
     BrokerServiceConfig service_config{};
 };
