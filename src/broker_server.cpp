@@ -293,10 +293,9 @@ private:
     bool enqueue_task(WorkerClass worker_class,
                       std::optional<uint64_t> spatial_affinity_key,
                       std::optional<uint32_t> preferred_numa_node,
-                      std::optional<std::chrono::steady_clock::time_point> deadline,
                       ClassWorkerPool::Task task) {
         return worker_pool_ && worker_pool_->enqueue(worker_class, spatial_affinity_key,
-                                                      preferred_numa_node, deadline, std::move(task));
+                                                      preferred_numa_node, std::move(task));
     }
 
     void open_listener() {
@@ -482,10 +481,16 @@ private:
                 }
 
                 const std::size_t payload_bytes = request.payload.size();
+                // Allocate the RAII guard before taking reservations so even an
+                // allocation failure cannot strand per-client/global capacity.
+                auto completion = std::make_shared<InflightCompletion>();
                 if (!admission_budget_ || !admission_budget_->try_acquire(payload_bytes)) {
                     send_error(rejected_task_id, "broker outstanding-work budget exhausted", use_brk2, request_id);
                     continue;
                 }
+                completion->budget = admission_budget_;
+                completion->payload_bytes = payload_bytes;
+
                 bool admitted = false;
                 {
                     std::lock_guard<std::mutex> lock(inflight->mutex);
@@ -495,23 +500,19 @@ private:
                     }
                 }
                 if (!admitted) {
-                    admission_budget_->release(payload_bytes);
+                    completion.reset();
                     send_error(rejected_task_id, "too many inflight requests for client",
                                use_brk2, request_id);
                     continue;
                 }
-
-                auto completion = std::make_shared<InflightCompletion>();
                 completion->state = inflight;
-                completion->budget = admission_budget_;
-                completion->payload_bytes = payload_bytes;
                 const WorkerClass worker_class = request.worker_class;
                 const auto affinity_key = request.spatial_affinity_key;
                 const auto preferred_node = request.preferred_numa_node;
                 auto completion = std::make_shared<InflightCompletion>();
                 completion->state = inflight;
                 const bool queued = enqueue_task(
-                    worker_class, affinity_key, preferred_node, deadline,
+                    worker_class, affinity_key, preferred_node,
                     [this, request = std::move(request), write_response, completion,
                      use_brk2, request_id, admitted_at, deadline]
                     (const WorkerExecutionContext& context) mutable {
