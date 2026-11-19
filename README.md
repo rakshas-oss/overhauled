@@ -1,18 +1,18 @@
-# Overhauled v1.1.4 (release candidate)
+# Overhauled v1.1.5 (release candidate)
 
-> **Release candidate v1.1.4:** documentation and release-metadata alignment only; BRK1/BRK2 wire contracts and broker runtime behavior are unchanged. Do not treat this candidate as published until the release PR is merged and the tag is created.
+> **Release candidate v1.1.5:** benchmark-input and BRK2 response-validation hardening, benchmark telemetry, interoperability guidance, and architecture diagrams. It does not change the BRK1/BRK2/WSM1 wire contracts or the broker's execution policy. The last published release is v1.1.4.
 
 > **Route workloads by topology, not guesswork.**
 >
 > Turn GPU interconnect awareness into higher throughput, better tail latency, and more effective use of accelerator infrastructure.
 
-> **Release status:** v1.1.4 is a documentation and release-metadata candidate. Its PR must pass review and CI before merge; the version tag, release archive, and external package-manager updates have not been published.
+> **Release status:** v1.1.5 is a patch-release candidate. CI, review, the v1.1.5 tag and release archive are pending; external package-manager submissions are separate.
 
 Overhauled is a C++17 placement and execution library with an interoperable broker service. It provides topology-aware GPU scheduling and broker dispatch for CPU, GPU, and optional NPU execution.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
-[![Release](https://img.shields.io/badge/Release-v1.1.4-blueviolet)](#)
+[![Release](https://img.shields.io/badge/Release-v1.1.5-blueviolet)](#)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2FBRK2-orange)](#)
 
 ## Capabilities
@@ -25,6 +25,28 @@ Overhauled is a C++17 placement and execution library with an interoperable brok
 - Opt-in mainline Linux DRM Ethos-U85 executor, with a documented Vela-generated `YU85BND1` bundle format.
 - Optional CUDA/TensorRT GPU runtime features; deterministic CPU-only broker operation remains available.
 - Bounded broker workers, per-client in-flight limits, queue backpressure, frame deadlines, and resource ceilings.
+
+## What's new in v1.1.5
+
+The v1.1.5 candidate strengthens the benchmark and interoperability
+qualification layer without changing the broker's public C++ API or wire
+contracts:
+
+- The dataset benchmark rejects malformed manifests, duplicate dataset or
+  profile IDs, out-of-range sequence/timestamp values, unsafe dataset paths,
+  and invalid sampling controls.
+- Every BRK2 benchmark response is decoded and validated for envelope/schema,
+  request/task correlation, status, actual backend identity, and
+  backend/selected-GPU consistency. Reports now distinguish backend counts,
+  selected GPU IDs and CPU fallbacks rather than treating a device preference
+  as proof of execution.
+- The browser-WASM benchmark bridge is documented as direct BRK2 inference
+  traffic using host-prepared numeric records, separate from WSM1 guest
+  lifecycle execution. Full-colour architecture diagrams make repository
+  responsibilities explicit.
+
+These are patch-level tooling, qualification and documentation improvements.
+The BRK1/BRK2/WSM1 wire contracts and broker dispatch policy remain unchanged.
 
 ## Throughput and energy-efficiency model
 
