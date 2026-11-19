@@ -299,9 +299,10 @@ private:
     bool enqueue_task(WorkerClass worker_class,
                       std::optional<uint64_t> spatial_affinity_key,
                       std::optional<uint32_t> preferred_numa_node,
+                      std::optional<std::chrono::steady_clock::time_point> deadline,
                       ClassWorkerPool::Task task) {
-        return worker_pool_ && worker_pool_->enqueue(worker_class, spatial_affinity_key,
-                                                      preferred_numa_node, std::move(task));
+        return worker_pool_ && worker_pool_->enqueue_with_deadline(
+            worker_class, spatial_affinity_key, preferred_numa_node, deadline, std::move(task));
     }
 
     void open_listener() {
@@ -519,7 +520,7 @@ private:
                 const auto affinity_key = request.spatial_affinity_key;
                 const auto preferred_node = request.preferred_numa_node;
                 const bool queued = enqueue_task(
-                    worker_class, affinity_key, preferred_node,
+                    worker_class, affinity_key, preferred_node, deadline,
                     [this, request = std::move(request), write_response, completion,
                      use_brk2, request_id, admitted_at, deadline]
                     (const WorkerExecutionContext& context) mutable {
