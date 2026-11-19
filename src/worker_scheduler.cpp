@@ -223,10 +223,10 @@ public:
             stopping_ = true;
         }
         cv_.notify_all();
-        join();
     }
 
     void join() noexcept {
+        std::lock_guard<std::mutex> join_lock(join_mutex_);
         for (auto& pool : threads_) {
             for (auto& worker : pool) if (worker.joinable()) worker.join();
             pool.clear();
@@ -283,6 +283,7 @@ private:
     }
 
     const std::size_t max_queue_per_class_;
+    std::mutex join_mutex_;
     mutable std::mutex mutex_;
     std::condition_variable cv_;
     std::array<std::deque<QueuedTask>, kWorkerClassCount> queues_;
@@ -303,6 +304,7 @@ bool ClassWorkerPool::enqueue(WorkerClass worker_class,
                                    preferred_numa_node, std::move(task));
 }
 void ClassWorkerPool::stop() noexcept { if (impl_) impl_->stop(); }
+void ClassWorkerPool::join() noexcept { if (impl_) impl_->join(); }
 std::size_t ClassWorkerPool::queued(WorkerClass worker_class) const noexcept {
     return impl_ ? impl_->queued(worker_class) : 0;
 }
