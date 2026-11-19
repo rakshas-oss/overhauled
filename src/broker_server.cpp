@@ -170,6 +170,23 @@ public:
         if (config_.socket_timeout_ms <= 0) {
             throw std::invalid_argument("socket_timeout_ms must be greater than zero");
         }
+        if (config_.max_inflight_payload_bytes == 0) {
+            throw std::invalid_argument("max_inflight_payload_bytes must be greater than zero");
+        }
+        constexpr std::size_t kMaxOutstandingRequests = 65536;
+        const std::size_t derived_limit =
+            config_.max_clients > kMaxOutstandingRequests / config_.max_inflight_per_client
+                ? kMaxOutstandingRequests
+                : config_.max_clients * config_.max_inflight_per_client;
+        if (config_.max_outstanding_requests > kMaxOutstandingRequests) {
+            throw std::invalid_argument("max_outstanding_requests must not exceed 65536");
+        }
+        const std::size_t request_limit = config_.max_outstanding_requests == 0
+            ? derived_limit
+            : std::min(config_.max_outstanding_requests, derived_limit);
+        admission_budget_ = std::make_shared<WorkerAdmissionBudget>(
+            request_limit, config_.max_inflight_payload_bytes);
+
         const std::size_t hw = std::max<std::size_t>(1, std::thread::hardware_concurrency());
         const std::size_t automatic_total = std::min<std::size_t>(256, std::max<std::size_t>(5, hw * 2));
         const std::size_t reserved =
@@ -265,7 +282,12 @@ private:
 
     struct InflightCompletion {
         std::shared_ptr<SessionInflight> state;
-        ~InflightCompletion() { if (state) state->finish(); }
+        std::shared_ptr<WorkerAdmissionBudget> budget;
+        std::size_t payload_bytes = 0;
+        ~InflightCompletion() {
+            if (state) state->finish();
+            if (budget) budget->release(payload_bytes);
+        }
     };
 
     bool enqueue_task(WorkerClass worker_class,
@@ -440,20 +462,6 @@ private:
                     continue;
                 }
 
-                bool admitted = false;
-                {
-                    std::lock_guard<std::mutex> lock(inflight->mutex);
-                    if (inflight->count < config_.max_inflight_per_client) {
-                        ++inflight->count;
-                        admitted = true;
-                    }
-                }
-                if (!admitted) {
-                    send_error(request.task_id, "too many inflight requests for client",
-                               use_brk2, request_id);
-                    continue;
-                }
-
                 const std::string rejected_task_id = request.task_id;
                 const auto admitted_at = std::chrono::steady_clock::now();
                 auto deadline = admitted_at + std::chrono::milliseconds(request.timeout_ms);
@@ -472,6 +480,31 @@ private:
                         continue;
                     }
                 }
+
+                const std::size_t payload_bytes = request.payload.size();
+                if (!admission_budget_ || !admission_budget_->try_acquire(payload_bytes)) {
+                    send_error(rejected_task_id, "broker outstanding-work budget exhausted", use_brk2, request_id);
+                    continue;
+                }
+                bool admitted = false;
+                {
+                    std::lock_guard<std::mutex> lock(inflight->mutex);
+                    if (inflight->count < config_.max_inflight_per_client) {
+                        ++inflight->count;
+                        admitted = true;
+                    }
+                }
+                if (!admitted) {
+                    admission_budget_->release(payload_bytes);
+                    send_error(rejected_task_id, "too many inflight requests for client",
+                               use_brk2, request_id);
+                    continue;
+                }
+
+                auto completion = std::make_shared<InflightCompletion>();
+                completion->state = inflight;
+                completion->budget = admission_budget_;
+                completion->payload_bytes = payload_bytes;
                 const WorkerClass worker_class = request.worker_class;
                 const auto affinity_key = request.spatial_affinity_key;
                 const auto preferred_node = request.preferred_numa_node;
@@ -520,7 +553,9 @@ private:
                     });
                 if (!queued) {
                     completion.reset();
-                    send_error(rejected_task_id, "broker worker queue is full", use_brk2, request_id);
+                    send_error(rejected_task_id,
+                               "worker queue could not accept task (shutdown or memory allocation failure)",
+                               use_brk2, request_id);
                     break;
                 }
             }
@@ -569,6 +604,7 @@ private:
     std::atomic<bool> running_{false};
     SocketHandle listener_socket_ = kInvalidSocket;
     std::unique_ptr<ClassWorkerPool> worker_pool_;
+    std::shared_ptr<WorkerAdmissionBudget> admission_budget_;
     std::vector<SessionState> session_threads_;
     std::unordered_set<SocketHandle> client_sockets_;
     mutable std::mutex client_mutex_;
