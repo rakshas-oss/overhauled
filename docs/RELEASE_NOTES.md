@@ -3,7 +3,7 @@
 Repository: rakshas-oss/overhauled
 
 ## v1.1.5 (release candidate; tag pending)
-Date: 2026-11-19
+Date: 2026-11-18
 
 ### Highlights
 
