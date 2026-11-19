@@ -277,6 +277,7 @@ def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout,
     backend_counts = {}
     selected_gpus = set()
     fallback_requests = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=active_workers) as pool:
         futures = [
             pool.submit(run_worker, host, port, dataset_id, part, batch_size, timeout, device)
             for part in partitions if part
