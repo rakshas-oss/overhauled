@@ -36,6 +36,37 @@ workloads without contacting a broker. Only `latency` and `throughput`
 profiles are broker workload objectives. Memory and geospatial objectives
 remain YuKKi-OS measurements; they are not relabelled as broker results.
 
+To exercise YuKKi-directed worker scheduling, add an explicit class and (for
+real-time spatial work) a logical affinity key:
+
+```sh
+python3 benchmarks/dataset_broker_bench.py \
+  --manifest ../YuKKi-OS/examples/benchmark-datasets/manifest.json \
+  --host 127.0.0.1 --port 9090 \
+  --device cpu \
+  --worker-class realtime-spatial \
+  --spatial-affinity-key 0x53454e534f522d31 \
+  --preferred-numa-node 1 \
+  --deadline-ms 250 \
+  --dataset all --profile all \
+  --output benchmark-results/realtime-spatial.json
+```
+
+Supported worker classes are `control`, `realtime-spatial`, `throughput`,
+`exact-cpu`, and `inference`. The default is `throughput`. A real-time
+spatial run requires `--spatial-affinity-key`; the NUMA node is an advisory
+local hint and is reported only if the broker successfully applies Linux CPU
+affinity. `--deadline-ms` creates an absolute per-request deadline from the
+time each request is constructed. It is a broker deadline, not an end-to-end
+deadline guarantee for the dataset profile.
+
+When the broker returns worker telemetry, the benchmark records class,
+queue-wait and service-time aggregates, worker IDs and applied NUMA nodes.
+Older brokers may ignore the optional request TLVs and omit telemetry; such
+runs retain backend and end-to-end measurements but do not qualify the new
+worker fabric. Compare `worker_telemetry_requests` with total request count
+before interpreting queue-wait metrics.
+
 For each dataset/profile pair, the adapter runs the declared warmup records,
 then deterministically selects the requested sample. Every batch-size and
 worker-count combination is run against the same selected records. The report
