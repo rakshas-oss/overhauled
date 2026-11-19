@@ -61,15 +61,13 @@ Date: 2026-11-18
 
 ### Compatibility and release boundary
 
-- This is a documentation and release-metadata maintenance candidate. No
-  BRK1/BRK2 or WSM1 wire format, public C++ API, or broker runtime behavior is
+- This was a documentation and release-metadata maintenance release. No
+  BRK1/BRK2 or WSM1 wire format, public C++ API, or broker runtime behavior was
   intentionally changed.
-- CMake and Conan metadata are aligned at 1.1.4. The vcpkg source pin and
-  Homebrew archive formula remain post-tag packaging tasks: their source
-  archive digest must be generated from the final tagged archive rather than
-  guessed in this candidate.
-- Do not create the v1.1.4 tag or publish package-manager artifacts until the
-  release PR is merged and the intended release commit is verified.
+- The v1.1.4 GitHub release was published on 2026-11-18. External package-
+  manager registry submissions are separate and must be verified independently.
+- The current v1.1.5 candidate builds on that published baseline with benchmark
+  input and BRK2 response-validation hardening.
 
 ---
 
