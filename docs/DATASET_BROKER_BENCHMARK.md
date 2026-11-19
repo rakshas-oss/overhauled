@@ -64,6 +64,44 @@ the broker for a live BRK2 round trip; its local-only mode does not measure
 broker interoperability. The manifest is a shared
 file-format contract, not a cross-repository library dependency.
 
+## Browser-WASM counterpart
+
+The YuKKi-OS browser runner is a separate client-side measurement. It builds
+and executes the spatial module in Node's WebAssembly runtime, then optionally
+submits host-prepared numeric records from the same multivariate fixture to
+this broker using direct BRK2 inference requests. From the YuKKi-OS checkout
+root, the live mode is:
+
+~~~sh
+node browser-wasm/bench/run.mjs --quick --broker-host 127.0.0.1 --broker-port 9090 --broker-device cpu --output browser-wasm-brk2.json
+~~~
+
+This is not execution of the spatial WASM module inside Overhauled and is not
+a WSM1 task/lifecycle test. It does not test browser rendering, gateway
+streaming, NUMA scheduling, or physical accelerator hardware. For the
+production guest lifecycle boundary, see [WASM interoperability](WASM_INTEROP.md).
+
+## Client-side resource bounds
+
+The Python benchmark applies the following guardrails before or during a run:
+
+| Input or resource | Limit |
+|---|---:|
+| Manifest file | 1 MiB |
+| Dataset file | 512 MiB |
+| JSONL record | 64 KiB |
+| Records per dataset | 1,000,000 |
+| Numeric feature fields | 1–64 |
+| Response frame | 16 MiB |
+| Batch size | 1–1,024 |
+| Worker count | 1–32 |
+| Socket timeout | 0.1–120 seconds |
+
+These are benchmark-client limits, not replacements for the broker's own
+protocol limits. The broker may reject a request that satisfies the client
+bounds if its configured frame or payload ceiling is lower.
+
+
 ## Interpretation and safety
 
 The included financial, drone, and environmental records are synthetic
