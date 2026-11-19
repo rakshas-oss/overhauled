@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "brk2_protocol.h"
+#include "worker_scheduler.h"
 
 #include <algorithm>
 #include <array>
@@ -32,6 +33,7 @@ void put_field(std::vector<uint8_t>& p,uint16_t id,uint8_t type,const uint8_t* d
 }
 void field_str(std::vector<uint8_t>& p,uint16_t id,const std::string& s){put_field(p,id,WT_UTF8,reinterpret_cast<const uint8_t*>(s.data()),s.size());}
 void field_u8(std::vector<uint8_t>& p,uint16_t id,uint8_t v){put_field(p,id,WT_U8,&v,1);}
+void field_u32(std::vector<uint8_t>& p,uint16_t id,uint32_t v){std::vector<uint8_t>b;put32(b,v);put_field(p,id,WT_U32,b.data(),b.size());}
 void field_u64(std::vector<uint8_t>& p,uint16_t id,uint64_t v){std::vector<uint8_t>b;put64(b,v);put_field(p,id,WT_U64,b.data(),b.size());}
 void field_i64(std::vector<uint8_t>& p,uint16_t id,int64_t v){std::vector<uint8_t>b;put64(b,static_cast<uint64_t>(v));put_field(p,id,WT_I64,b.data(),b.size());}
 void field_bytes(std::vector<uint8_t>& p,uint16_t id,const std::vector<uint8_t>& v){put_field(p,id,WT_BYTES,v.data(),v.size());}
@@ -110,7 +112,7 @@ bool decode_brk2_request_body(const std::vector<uint8_t>& body,BrokerRequest* ou
     if(read32(body.data()+20)!=BRK2_SCHEMA_REQUEST||read16(body.data()+24)!=1)return fail("unsupported BRK2 request schema");
     *request_id=read64(body.data()+12);
     std::vector<FieldView> fs;if(!parse_fields(body,&fs,error))return false;
-    for (const auto& f : fs) if (!(f.id >= 1 && f.id <= 10) && (f.flags & FIELD_CRITICAL)) return fail("unknown critical BRK2 field");
+    for (const auto& f : fs) if (!(f.id >= 1 && f.id <= 13) && (f.flags & FIELD_CRITICAL)) return fail("unknown critical BRK2 field");
     BrokerRequest req;
     if(!get_string(fs,1,&req.task_id,error)||!get_string(fs,2,&req.source,error)||!get_string(fs,3,&req.destination,error)||!get_string(fs,4,&req.kind,error))return false;
     for (const auto* value : {&req.task_id, &req.source, &req.destination, &req.kind}) if (value->size() > limits.max_string_bytes) return fail("BRK2 string exceeds configured limit");
@@ -121,12 +123,31 @@ bool decode_brk2_request_body(const std::vector<uint8_t>& body,BrokerRequest* ou
     const auto* payload=find(fs,7);if(payload->size>limits.max_payload_bytes)return fail("BRK2 request payload exceeds limit");
     req.payload.assign(payload->data,payload->data+payload->size);
     if(const auto* key=find(fs,8)){if(key->type!=WT_UUID||key->size!=16)return fail("invalid BRK2 idempotency key");}
-    if(const auto* deadline=find(fs,9)){if(deadline->type!=WT_U64||deadline->size!=8)return fail("invalid BRK2 deadline");}
+    if(const auto* deadline=find(fs,9)){
+        if(deadline->type!=WT_U64||deadline->size!=8)return fail("invalid BRK2 deadline");
+        const uint64_t value=read64(deadline->data);
+        if(value==0)return fail("BRK2 deadline must be nonzero");
+        req.deadline_unix_ns=value;
+    }
     if(const auto* pref=find(fs,10)){
         if(pref->type!=WT_UTF8)return fail("invalid BRK2 device_preference type");
         std::string value(reinterpret_cast<const char*>(pref->data),pref->size);
         if(value!="cpu"&&value!="gpu"&&value!="npu"&&value!="auto")return fail("unknown BRK2 device_preference");
         req.device_preference=value;
+    }
+    if(const auto* worker=find(fs,11)){
+        if(worker->type!=WT_UTF8||worker->size==0||worker->size>limits.max_string_bytes||
+           !valid_utf8(worker->data,worker->size))return fail("invalid BRK2 worker_class");
+        const std::string value(reinterpret_cast<const char*>(worker->data),worker->size);
+        if(!parse_worker_class(value,&req.worker_class))return fail("unknown BRK2 worker_class");
+    }
+    if(const auto* affinity=find(fs,12)){
+        if(affinity->type!=WT_U64||affinity->size!=8)return fail("invalid BRK2 spatial_affinity_key");
+        req.spatial_affinity_key=read64(affinity->data);
+    }
+    if(const auto* numa=find(fs,13)){
+        if(numa->type!=WT_U32||numa->size!=4)return fail("invalid BRK2 preferred_numa_node");
+        req.preferred_numa_node=read32(numa->data);
     }
     if(req.timeout_ms==0||req.timeout_ms>BROKER_MAX_TIMEOUT_MS)return fail("BRK2 timeout_ms outside 1..300000");
     *out=std::move(req);return true;
@@ -142,6 +163,11 @@ std::vector<uint8_t> encode_brk2_response_body(const BrokerResponse& r,uint64_t 
     field_i64(p,3,static_cast<int64_t>(r.selected_gpu));field_u64(p,4,r.latency_ms);
     field_bytes(p,5,r.result);field_str(p,6,bounded_error);
     field_str(p,7,backend_name(r.backend));
+    field_str(p,8,worker_class_name(r.worker_class));
+    field_u64(p,9,r.queue_wait_us);
+    field_u64(p,10,r.service_time_us);
+    field_u32(p,11,r.worker_id);
+    if(r.worker_numa_node) field_u32(p,12,*r.worker_numa_node);
     if(p.size()>limits.max_payload_bytes||BRK2_HEADER_BYTES+p.size()>limits.max_frame_bytes)throw std::runtime_error("BRK2 response exceeds frame limit");
     return envelope(MSG_RESPONSE,FLAG_RESPONSE|FLAG_END_STREAM,request_id,BRK2_SCHEMA_RESPONSE,p);
 }
