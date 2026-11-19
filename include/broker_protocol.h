@@ -88,6 +88,7 @@ struct BrokerResponse {
     uint64_t service_time_us = 0;
     uint32_t worker_id = 0;
     std::optional<uint32_t> worker_numa_node;
+    bool worker_telemetry_available = false;
 };
 
 bool validate_request(const BrokerRequest& request, std::string* error, const ProtocolLimits& limits);
