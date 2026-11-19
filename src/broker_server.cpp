@@ -567,7 +567,7 @@ private:
         close_socket(listener_socket_);
         listener_socket_ = kInvalidSocket;
         reap_finished_sessions(true);
-        if (worker_pool_) worker_pool_->stop();
+        if (worker_pool_) { worker_pool_->stop(); worker_pool_->join(); }
     }
 
     BrokerServerConfig config_;
