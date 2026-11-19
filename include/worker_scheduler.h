@@ -46,6 +46,7 @@ public:
 
     // Stops admission, drains already queued work, and joins all class pools.
     void stop() noexcept;
+    void join() noexcept;
     std::size_t queued(WorkerClass worker_class) const noexcept;
 
 private:
