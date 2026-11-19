@@ -48,6 +48,41 @@ bool parse_worker_class(const std::string& value, WorkerClass* out) noexcept {
     return true;
 }
 
+
+WorkerAdmissionBudget::WorkerAdmissionBudget(std::size_t max_outstanding_requests,
+                                             std::size_t max_payload_bytes)
+    : max_outstanding_requests_(max_outstanding_requests),
+      max_payload_bytes_(max_payload_bytes) {
+    if (max_outstanding_requests_ == 0 || max_payload_bytes_ == 0)
+        throw std::invalid_argument("worker admission budgets must be greater than zero");
+}
+
+bool WorkerAdmissionBudget::try_acquire(std::size_t payload_bytes) noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (outstanding_requests_ >= max_outstanding_requests_ ||
+        payload_bytes > max_payload_bytes_ - outstanding_payload_bytes_) return false;
+    ++outstanding_requests_;
+    outstanding_payload_bytes_ += payload_bytes;
+    return true;
+}
+
+void WorkerAdmissionBudget::release(std::size_t payload_bytes) noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (outstanding_requests_ > 0) --outstanding_requests_;
+    outstanding_payload_bytes_ = payload_bytes > outstanding_payload_bytes_
+        ? 0 : outstanding_payload_bytes_ - payload_bytes;
+}
+
+std::size_t WorkerAdmissionBudget::outstanding_requests() const noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return outstanding_requests_;
+}
+
+std::size_t WorkerAdmissionBudget::outstanding_payload_bytes() const noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return outstanding_payload_bytes_;
+}
+
 namespace {
 using Clock = std::chrono::steady_clock;
 
