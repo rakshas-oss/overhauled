@@ -140,6 +140,7 @@ bool decode_brk2_request_body(const std::vector<uint8_t>& body,BrokerRequest* ou
            !valid_utf8(worker->data,worker->size))return fail("invalid BRK2 worker_class");
         const std::string value(reinterpret_cast<const char*>(worker->data),worker->size);
         if(!parse_worker_class(value,&req.worker_class))return fail("unknown BRK2 worker_class");
+        req.worker_class_explicit=true;
     }
     if(const auto* affinity=find(fs,12)){
         if(affinity->type!=WT_U64||affinity->size!=8)return fail("invalid BRK2 spatial_affinity_key");
@@ -149,6 +150,8 @@ bool decode_brk2_request_body(const std::vector<uint8_t>& body,BrokerRequest* ou
         if(numa->type!=WT_U32||numa->size!=4)return fail("invalid BRK2 preferred_numa_node");
         req.preferred_numa_node=read32(numa->data);
     }
+    if(req.worker_class_explicit && req.worker_class==WorkerClass::RealtimeSpatial &&
+       !req.spatial_affinity_key)return fail("realtime-spatial BRK2 directive requires spatial_affinity_key");
     if(req.timeout_ms==0||req.timeout_ms>BROKER_MAX_TIMEOUT_MS)return fail("BRK2 timeout_ms outside 1..300000");
     *out=std::move(req);return true;
 }
