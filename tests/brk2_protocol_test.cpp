@@ -110,6 +110,17 @@ int main(){
     assert(request.preferred_numa_node == 3);
     assert(request.deadline_unix_ns == 1900000000000000000ULL);
 
+    auto missing_affinity = request_body();
+    const auto realtime_field = str("realtime-spatial");
+    field(missing_affinity, 11, 8, realtime_field, 0);
+    const uint32_t missing_affinity_size = static_cast<uint32_t>(missing_affinity.size() - 32);
+    missing_affinity[28]=static_cast<uint8_t>(missing_affinity_size>>24);
+    missing_affinity[29]=static_cast<uint8_t>(missing_affinity_size>>16);
+    missing_affinity[30]=static_cast<uint8_t>(missing_affinity_size>>8);
+    missing_affinity[31]=static_cast<uint8_t>(missing_affinity_size);
+    assert(!decode_brk2_request_body(missing_affinity, &request, &id, &error, field_limits));
+    assert(error == "realtime-spatial BRK2 directive requires spatial_affinity_key");
+
     auto unknown_class = routed;
     // The first directive TLV follows the original request fields and starts at the original end.
     const std::size_t directive_offset = body.size();
