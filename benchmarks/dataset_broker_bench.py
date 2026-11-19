@@ -49,14 +49,24 @@ def read_manifest(path):
         raise ValueError("manifest exceeds 1 MiB")
     with path.open("r", encoding="utf-8") as source:
         manifest = json.load(source)
-    if manifest.get("version") != 1:
-        raise ValueError("unsupported dataset manifest version")
+    if not isinstance(manifest, dict) or manifest.get("version") != 1:
+        raise ValueError("unsupported dataset manifest version or root type")
     datasets = manifest.get("datasets")
     profiles = manifest.get("profiles")
     if not isinstance(datasets, list) or not 1 <= len(datasets) <= 256:
         raise ValueError("manifest datasets must contain 1..=256 entries")
     if not isinstance(profiles, list) or not 1 <= len(profiles) <= 64:
         raise ValueError("manifest profiles must contain 1..=64 entries")
+    if any(not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"]
+           for item in datasets):
+        raise ValueError("manifest datasets must be objects with non-empty IDs")
+    if any(not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"]
+           for item in profiles):
+        raise ValueError("manifest profiles must be objects with non-empty IDs")
+    if len({item["id"] for item in datasets}) != len(datasets):
+        raise ValueError("manifest dataset IDs must be unique")
+    if len({item["id"] for item in profiles}) != len(profiles):
+        raise ValueError("manifest profile IDs must be unique")
     return manifest
 
 
@@ -85,9 +95,9 @@ def load_dataset(base, spec):
                 raise ValueError(f"dataset {spec.get('id')} row {line_number} is not an object")
             sequence = row.get(spec["sequence_field"])
             timestamp = row.get(spec["timestamp_ns_field"])
-            if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence < 0:
+            if isinstance(sequence, bool) or not isinstance(sequence, int) or not 0 <= sequence <= 0xFFFFFFFFFFFFFFFF:
                 raise ValueError(f"dataset {spec.get('id')} row {line_number} has invalid sequence")
-            if isinstance(timestamp, bool) or not isinstance(timestamp, int) or timestamp < 0:
+            if isinstance(timestamp, bool) or not isinstance(timestamp, int) or not 0 <= timestamp <= 0xFFFFFFFFFFFFFFFF:
                 raise ValueError(f"dataset {spec.get('id')} row {line_number} has invalid timestamp")
             values = []
             for field in fields:
@@ -107,13 +117,16 @@ def load_dataset(base, spec):
 
 
 def select_sample(rows, profile):
-    warmup = min(profile.get("warmup_records", 0), len(rows))
+    warmup_value = profile.get("warmup_records", 0)
+    if isinstance(warmup_value, bool) or not isinstance(warmup_value, int) or not 0 <= warmup_value < len(rows):
+        raise ValueError("profile warmup_records must be an integer within the dataset")
+    warmup = warmup_value
     available = rows[warmup:]
     if not available:
         raise ValueError("profile leaves no records after warmup")
     requested = profile.get("sample_records")
-    if isinstance(requested, bool) or not isinstance(requested, int) or requested <= 0:
-        raise ValueError("profile sample_records must be positive")
+    if isinstance(requested, bool) or not isinstance(requested, int) or not 1 <= requested <= MAX_RECORDS:
+        raise ValueError("profile sample_records must be in 1..=MAX_RECORDS")
     count_rows = min(requested, len(available))
     selected = []
     for index in range(count_rows):
