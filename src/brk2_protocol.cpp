@@ -166,11 +166,13 @@ std::vector<uint8_t> encode_brk2_response_body(const BrokerResponse& r,uint64_t 
     field_i64(p,3,static_cast<int64_t>(r.selected_gpu));field_u64(p,4,r.latency_ms);
     field_bytes(p,5,r.result);field_str(p,6,bounded_error);
     field_str(p,7,backend_name(r.backend));
-    field_str(p,8,worker_class_name(r.worker_class));
-    field_u64(p,9,r.queue_wait_us);
-    field_u64(p,10,r.service_time_us);
-    field_u32(p,11,r.worker_id);
-    if(r.worker_numa_node) field_u32(p,12,*r.worker_numa_node);
+    if(r.worker_telemetry_available) {
+        field_str(p,8,worker_class_name(r.worker_class));
+        field_u64(p,9,r.queue_wait_us);
+        field_u64(p,10,r.service_time_us);
+        field_u32(p,11,r.worker_id);
+        if(r.worker_numa_node) field_u32(p,12,*r.worker_numa_node);
+    }
     if(p.size()>limits.max_payload_bytes||BRK2_HEADER_BYTES+p.size()>limits.max_frame_bytes)throw std::runtime_error("BRK2 response exceeds frame limit");
     return envelope(MSG_RESPONSE,FLAG_RESPONSE|FLAG_END_STREAM,request_id,BRK2_SCHEMA_RESPONSE,p);
 }
