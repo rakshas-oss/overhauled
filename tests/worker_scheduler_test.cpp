@@ -100,7 +100,10 @@ int main() {
         [record](const WorkerExecutionContext&) { record(2); }));
     deadline_release.set_value();
     assert(deadlines_done_future.wait_for(std::chrono::seconds(2)) == std::future_status::ready);
-    assert(order.size() == 2 && order[0] == 2 && order[1] == 1);
+    {
+        std::lock_guard<std::mutex> lock(order_mutex);
+        assert(order.size() == 2 && order[0] == 2 && order[1] == 1);
+    }
     deadline_pool.stop();
     deadline_pool.join();
 
