@@ -43,7 +43,12 @@ contains dataset and manifest SHA-256 digests, request count, throughput,
 mean/P50/P95/P99 request latency, candidate configurations, selected
 configuration, and whether an optional `max_p95_request_ms` constraint was
 met. Use the same broker host, hardware, broker configuration, dataset
-revision, and profile to compare runs.
+revision, and profile to compare runs. Every response is decoded and checked for
+BRK2 envelope/schema validity, request-ID and task-ID correlation, successful
+status, backend identity, and consistency between `backend` and
+`selected_gpu`. Reports include actual backend counts, selected GPU IDs, and
+CPU fallback counts; a requested device preference is never treated as proof
+of execution.
 
 ## Ownership boundary
 
@@ -53,7 +58,11 @@ revision, and profile to compare runs.
   and end-to-end request measurements.
 
 The adapter sends ordinary BRK2 inference tasks; it does not create a private
-protocol or add a runtime dependency on YuKKi-OS. The manifest is a shared
+protocol or add a runtime dependency on YuKKi-OS. This is a native broker
+qualification benchmark, not execution of the browser-WASM spatial module.
+The browser-WASM runner remains a local computation benchmark; the two
+measurements must not be described as one end-to-end WASM-to-broker run until
+the same WASM-produced workload is explicitly passed through the broker. The manifest is a shared
 file-format contract, not a cross-repository library dependency.
 
 ## Interpretation and safety

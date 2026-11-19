@@ -61,17 +61,29 @@ def read_manifest(path):
 
 
 def load_dataset(base, spec):
-    source = pathlib.PurePath(spec["source"])
+    source_name = spec.get("source")
+    if not isinstance(source_name, str) or not source_name:
+        raise ValueError(f"dataset {spec.get('id')} has an invalid source path")
+    source = pathlib.PurePath(source_name)
     if source.is_absolute() or ".." in source.parts:
         raise ValueError("dataset source must be relative and cannot traverse parent directories")
-    path = base.joinpath(source)
+    root = base.resolve()
+    try:
+        path = (root / pathlib.Path(*source.parts)).resolve(strict=True)
+        path.relative_to(root)
+    except (OSError, ValueError) as error:
+        raise ValueError("dataset source resolves outside the manifest directory or does not exist") from error
+    if not path.is_file():
+        raise ValueError(f"dataset {spec.get('id')} source is not a regular file")
     if path.stat().st_size > MAX_DATASET_BYTES:
         raise ValueError(f"dataset {spec.get('id')} exceeds 512 MiB")
     fields = spec.get("feature_fields")
     if not isinstance(fields, list) or not 1 <= len(fields) <= MAX_FEATURES:
         raise ValueError(f"dataset {spec.get('id')} has invalid feature fields")
-    if len(set(fields)) != len(fields) or any(not isinstance(field, str) or not field for field in fields):
-        raise ValueError(f"dataset {spec.get('id')} has duplicate or invalid feature names")
+    if any(not isinstance(field, str) or not field for field in fields):
+        raise ValueError(f"dataset {spec.get('id')} has invalid feature names")
+    if len(set(fields)) != len(fields):
+        raise ValueError(f"dataset {spec.get('id')} has duplicate feature names")
 
     rows = []
     with path.open("rb") as source_file:
@@ -156,16 +168,82 @@ def recv_exact(sock, size):
 
 def recv_response(sock):
     size = struct.unpack("!I", recv_exact(sock, 4))[0]
-    if size < 32 or size > MAX_RESPONSE_BYTES:
+    if size < HEADER.size or size > MAX_RESPONSE_BYTES:
         raise ValueError("response frame length outside benchmark safety bounds")
-    response = recv_exact(sock, size)
-    if response[:4] != MAGIC:
-        raise ValueError("invalid BRK2 response magic")
-    return struct.unpack_from("!Q", response, 12)[0]
+    return recv_exact(sock, size)
+
+
+def decode_response(response, expected_request_id, expected_task_id, device_preference):
+    if len(response) < HEADER.size:
+        raise ValueError("truncated BRK2 response header")
+    magic, major, minor, header_len, message_type, flags, request_id, schema, version, reserved, payload_len = HEADER.unpack_from(response)
+    if magic != MAGIC or major != 2 or minor != 0:
+        raise ValueError("invalid BRK2 response magic or version")
+    if header_len != HEADER.size or message_type != 4 or not (flags & 1):
+        raise ValueError("invalid BRK2 response envelope")
+    if flags & ~0x0007 or reserved != 0 or schema != 2 or version != 1:
+        raise ValueError("unsupported BRK2 response flags or schema")
+    if request_id != expected_request_id:
+        raise ValueError(f"BRK2 response correlation mismatch: expected {expected_request_id}, got {request_id}")
+    if payload_len != len(response) - HEADER.size:
+        raise ValueError("BRK2 response payload length mismatch")
+
+    fields = {}
+    offset = HEADER.size
+    while offset < len(response):
+        if len(response) - offset < 8:
+            raise ValueError("truncated BRK2 response TLV header")
+        field_id, wire_type, field_flags, value_len = struct.unpack_from("!HBBI", response, offset)
+        offset += 8
+        if field_flags & ~0x03 or value_len > len(response) - offset:
+            raise ValueError("invalid or truncated BRK2 response TLV")
+        if field_id in fields:
+            raise ValueError(f"duplicate BRK2 response field {field_id}")
+        fields[field_id] = (wire_type, response[offset:offset + value_len])
+        offset += value_len
+
+    def required(field_id, wire_type, size=None):
+        item = fields.get(field_id)
+        if item is None or item[0] != wire_type or (size is not None and len(item[1]) != size):
+            raise ValueError(f"missing or invalid BRK2 response field {field_id}")
+        return item[1]
+
+    try:
+        task_id = required(1, 8).decode("utf-8")
+        status = required(2, 1, 1)[0]
+        selected_gpu = struct.unpack("!q", required(3, 5, 8))[0]
+        latency_ms = struct.unpack("!Q", required(4, 4, 8))[0]
+        result = required(5, 9)
+        error = required(6, 8).decode("utf-8")
+        backend = required(7, 8).decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ValueError("invalid UTF-8 in BRK2 response") from error
+
+    if task_id != expected_task_id:
+        raise ValueError(f"BRK2 task correlation mismatch: expected {expected_task_id!r}, got {task_id!r}")
+    if status != 0:
+        raise RuntimeError(f"broker task failed with status={status}: {error}")
+    if backend not in ("cpu", "gpu", "npu"):
+        raise ValueError(f"broker reported unknown execution backend {backend!r}")
+    if (backend == "gpu" and selected_gpu < 0) or (backend != "gpu" and selected_gpu != -1):
+        raise ValueError("broker backend and selected_gpu telemetry disagree")
+    allowed = {"cpu"} if device_preference == "cpu" else {device_preference, "cpu"}
+    if backend not in allowed:
+        raise ValueError(f"requested {device_preference} but broker reported {backend}")
+    return {
+        "backend": backend,
+        "selected_gpu": selected_gpu,
+        "latency_ms": latency_ms,
+        "result_bytes": len(result),
+        "fallback": backend != device_preference,
+    }
 
 
 def run_worker(host, port, dataset_id, records, batch_size, timeout, device):
     latencies = []
+    backend_counts = {}
+    selected_gpus = set()
+    fallback_requests = 0
     with socket.create_connection((host, port), timeout=timeout) as connection:
         connection.settimeout(timeout)
         for offset in range(0, len(records), batch_size):
@@ -178,14 +256,20 @@ def run_worker(host, port, dataset_id, records, batch_size, timeout, device):
                 frames.append(request_frame(request_id, dataset_id, record, device))
             connection.sendall(b"".join(frames))
             for _ in batch:
-                response_id = recv_response(connection)
+                response = recv_response(connection)
+                response_id = struct.unpack_from("!Q", response, 12)[0] if len(response) >= HEADER.size else -1
                 started = sent_at.pop(response_id, None)
                 if started is None:
                     raise ValueError(f"unexpected or duplicate response request_id={response_id}")
+                telemetry = decode_response(response, response_id, "dataset-benchmark", device)
                 latencies.append(time.perf_counter_ns() - started)
+                backend_counts[telemetry["backend"]] = backend_counts.get(telemetry["backend"], 0) + 1
+                if telemetry["selected_gpu"] >= 0:
+                    selected_gpus.add(telemetry["selected_gpu"])
+                fallback_requests += int(telemetry["fallback"])
             if sent_at:
                 raise ValueError(f"missing responses for request_ids={sorted(sent_at)}")
-    return latencies
+    return latencies, backend_counts, selected_gpus, fallback_requests
 
 
 def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout, device):
@@ -195,13 +279,21 @@ def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout,
     partitions = [records[index::active_workers] for index in range(active_workers)]
     started = time.perf_counter()
     latencies_ns = []
+    backend_counts = {}
+    selected_gpus = set()
+    fallback_requests = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=active_workers) as pool:
         futures = [
             pool.submit(run_worker, host, port, dataset_id, part, batch_size, timeout, device)
             for part in partitions if part
         ]
         for future in concurrent.futures.as_completed(futures):
-            latencies_ns.extend(future.result())
+            worker_latencies, worker_backends, worker_gpus, worker_fallbacks = future.result()
+            latencies_ns.extend(worker_latencies)
+            for backend, count in worker_backends.items():
+                backend_counts[backend] = backend_counts.get(backend, 0) + count
+            selected_gpus.update(worker_gpus)
+            fallback_requests += worker_fallbacks
     elapsed = time.perf_counter() - started
     latencies_ms = sorted(value / 1_000_000 for value in latencies_ns)
     def percentile(p):
@@ -219,6 +311,9 @@ def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout,
         "p50_request_ms": percentile(0.50),
         "p95_request_ms": percentile(0.95),
         "p99_request_ms": percentile(0.99),
+        "actual_backend_counts": dict(sorted(backend_counts.items())),
+        "selected_gpu_ids": sorted(selected_gpus),
+        "fallback_requests": fallback_requests,
     }
 
 
@@ -262,6 +357,9 @@ def run_profile(host, port, dataset_id, rows, profile, timeout, dry_run, device)
         for batch in batch_sizes for workers in worker_counts
     ]
     limit = profile.get("max_p95_request_ms")
+    if limit is not None:
+        if isinstance(limit, bool) or not isinstance(limit, (int, float)) or not math.isfinite(float(limit)) or limit <= 0:
+            raise ValueError(f"profile {profile.get('id')} has invalid max_p95_request_ms")
     eligible = [
         item for item in candidates
         if limit is None or item["p95_request_ms"] <= float(limit)
@@ -335,6 +433,7 @@ def main():
         "manifest_version": manifest["version"],
         "manifest_sha256": sha256_file(args.manifest),
         "broker": {"host": args.host, "port": args.port, "protocol": "BRK2", "device_preference": args.device},
+        "telemetry_contract": "BRK2 response fields 1..7; status, backend and selected_gpu are validated per request",
         "measured": not args.dry_run,
         "results": results,
     }
