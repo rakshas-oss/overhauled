@@ -4,6 +4,7 @@
 #include "worker_scheduler.h"
 
 #include <algorithm>
+#include <new>
 #include <chrono>
 #include <condition_variable>
 #include <deque>
@@ -172,10 +173,7 @@ private:
 
 class ClassWorkerPool::Impl {
 public:
-    explicit Impl(const WorkerPoolConfig& config)
-        : max_queue_per_class_(config.max_queue_per_class) {
-        if (max_queue_per_class_ == 0 || max_queue_per_class_ > 65536)
-            throw std::invalid_argument("max_queue_per_class must be in 1..65536");
+    explicit Impl(const WorkerPoolConfig& config) {
         std::size_t total = 0;
         for (const std::size_t count : config.workers) {
             if (count == 0) throw std::invalid_argument("every worker class needs at least one worker");
@@ -210,17 +208,16 @@ public:
         const std::size_t index = class_index(worker_class);
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            if (stopping_ || queues_[index].size() >= max_queue_per_class_) return false;
-            QueuedTask queued{Clock::now(), affinity_key, preferred_node, deadline, std::move(task)};
-            if (worker_class == WorkerClass::RealtimeSpatial && deadline) {
-                auto& queue = queues_[index];
-                const auto position = std::find_if(queue.begin(), queue.end(),
-                    [&deadline](const QueuedTask& existing) {
-                        return !existing.deadline || *deadline < *existing.deadline;
-                    });
-                queue.insert(position, std::move(queued));
-            } else {
-                queues_[index].push_back(std::move(queued));
+            if (stopping_) return false;
+            // All classes are FIFO by the monotonic enqueue timestamp: the
+            // earliest accepted call in a class is always dispatched first.
+            // std::deque grows on demand; allocation failure rejects only this
+            // enqueue and never terminates the broker worker thread.
+            try {
+                queues_[index].push_back(QueuedTask{
+                    Clock::now(), affinity_key, preferred_node, deadline, std::move(task)});
+            } catch (const std::bad_alloc&) {
+                return false;
             }
         }
         cv_.notify_all();
@@ -293,7 +290,6 @@ private:
         }
     }
 
-    const std::size_t max_queue_per_class_;
     std::mutex join_mutex_;
     mutable std::mutex mutex_;
     std::condition_variable cv_;
