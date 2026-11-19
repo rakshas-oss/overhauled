@@ -65,7 +65,6 @@ public:
     bool enqueue(WorkerClass worker_class,
                  std::optional<uint64_t> spatial_affinity_key,
                  std::optional<uint32_t> preferred_numa_node,
-                 std::optional<std::chrono::steady_clock::time_point> deadline,
                  Task task);
 
     // Queues grow dynamically; the process memory limit is the ultimate bound.
