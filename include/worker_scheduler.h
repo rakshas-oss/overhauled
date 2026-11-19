@@ -7,6 +7,7 @@
 
 #include <array>
 #include <cstddef>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -42,6 +43,7 @@ public:
     bool enqueue(WorkerClass worker_class,
                  std::optional<uint64_t> spatial_affinity_key,
                  std::optional<uint32_t> preferred_numa_node,
+                 std::optional<std::chrono::steady_clock::time_point> deadline,
                  Task task);
 
     // Stops admission, drains already queued work, and joins all class pools.
