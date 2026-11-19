@@ -314,6 +314,9 @@ private:
 
     void worker_loop(std::size_t class_id, std::size_t worker_index) noexcept {
         const WorkerClass worker_class = static_cast<WorkerClass>(class_id);
+        std::size_t global_worker_index = worker_index;
+        for (std::size_t prior_class = 0; prior_class < class_id; ++prior_class)
+            global_worker_index += threads_[prior_class].size();
         uint64_t rotation = 0;
         for (;;) {
             QueuedTask queued_task;
@@ -335,7 +338,7 @@ private:
             context.worker_id = static_cast<uint32_t>(class_id * 256 + worker_index);
             context.queue_wait_us = wait > 0 ? static_cast<uint64_t>(wait) : 0;
             context.numa_node = topology_.pin(
-                queued_task.preferred_node, queued_task.affinity_key, worker_index, rotation++);
+                queued_task.preferred_node, queued_task.affinity_key, global_worker_index, rotation++);
             try { queued_task.task(context); }
             catch (...) {
                 // A task failure is isolated to this worker and its client completion guard.
