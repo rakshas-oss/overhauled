@@ -102,6 +102,11 @@ default from payload size or task kind. The fixed ceiling avoids trusting
 unbounded client deadlines when request characteristics do not reliably
 predict execution cost.
 
+The following list describes the BRK1/v1 response members. BRK1 has no wire
+field that identifies the selected backend; `selected_gpu = -1` is therefore
+not enough to distinguish CPU from NPU execution.
+
+
 ## Response Fields
 
 - `task_id` (string)
@@ -110,6 +115,10 @@ predict execution cost.
 - `latency_ms` (`uint64`)
 - `result` (binary)
 - `error` (string)
+
+For BRK2/v2, response field 7 (`backend`) is authoritative and reports
+`cpu`, `gpu`, or `npu`; pair it with `selected_gpu` when interpreting placement.
+Do not describe BRK1 responses as carrying this field.
 
 ## Validation and Safety
 
