@@ -1,18 +1,18 @@
-# Overhauled v1.1.5 (release candidate)
+# Overhauled v1.2.0 (release candidate)
 
-> **Release candidate v1.1.5:** benchmark-input and BRK2 response-validation hardening, benchmark telemetry, interoperability guidance, and architecture diagrams. It does not change the BRK1/BRK2/WSM1 wire contracts or the broker's execution policy. The last published release is v1.1.4.
+ > **Release candidate v1.2.0:** introduces YuKKi-aware worker classes, isolated broker worker pools, deadline-aware spatial scheduling, process-wide admission budgets, Linux NUMA/CPU affinity, and optional BRK2 worker telemetry. The last verified published release is v1.1.4.
 
 > **Route workloads by topology, not guesswork.**
 >
 > Turn GPU interconnect awareness into higher throughput, better tail latency, and more effective use of accelerator infrastructure.
 
-> **Release status:** v1.1.5 is a patch-release candidate. CI, review, the v1.1.5 tag and release archive are pending; external package-manager submissions are separate.
+> **Release status:** v1.2.0 is a minor-release candidate. Required CI, review, release tag/archive, and external package-manager submissions are pending.
 
 Overhauled is a C++17 placement and execution library with an interoperable broker service. It provides topology-aware GPU scheduling and broker dispatch for CPU, GPU, and optional NPU execution.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
-[![Release](https://img.shields.io/badge/Release-v1.1.5-blueviolet)](#)
+[![Release](https://img.shields.io/badge/Release-v1.2.0-blueviolet)](#)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2FBRK2-orange)](#)
 
 ## Capabilities
@@ -26,27 +26,31 @@ Overhauled is a C++17 placement and execution library with an interoperable brok
 - Optional CUDA/TensorRT GPU runtime features; deterministic CPU-only broker operation remains available.
 - Bounded broker workers, per-client in-flight limits, queue backpressure, frame deadlines, and resource ceilings.
 
-## What's new in v1.1.5
+## What's new in v1.2.0
 
-The v1.1.5 candidate strengthens the benchmark and interoperability
-qualification layer without changing the broker's public C++ API or wire
-contracts:
+The v1.2.0 candidate adds a broker-side worker fabric coordinated with
+YuKKi-OS workload directives:
 
-- The dataset benchmark rejects malformed manifests, duplicate dataset or
-  profile IDs, out-of-range sequence/timestamp values, unsafe dataset paths,
-  and invalid sampling controls.
-- Every BRK2 benchmark response is decoded and validated for envelope/schema,
-  request/task correlation, status, actual backend identity, and
-  backend/selected-GPU consistency. Reports now distinguish backend counts,
-  selected GPU IDs and CPU fallbacks rather than treating a device preference
-  as proof of execution.
-- The browser-WASM benchmark bridge is documented as direct BRK2 inference
-  traffic using host-prepared numeric records, separate from WSM1 guest
-  lifecycle execution. Full-colour architecture diagrams make repository
-  responsibilities explicit.
+- Five worker classes: Control, RealtimeSpatial, Throughput, ExactCpu and
+  Inference, each with an isolated queue and reserved worker pool.
+- RealtimeSpatial requests use earliest-deadline-first ordering when an
+  absolute deadline is present; equal deadlines retain admission order.
+- Process-wide outstanding-request and in-flight-memory budgets remain held
+  until execution completes, including after client disconnect.
+- Linux NUMA topology discovery intersects node CPU sets with the process
+  affinity mask and attempts worker-thread pinning. Telemetry reports a NUMA
+  node only when affinity was successfully applied.
+- Optional BRK2 request fields 11–13 carry worker class, logical spatial
+  affinity and preferred NUMA node. Optional response fields 8–12 report
+  worker class, queue wait, service time, worker ID and applied NUMA node.
+- The dataset benchmark can exercise class, affinity, NUMA and deadline
+  behavior and report queue/service measurements.
 
-These are patch-level tooling, qualification and documentation improvements.
-The BRK1/BRK2/WSM1 wire contracts and broker dispatch policy remain unchanged.
+BRK1 remains on the legacy Throughput queue and preserves its backend
+selection semantics. Existing BRK1/BRK2/WSM1 envelope identities and required
+fields are unchanged. Deadlines are broker request bounds, not preemption or
+hard real-time guarantees. See
+[YuKKi-aware worker fabric](docs/YUKKI_WORKER_FABRIC.md).
 
 ## Throughput and energy-efficiency model
 
