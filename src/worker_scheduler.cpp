@@ -491,6 +491,11 @@ private:
         for (auto& node : nodes_) signal_elastic(*node, false);
     }
 
+    static bool queue_nonempty(const ClassQueue& queue) {
+        std::lock_guard<std::mutex> lock(queue.mutex);
+        return !queue.tasks.empty();
+    }
+
     static bool pop_task(ClassQueue& queue, QueuedTask& task) {
         std::lock_guard<std::mutex> lock(queue.mutex);
         if (queue.tasks.empty()) return false;
@@ -568,8 +573,9 @@ private:
             const std::size_t slot = (schedule_cursor + attempt) % kElasticServiceSchedule.size();
             const WorkerClass candidate = kElasticServiceSchedule[slot];
             const std::size_t class_id = class_index(candidate);
-            if (!reserve_elastic_slot(class_id)) continue;
-            if (pop_task(node.queues[class_id], queued_task)) {
+            ClassQueue& queue = node.queues[class_id];
+            if (!queue_nonempty(queue) || !reserve_elastic_slot(class_id)) continue;
+            if (pop_task(queue, queued_task)) {
                 selected_class = candidate;
                 schedule_cursor = (slot + 1) % kElasticServiceSchedule.size();
                 return true;
