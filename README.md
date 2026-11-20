@@ -107,9 +107,11 @@ There are two complementary benchmark entry points, with different scopes:
 Neither path sends executable Wasm modules to this broker. The browser
 benchmark leg is ordinary BRK2 inference traffic, not a WSM1 guest task or
 lifecycle operation. YuKKi-OS remains authoritative for manifest semantics,
-spatial processing, NUMA discovery/locality, and the eigensolver; Overhauled
-owns broker dispatch, GPU topology/placement, and CPU/GPU/NPU execution. This
-repository deliberately does not duplicate YuKKi-OS's NUMA subsystem.
+spatial processing, resolver-derived locality hints, and the eigensolver.
+Overhauled owns broker dispatch, worker-class queues, process-local Linux
+NUMA discovery/CPU affinity, GPU topology/placement, and CPU/GPU/NPU execution.
+The two repositories therefore keep workload-level topology semantics
+separate from broker-local worker placement.
 
 See [Dataset-driven BRK2 broker benchmarks](docs/DATASET_BROKER_BENCHMARK.md),
 [YuKKi-OS benchmarking guide](https://github.com/rakshas-oss/YuKKi-OS/blob/main/docs/BENCHMARKING.md),
