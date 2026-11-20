@@ -160,6 +160,7 @@ class DatasetBrokerBenchmarkTests(unittest.TestCase):
         self.assertEqual(metrics["mean_queue_wait_us"], 100)
         self.assertEqual(metrics["mean_service_time_us"], 200)
         self.assertEqual(metrics["worker_numa_nodes"], [0])
+        self.assertEqual(metrics["worker_ids"], [512])
 
     def test_response_decoder_rejects_non_ok_status_and_bad_correlation(self):
         payload = b"".join((
