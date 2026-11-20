@@ -13,10 +13,13 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <vector>
 
 namespace nvlink::broker {
 
 constexpr std::size_t kWorkerClassCount = 5;
+// Worker IDs at or above this value identify opt-in elastic worker threads.
+constexpr std::size_t kFirstElasticWorkerId = kWorkerClassCount * 256;
 
 struct WorkerExecutionContext {
     WorkerClass worker_class = WorkerClass::Throughput;
@@ -26,8 +29,15 @@ struct WorkerExecutionContext {
 };
 
 struct WorkerPoolConfig {
-    // One independently growing FIFO and reserved worker pool per class.
+    // Dedicated workers are reserved by class and distributed across the
+    // process-allowed NUMA nodes.
     std::array<std::size_t, kWorkerClassCount> workers{{1, 1, 4, 1, 1}};
+
+    // Optional shared worker slots. Elastic workers can serve only
+    // RealtimeSpatial, Throughput and Inference; Control and ExactCpu remain
+    // strictly dedicated. The per-class limits cap concurrent elastic service.
+    std::size_t elastic_workers = 0;
+    std::array<std::size_t, kWorkerClassCount> elastic_max_per_class{{0, 1, 4, 0, 2}};
 };
 
 
@@ -82,6 +92,11 @@ public:
     void stop() noexcept;
     void join() noexcept;
     std::size_t queued(WorkerClass worker_class) const noexcept;
+    std::size_t queued_on_node(WorkerClass worker_class, uint32_t numa_node) const noexcept;
+    // Nodes on which this class has at least one eligible dedicated or
+    // elastic worker. Use these IDs when testing or inspecting routing.
+    std::vector<uint32_t> queue_nodes(WorkerClass worker_class) const;
+    std::size_t active_elastic(WorkerClass worker_class) const noexcept;
 
 private:
     class Impl;
