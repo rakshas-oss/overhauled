@@ -485,6 +485,12 @@ private:
         else node.elastic_wake_cv.notify_one();
     }
 
+    // Elastic ceilings are process-wide per class. Releasing a slot on one
+    // node must wake waiters on every other node that may have queued work.
+    void signal_all_elastic() noexcept {
+        for (auto& node : nodes_) signal_elastic(*node, false);
+    }
+
     static bool pop_task(ClassQueue& queue, QueuedTask& task) {
         std::lock_guard<std::mutex> lock(queue.mutex);
         if (queue.tasks.empty()) return false;
@@ -569,6 +575,7 @@ private:
                 return true;
             }
             elastic_active_[class_id].fetch_sub(1, std::memory_order_acq_rel);
+            signal_all_elastic();
         }
         return false;
     }
@@ -595,9 +602,9 @@ private:
                              topology_worker_index, node, queued_task,
                              true, current_pin);
                 elastic_active_[class_id].fetch_sub(1, std::memory_order_acq_rel);
-                // Wake another elastic worker that may have been held back by
-                // this class's concurrent-service ceiling.
-                signal_elastic(node, false);
+                // A released class slot is globally available, so wake node
+                // queues beyond this worker's own NUMA node as well.
+                signal_all_elastic();
                 continue;
             }
 
