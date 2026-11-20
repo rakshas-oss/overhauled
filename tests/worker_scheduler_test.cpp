@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MIT
 #include "worker_scheduler.h"
 
-#include <cstdlib>
 #include <atomic>
 #include <chrono>
-#include <thread>
+#include <cstdlib>
 #include <future>
 #include <iostream>
 #include <mutex>
+#include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #define CHECK(condition) do { \
