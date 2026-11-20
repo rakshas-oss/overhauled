@@ -576,7 +576,7 @@ private:
     void elastic_worker_loop(std::size_t worker_index, std::size_t node_index) noexcept {
         NodeState& node = *nodes_[node_index];
         std::size_t schedule_cursor = worker_index % kElasticServiceSchedule.size();
-        std::size_t topology_worker_index = config_.elastic_workers;
+        std::size_t topology_worker_index = 0;
         for (const std::size_t count : config_.workers) topology_worker_index += count;
         topology_worker_index += worker_index;
         std::optional<std::pair<uint32_t, int>> current_pin;
