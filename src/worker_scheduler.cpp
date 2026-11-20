@@ -547,6 +547,9 @@ private:
                 auto item = queue.tasks.extract(queue.tasks.begin());
                 queued_task = std::move(item.value());
             }
+            // A dedicated worker may have drained the last item from a node
+            // queue that an elastic worker was waiting to service.
+            signal_elastic(node, false);
             execute_task(worker_class, class_id * 256 + worker_index, topology_worker_index,
                          node, queued_task, false, current_pin);
         }
@@ -560,6 +563,14 @@ private:
         while (current < limit) {
             if (active.compare_exchange_weak(current, current + 1,
                     std::memory_order_acq_rel, std::memory_order_relaxed)) return true;
+        }
+        return false;
+    }
+
+    bool node_has_elastic_work(NodeState& node) const {
+        for (std::size_t class_id = 0; class_id < kWorkerClassCount; ++class_id) {
+            if (config_.elastic_max_per_class[class_id] > 0 &&
+                queue_nonempty(node.queues[class_id])) return true;
         }
         return false;
     }
@@ -614,11 +625,13 @@ private:
                 continue;
             }
 
-            if (stopping_.load(std::memory_order_acquire)) return;
+            if (stopping_.load(std::memory_order_acquire) &&
+                !node_has_elastic_work(node)) return;
             std::unique_lock<std::mutex> lock(node.elastic_wake_mutex);
             node.elastic_wake_cv.wait(lock, [this, &node, observed_generation] {
-                return stopping_.load(std::memory_order_acquire) ||
-                       node.elastic_generation != observed_generation;
+                return node.elastic_generation != observed_generation ||
+                       (stopping_.load(std::memory_order_acquire) &&
+                        !node_has_elastic_work(node));
             });
         }
     }
