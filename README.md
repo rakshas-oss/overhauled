@@ -30,6 +30,9 @@ Overhauled is a C++17 placement and execution library with an interoperable brok
   realtime deadline insertion uses ordered queue entries, while worker CPU
   selection remains stable for a worker on a given NUMA target and avoids
   redundant affinity syscalls.
+- Worker queues are sharded by process-visible NUMA node. Optional elastic
+  workers add bounded capacity for RealtimeSpatial, Throughput and Inference
+  while Control and ExactCpu retain protected dedicated pools.
 
 ## What's new in v1.2.0
 
@@ -128,8 +131,9 @@ and [YuKKi-OS interoperability](docs/YUKKI_INTEROP.md).
 
 Overhauled is the broker and execution tier. It validates BRK1/BRK2 frames,
 applies bounded admission, routes requests into five isolated worker-class
-queues, performs broker-local Linux CPU/NUMA affinity where supported, then
-dispatches eligible work to CPU/GPU/NPU backends. It does not duplicate
+queues with NUMA-local shards, performs broker-local Linux CPU/NUMA
+affinity where supported, and can use bounded class-aware elastic workers
+before dispatching eligible work to CPU/GPU/NPU backends. It does not duplicate
 YuKKi-OS workload semantics or spatial resolution: YuKKi selects the class
 and sends an optional affinity key, deadline and preferred-NUMA hint;
 Overhauled resolves that hint against its own process-allowed CPU topology and
