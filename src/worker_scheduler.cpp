@@ -338,8 +338,10 @@ public:
         {
             std::lock_guard<std::mutex> lock(queue.mutex);
             if (stopping_.load(std::memory_order_acquire)) return false;
+            const auto queue_deadline = worker_class == WorkerClass::RealtimeSpatial
+                ? deadline : std::nullopt;
             QueuedTask queued_task{
-                Clock::now(), deadline, queue.next_sequence++, std::move(task)};
+                Clock::now(), queue_deadline, queue.next_sequence++, std::move(task)};
             try {
                 queue.tasks.insert(std::move(queued_task));
             } catch (const std::bad_alloc&) {
