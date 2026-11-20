@@ -53,6 +53,9 @@ YuKKi-OS workload directives:
   worker class, queue wait, service time, worker ID and applied NUMA node.
 - The dataset benchmark can exercise class, affinity, NUMA and deadline
   behavior and report queue/service measurements.
+- Per-class queues are sharded across eligible NUMA nodes. Optional elastic
+  workers use weighted RealtimeSpatial/Throughput/Inference service with
+  process-wide per-class ceilings; Control and ExactCpu remain dedicated.
 
 BRK1 remains on the legacy Throughput queue and preserves its backend
 selection semantics. Existing BRK1/BRK2/WSM1 envelope identities and required
