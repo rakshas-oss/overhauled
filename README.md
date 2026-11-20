@@ -1,6 +1,6 @@
 # Overhauled v1.2.0 (release candidate)
 
- > **Release candidate v1.2.0:** introduces YuKKi-aware worker classes, isolated broker worker pools, deadline-aware spatial scheduling, process-wide admission budgets, Linux NUMA/CPU affinity, and optional BRK2 worker telemetry. The last verified published release is v1.1.4.
+> **Release candidate v1.2.0:** introduces YuKKi-aware worker classes, isolated broker worker pools, deadline-aware spatial scheduling, process-wide admission budgets, Linux NUMA/CPU affinity, and optional BRK2 worker telemetry. The last verified published release is v1.1.4.
 
 > **Route workloads by topology, not guesswork.**
 >
@@ -24,7 +24,8 @@ Overhauled is a C++17 placement and execution library with an interoperable brok
 - A shared Rust/C++ protocol conformance corpus and CPU-only test suite.
 - Opt-in mainline Linux DRM Ethos-U85 executor, with a documented Vela-generated `YU85BND1` bundle format.
 - Optional CUDA/TensorRT GPU runtime features; deterministic CPU-only broker operation remains available.
-- Bounded broker workers, per-client in-flight limits, queue backpressure, frame deadlines, and resource ceilings.
+- Isolated Control, RealtimeSpatial, Throughput, ExactCpu and Inference worker pools with bounded process-wide admission and in-flight memory budgets.
+- Deadline-aware spatial queue ordering and Linux worker-thread NUMA affinity, with BRK2 queue/service/worker telemetry.
 
 ## What's new in v1.2.0
 
@@ -122,7 +123,7 @@ and [YuKKi-OS interoperability](docs/YUKKI_INTEROP.md).
 Overhauled is the broker and execution tier: it validates BRK1/BRK2 frames,
 classifies requests, dispatches to the CPU baseline or optional GPU/NPU
 executors, and reports the backend actually selected in BRK2 response field 7.
-It deliberately does not duplicate YuKKi-OS's NUMA discovery/locality services
+It does not duplicate YuKKi-OS's workload semantics or spatial resolver; it independently discovers the broker process's allowed Linux CPU/NUMA topology for local worker placement
 or act as a WebAssembly runtime. WSM1 operations track broker-side task and
 module-version lifecycle; Wasmtime compilation, guest isolation and execution
 remain on the YuKKi-OS host.
