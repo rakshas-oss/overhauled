@@ -122,13 +122,17 @@ and [YuKKi-OS interoperability](docs/YUKKI_INTEROP.md).
 
 ![Overhauled broker and execution architecture diagram](docs/diagrams/overhauled-architecture.svg)
 
-Overhauled is the broker and execution tier: it validates BRK1/BRK2 frames,
-classifies requests, dispatches to the CPU baseline or optional GPU/NPU
-executors, and reports the backend actually selected in BRK2 response field 7.
-It does not duplicate YuKKi-OS's workload semantics or spatial resolver; it independently discovers the broker process's allowed Linux CPU/NUMA topology for local worker placement
-or act as a WebAssembly runtime. WSM1 operations track broker-side task and
-module-version lifecycle; Wasmtime compilation, guest isolation and execution
-remain on the YuKKi-OS host.
+Overhauled is the broker and execution tier. It validates BRK1/BRK2 frames,
+applies bounded admission, routes requests into five isolated worker-class
+queues, performs broker-local Linux CPU/NUMA affinity where supported, then
+dispatches eligible work to CPU/GPU/NPU backends. It does not duplicate
+YuKKi-OS workload semantics or spatial resolution: YuKKi selects the class
+and sends an optional affinity key, deadline and preferred-NUMA hint;
+Overhauled resolves that hint against its own process-allowed CPU topology and
+reports the NUMA node only if thread affinity succeeds. BRK2 field 7 reports
+the actual backend; optional fields 8–12 report worker and placement telemetry.
+WSM1 remains task/lifecycle metadata, not a Wasm runtime; Wasmtime compilation,
+guest isolation and execution remain on the YuKKi-OS host.
 
 The accompanying terminal sketch uses 24-bit ANSI colours:
 `bash docs/diagrams/print-ansi.sh`. GitHub does not render terminal escape
