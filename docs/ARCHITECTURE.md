@@ -2,7 +2,7 @@
 
 ## 1. System boundary
 
-Overhauled is the broker execution plane. It accepts bounded binary broker frames, validates optional YuKKi worker directives, admits requests into isolated worker-class queues, applies broker-local CPU/NUMA placement where supported, selects an execution backend, and returns structured results and telemetry. YuKKi-OS owns workload semantics, class selection, spatial resolution, logical affinity keys, deadlines, and advisory preferred-NUMA hints; Overhauled owns local class queues, request admission budgets, Linux process-allowed CPU discovery/worker affinity, GPU topology, accelerator placement, and execution. This repository does not embed YuKKi-OS or Wasmtime.
+Overhauled is the broker execution plane. It accepts bounded binary broker frames, validates optional YuKKi worker directives, admits requests into NUMA-local worker-class queue shards, applies broker-local CPU affinity where supported, optionally borrows bounded elastic worker capacity for eligible classes, selects an execution backend, and returns structured results and telemetry. YuKKi-OS owns workload semantics, class selection, spatial resolution, logical affinity keys, deadlines, and advisory preferred-NUMA hints; Overhauled owns local queue shards, dedicated and elastic worker admission, Linux process-allowed CPU discovery/worker affinity, GPU topology, accelerator placement, and execution. This repository does not embed YuKKi-OS or Wasmtime.
 
 ```text
 YuKKi-OS / external client
@@ -21,7 +21,7 @@ BrokerServer (default TCP port 9090)
         |      +-- media.stream.v1 (MED1 validation / echo)
         |      +-- WASM task and lifecycle operations
         |
-        +-- worker scheduler (Control / RealtimeSpatial / Throughput / ExactCpu / Inference)\n        |      +-- bounded admission, deadline ordering, Linux NUMA affinity\n        |\n        +-- backend dispatcher (CPU / GPU / NPU)
+        +-- worker scheduler (five classes × eligible NUMA nodes)\n        |      +-- dedicated class pools and node-local ordered queues\n        |      +-- optional bounded elastic workers (RealtimeSpatial / Throughput / Inference)\n        |      +-- preferred node → logical affinity → round-robin routing\n        |\n        +-- backend dispatcher (CPU / GPU / NPU)
                +-- CPU reference compute path
                +-- GPU compute path -> GpuTopology -> Placer
                +-- optional NPU executor
@@ -36,12 +36,16 @@ The broker is not an authentication, encryption, HTTP, or general-purpose model-
 ![Overhauled broker and execution architecture diagram](diagrams/overhauled-architecture.svg)
 
 A terminal-renderable ANSI-colour version is available with
-`bash docs/diagrams/print-ansi.sh`. The updated map adds the five isolated
-worker-class pools, request/memory admission budget, deadline ordering and
-broker-local Linux NUMA affinity. BRK2 fields 11–13 carry optional class and
-locality intent; response fields 8–12 report executed worker and successfully
-applied NUMA telemetry. BRK1 retains its legacy Throughput queue and has no
-backend-identity field. The NPU simulator is CPU emulation, not acceleration.
+`bash docs/diagrams/print-ansi.sh`. The map shows five worker classes, their
+eligible NUMA-local queue shards, dedicated workers, optional bounded elastic
+capacity, request/memory admission budget, deadline ordering and broker-local
+Linux worker affinity. Preferred-node routing falls back to the logical
+affinity key and then round-robin. Elastic capacity is limited to
+RealtimeSpatial, Throughput and Inference; Control and ExactCpu remain
+dedicated. BRK2 fields 11–13 carry optional class and locality intent;
+response fields 8–12 report worker and successfully applied NUMA telemetry.
+BRK1 retains its legacy Throughput behavior and has no backend-identity field.
+The NPU simulator is CPU emulation, not acceleration.
 
 
 ## 2. Transport and protocol boundary
@@ -213,4 +217,17 @@ For the full operational sequence, use [System administration](SYSADMIN_HOWTO.md
 
 ## YuKKi-directed worker fabric
 
-Overhauled has class-isolated, dynamically growing queues for Control, RealtimeSpatial, Throughput, ExactCpu, and Inference work. YuKKi-OS supplies optional BRK2 worker intent; Overhauled performs broker admission, Linux NUMA CPU affinity, accelerator dispatch, and telemetry. Control, Throughput, ExactCpu, and Inference queues are FIFO; RealtimeSpatial is earliest-deadline-first when an absolute deadline is supplied, with FIFO tie-breaking. A process-wide outstanding-request and in-flight-memory budget protects the broker from memory exhaustion, and reservations remain held after client disconnect until task completion. Isolated class pools intentionally do not provide a single global ordering. See [YUKKI_WORKER_FABRIC.md](YUKKI_WORKER_FABRIC.md) for the BRK2 field contract, ownership rules, capacity controls, NUMA behavior, and operational validation.
+Overhauled maintains five worker classes with one ordered queue per eligible
+NUMA node. Dedicated workers remain assigned to a home node and consume only
+that node's queue. Optional elastic worker threads are separately capped at
+64 (256 combined workers maximum) and may service RealtimeSpatial, Throughput
+and Inference queues on their own node, subject to process-wide concurrent
+ceilings per class. Control and ExactCpu never use elastic capacity.
+RealtimeSpatial retains earliest-deadline-first order within each node queue;
+other classes preserve FIFO order. Preferred-node hints are honoured only
+when that class has an eligible queue there; otherwise routing uses the
+logical affinity key or round-robin. The process-wide outstanding-request
+and in-flight-memory budget remains the queue bound and reservations remain
+held through completion. The feature adds no BRK2 fields and does not change
+BRK1 behavior. See [YUKKI_WORKER_FABRIC.md](YUKKI_WORKER_FABRIC.md) for CLI
+settings, limits, ownership and operational validation.
