@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - perf/measure-worker-fabric-throughput
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -28,7 +31,7 @@ jobs:
       - name: Record runner topology
         run: |
           uname -a
-          lscpu | grep -E 'Architecture|CPU\\(s\\)|Thread|Core|Socket|NUMA' || true
+          lscpu | grep -E 'Architecture|CPU|Thread|Core|Socket|NUMA' || true
           cat /sys/devices/system/node/online 2>/dev/null || true
           cat /sys/devices/system/node/node*/cpulist 2>/dev/null || true
 
@@ -68,7 +71,7 @@ jobs:
               for i in range(12000):
                   row = {"sequence": i, "timestamp_ns": 1_700_000_000_000_000_000 + i}
                   row.update({name: ((i * (j + 3)) % 1009) / 1009.0 for j, name in enumerate(fields)})
-                  out.write(json.dumps(row, separators=(",", ":")) + "\\n")
+                  out.write(json.dumps(row, separators=(",", ":")) + "\n")
           manifest = {
               "version": 1,
               "datasets": [{
@@ -88,7 +91,7 @@ jobs:
                   "worker_counts": [8, 16, 24]
               }]
           }
-          (root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\\n", encoding="utf-8")
+          (root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
           PY
 
       - name: Run alternating baseline and merged scheduler trials
@@ -227,8 +230,8 @@ jobs:
                   f"| {workers} | {base:,.0f} | {dedicated:,.0f} ({dedicated_delta:+.1f}%) | "
                   f"{elastic:,.0f} ({elastic_delta:+.1f}%) | {dedicated_delta:+.1f}% | {elastic_delta:+.1f}% |"
               )
-          (root / "summary.json").write_text(json.dumps(summary, indent=2) + "\\n")
-          (root / "summary.md").write_text("\\n".join(lines) + "\\n")
+          (root / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+          (root / "summary.md").write_text("\n".join(lines) + "\n")
           print((root / "summary.md").read_text())
           PY
           cat benchmark-results/summary.md >> "$GITHUB_STEP_SUMMARY"
