@@ -2,7 +2,7 @@
 
 ## 1. System boundary
 
-Overhauled is the execution and placement plane. It accepts bounded binary broker frames, validates and dispatches requests, selects an execution backend, and returns a structured result. It is designed to sit behind a separately authenticated control plane such as YuKKi-OS; it does not embed YuKKi-OS. NUMA topology discovery, NUMA-local memory policy, and NUMA worker scheduling are deliberately outside this repository; YuKKi-OS owns system topology/locality, while Overhauled's topology and placement code concern accelerator devices and GPU interconnects.
+Overhauled is the broker execution plane. It accepts bounded binary broker frames, validates workload directives, admits requests into isolated worker-class queues, applies local CPU/NUMA placement where supported, selects an execution backend, and returns structured results and telemetry. YuKKi-OS owns workload semantics, spatial resolution, and advisory locality hints; Overhauled owns the broker's local worker scheduling, Linux NUMA discovery/CPU affinity, GPU topology, accelerator placement, and execution. This repository does not embed YuKKi-OS or Wasmtime.
 
 ```text
 YuKKi-OS / external client
@@ -21,7 +21,7 @@ BrokerServer (default TCP port 9090)
         |      +-- media.stream.v1 (MED1 validation / echo)
         |      +-- WASM task and lifecycle operations
         |
-        +-- backend dispatcher (CPU / GPU / NPU)
+        +-- worker scheduler (Control / RealtimeSpatial / Throughput / ExactCpu / Inference)\n        |      +-- bounded admission, deadline ordering, Linux NUMA affinity\n        |\n        +-- backend dispatcher (CPU / GPU / NPU)
                +-- CPU reference compute path
                +-- GPU compute path -> GpuTopology -> Placer
                +-- optional NPU executor
