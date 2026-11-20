@@ -1,0 +1,247 @@
+name: Worker Fabric A-B Throughput
+
+on:
+  push:
+    branches:
+      - perf/measure-worker-fabric-throughput
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: Release broker A-B benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libssl-dev python3
+
+      - name: Record runner topology
+        run: |
+          uname -a
+          lscpu | grep -E 'Architecture|CPU|Thread|Core|Socket|NUMA' || true
+          cat /sys/devices/system/node/online 2>/dev/null || true
+          cat /sys/devices/system/node/node*/cpulist 2>/dev/null || true
+
+      - name: Prepare baseline and merged source trees
+        env:
+          BASE_SHA: accd334bd6964213cb6eb9c1eed295901b83b5e6
+          MERGED_SHA: bbacdbf654d1932a534c3e42ed31fde98b23b2f6
+        run: |
+          mkdir -p /tmp/worker-fabric-src
+          git worktree add /tmp/worker-fabric-src/baseline "$BASE_SHA"
+          git worktree add /tmp/worker-fabric-src/merged "$MERGED_SHA"
+
+      - name: Build optimized broker binaries
+        run: |
+          set -euo pipefail
+          for variant in baseline merged; do
+            cmake -S "/tmp/worker-fabric-src/$variant" -B "/tmp/worker-fabric-build/$variant" \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_BROKER=ON \
+              -DBUILD_TESTING=OFF \
+              -DBUILD_EXAMPLES=OFF \
+              -DENABLE_CUDA=OFF \
+              -DENABLE_TENSORRT=OFF
+            cmake --build "/tmp/worker-fabric-build/$variant" --target broker_server --parallel 2
+          done
+
+      - name: Generate deterministic multivariate broker workload
+        run: |
+          mkdir -p benchmark-results
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("benchmark-input")
+          root.mkdir(exist_ok=True)
+          fields = [f"feature_{i}" for i in range(8)]
+          with (root / "synthetic.jsonl").open("w", encoding="utf-8") as out:
+              for i in range(12000):
+                  row = {"sequence": i, "timestamp_ns": 1_700_000_000_000_000_000 + i}
+                  row.update({name: ((i * (j + 3)) % 1009) / 1009.0 for j, name in enumerate(fields)})
+                  out.write(json.dumps(row, separators=(",", ":")) + "\n")
+          manifest = {
+              "version": 1,
+              "datasets": [{
+                  "id": "synthetic-multivariate",
+                  "domain": "synthetic",
+                  "source": "synthetic.jsonl",
+                  "sequence_field": "sequence",
+                  "timestamp_ns_field": "timestamp_ns",
+                  "feature_fields": fields
+              }],
+              "profiles": [{
+                  "id": "saturated-throughput",
+                  "objective": "throughput",
+                  "warmup_records": 500,
+                  "sample_records": 12000,
+                  "batch_sizes": [1],
+                  "worker_counts": [8, 16, 24]
+              }]
+          }
+          (root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Run alternating baseline and merged scheduler trials
+        run: |
+          set -euo pipefail
+          cp /tmp/worker-fabric-src/merged/benchmarks/dataset_broker_bench.py ./dataset_broker_bench.py
+          port=19190
+          server_pid=""
+          stop_server() {
+            if [ -n "$server_pid" ]; then
+              kill "$server_pid" 2>/dev/null || true
+              wait "$server_pid" 2>/dev/null || true
+              server_pid=""
+            fi
+          }
+          trap stop_server EXIT
+
+          run_arm() {
+            arm="$1"
+            round="$2"
+            variant="$3"
+            elastic="$4"
+            binary="/tmp/worker-fabric-build/$variant/broker_server"
+            common=(--workers-control 1 --workers-realtime 1 --workers-throughput 4 --workers-exact-cpu 1 --workers-inference 1)
+            if [ "$elastic" = "yes" ]; then
+              "$binary" "$port" "${common[@]}" --workers-elastic 4 --elastic-throughput-max 4 > "benchmark-results/$arm-r$round-server.log" 2>&1 &
+            else
+              "$binary" "$port" "${common[@]}" > "benchmark-results/$arm-r$round-server.log" 2>&1 &
+            fi
+            server_pid=$!
+            ready=0
+            for _ in $(seq 1 80); do
+              if ! kill -0 "$server_pid" 2>/dev/null; then
+                cat "benchmark-results/$arm-r$round-server.log"
+                return 1
+              fi
+              if (echo > "/dev/tcp/127.0.0.1/$port") >/dev/null 2>&1; then
+                ready=1
+                break
+              fi
+              sleep 0.25
+            done
+            if [ "$ready" -ne 1 ]; then
+              cat "benchmark-results/$arm-r$round-server.log"
+              return 1
+            fi
+            python3 ./dataset_broker_bench.py \
+              --manifest benchmark-input/manifest.json \
+              --host 127.0.0.1 --port "$port" --timeout 30 \
+              --device cpu --worker-class throughput --profile saturated-throughput \
+              --output "benchmark-results/$arm-r$round.json"
+            stop_server
+          }
+
+          # Rotate order to reduce systematic warm-run and host-load bias.
+          for round in 1 2 3; do
+            case "$round" in
+              1) run_arm baseline "$round" baseline no
+                 run_arm merged-dedicated "$round" merged no
+                 run_arm merged-elastic "$round" merged yes ;;
+              2) run_arm merged-elastic "$round" merged yes
+                 run_arm baseline "$round" baseline no
+                 run_arm merged-dedicated "$round" merged no ;;
+              3) run_arm merged-dedicated "$round" merged no
+                 run_arm merged-elastic "$round" merged yes
+                 run_arm baseline "$round" baseline no ;;
+            esac
+          done
+
+      - name: Summarize throughput and latency
+        run: |
+          python3 - <<'PY'
+          import glob, json, statistics
+          from pathlib import Path
+          root = Path("benchmark-results")
+          arms = ["baseline", "merged-dedicated", "merged-elastic"]
+          parsed = {}
+          for arm in arms:
+              files = sorted(glob.glob(str(root / f"{arm}-r[123].json")))
+              samples = {}
+              for file in files:
+                  doc = json.loads(Path(file).read_text())
+                  for profile in doc["results"]:
+                      for candidate in profile["candidates"]:
+                          samples.setdefault(candidate["workers"], []).append(candidate)
+              parsed[arm] = samples
+
+          def med(arm, workers, key):
+              return statistics.median(item[key] for item in parsed[arm][workers])
+
+          lines = [
+              "# Worker-fabric A/B throughput",
+              "",
+              "Release-mode broker; same Ubuntu runner; 12,000 deterministic eight-feature BRK2 records per candidate; three alternating repetitions.",
+              "",
+              "| Concurrent clients | Baseline req/s | Merged, dedicated only | Merged + 4 elastic | Dedicated-only delta | Elastic total delta |",
+              "|---:|---:|---:|---:|---:|---:|"
+          ]
+          summary = {"runner": "ubuntu-latest", "arms": {}, "comparisons": {}}
+          for arm in arms:
+              summary["arms"][arm] = {}
+              for workers in sorted(parsed[arm]):
+                  summary["arms"][arm][str(workers)] = {
+                      "requests_per_second_median": med(arm, workers, "requests_per_second"),
+                      "p50_ms_median": med(arm, workers, "p50_request_ms"),
+                      "p95_ms_median": med(arm, workers, "p95_request_ms"),
+                      "p99_ms_median": med(arm, workers, "p99_request_ms"),
+                      "mean_queue_wait_us_median": med(arm, workers, "mean_queue_wait_us"),
+                      "p95_queue_wait_us_median": med(arm, workers, "p95_queue_wait_us"),
+                      "mean_service_time_us_median": med(arm, workers, "mean_service_time_us"),
+                      "elastic_worker_ids_seen": sorted({
+                          worker_id
+                          for repetition in parsed[arm][workers]
+                          for worker_id in repetition["worker_ids"]
+                          if worker_id >= 1280
+                      }),
+                      "numa_nodes_seen": sorted({
+                          node
+                          for repetition in parsed[arm][workers]
+                          for node in repetition["worker_numa_nodes"]
+                      })
+                  }
+          for workers in sorted(parsed["baseline"]):
+              base = med("baseline", workers, "requests_per_second")
+              dedicated = med("merged-dedicated", workers, "requests_per_second")
+              elastic = med("merged-elastic", workers, "requests_per_second")
+              dedicated_delta = (dedicated / base - 1.0) * 100.0
+              elastic_delta = (elastic / base - 1.0) * 100.0
+              elastic_vs_dedicated = (elastic / dedicated - 1.0) * 100.0
+              summary["comparisons"][str(workers)] = {
+                  "merged_dedicated_vs_baseline_pct": dedicated_delta,
+                  "merged_elastic_vs_baseline_pct": elastic_delta,
+                  "elastic_vs_merged_dedicated_pct": elastic_vs_dedicated
+              }
+              lines.append(
+                  f"| {workers} | {base:,.0f} | {dedicated:,.0f} ({dedicated_delta:+.1f}%) | "
+                  f"{elastic:,.0f} ({elastic_delta:+.1f}%) | {dedicated_delta:+.1f}% | {elastic_delta:+.1f}% |"
+              )
+          (root / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+          (root / "summary.md").write_text("\n".join(lines) + "\n")
+          print((root / "summary.md").read_text())
+          PY
+          cat benchmark-results/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload benchmark report and raw trials
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-fabric-throughput-ab
+          path: |
+            benchmark-results/
+            benchmark-input/manifest.json
+          if-no-files-found: error
+          retention-days: 30
