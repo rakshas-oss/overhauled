@@ -18,15 +18,14 @@
 namespace nvlink::broker {
 
 constexpr std::size_t kWorkerClassCount = 5;
+// Worker IDs at or above this value identify opt-in elastic worker threads.
+constexpr std::size_t kFirstElasticWorkerId = kWorkerClassCount * 256;
 
 struct WorkerExecutionContext {
     WorkerClass worker_class = WorkerClass::Throughput;
     uint32_t worker_id = 0;
     uint64_t queue_wait_us = 0;
     std::optional<uint32_t> numa_node;
-    // True when an additional bounded elastic worker serviced this request.
-    // This is local execution metadata; the BRK2 wire schema is unchanged.
-    bool elastic_worker = false;
 };
 
 struct WorkerPoolConfig {
