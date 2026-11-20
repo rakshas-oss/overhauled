@@ -9,6 +9,13 @@ The repositories remain separate. This feature does not move Wasmtime,
 NXR1 interpretation, spatial freshness policy, or numerical semantics into
 Overhauled.
 
+![Overhauled broker worker-fabric architecture](diagrams/overhauled-architecture.svg)
+
+The diagram summarizes the five isolated queues, their ordering rules,
+process-wide admission controls, broker-local Linux NUMA affinity, backend
+dispatch and BRK2 response telemetry. It is paired with the terminal renderer
+at `docs/diagrams/print-ansi.sh`.
+
 ## Worker classes
 
 BRK2 request TLVs extend the existing request schema without changing the
