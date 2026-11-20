@@ -90,5 +90,51 @@ int main(){
             (void)decode_brk2_request_body(mutated, &fuzz_request, &fuzz_id, &fuzz_error, limits);
         }
     }
+
+    // Optional YuKKi-OS worker directive: class, spatial affinity and NUMA hint.
+    auto routed = request_body();
+    std::vector<uint8_t> worker = str("realtime-spatial");
+    field(routed, 11, 8, worker, 0);
+    std::vector<uint8_t> affinity; u64(affinity, 0x1122334455667788ULL);
+    field(routed, 12, 4, affinity, 0);
+    std::vector<uint8_t> numa; u32(numa, 3);
+    field(routed, 13, 3, numa, 0);
+    const uint32_t routed_size = static_cast<uint32_t>(routed.size() - 32);
+    routed[28]=static_cast<uint8_t>(routed_size>>24);
+    routed[29]=static_cast<uint8_t>(routed_size>>16);
+    routed[30]=static_cast<uint8_t>(routed_size>>8);
+    routed[31]=static_cast<uint8_t>(routed_size);
+    assert(decode_brk2_request_body(routed, &request, &id, &error, field_limits));
+    assert(request.worker_class == WorkerClass::RealtimeSpatial);
+    assert(request.spatial_affinity_key == 0x1122334455667788ULL);
+    assert(request.preferred_numa_node == 3);
+    assert(request.deadline_unix_ns == 1900000000000000000ULL);
+
+    auto missing_affinity = request_body();
+    const auto realtime_field = str("realtime-spatial");
+    field(missing_affinity, 11, 8, realtime_field, 0);
+    const uint32_t missing_affinity_size = static_cast<uint32_t>(missing_affinity.size() - 32);
+    missing_affinity[28]=static_cast<uint8_t>(missing_affinity_size>>24);
+    missing_affinity[29]=static_cast<uint8_t>(missing_affinity_size>>16);
+    missing_affinity[30]=static_cast<uint8_t>(missing_affinity_size>>8);
+    missing_affinity[31]=static_cast<uint8_t>(missing_affinity_size);
+    assert(!decode_brk2_request_body(missing_affinity, &request, &id, &error, field_limits));
+    assert(error == "realtime-spatial BRK2 directive requires spatial_affinity_key");
+
+    auto unknown_class = routed;
+    // The first directive TLV follows the original request fields and starts at the original end.
+    const std::size_t directive_offset = body.size();
+    unknown_class[directive_offset + 8] = 'x';
+    assert(!decode_brk2_request_body(unknown_class, &request, &id, &error, field_limits));
+
+    response.worker_telemetry_available = true;
+    response.worker_class = WorkerClass::RealtimeSpatial;
+    response.queue_wait_us = 1234;
+    response.service_time_us = 5678;
+    response.worker_id = 513;
+    response.worker_numa_node = 3;
+    const auto telemetry_response = encode_brk2_response_body(response, id, limits);
+    assert(telemetry_response.size() > encoded.size());
+
     std::cout<<"brk2_protocol_test passed\\n";
 }

@@ -234,6 +234,36 @@ int main() {
         assert(!media_rejected.error.empty());
     }
 
+    // YuKKi's exact-CPU class overrides a GPU preference; throughput
+    // classification can still use GPU when the broker's local policy allows it.
+    {
+        BrokerServiceConfig class_config;
+        class_config.synthetic_gpu_count = 1;
+        class_config.default_backend = BackendKind::Gpu;
+        class_config.gpu_offload_threshold_bytes = 1;
+        BrokerService class_service(class_config);
+
+        BrokerRequest exact = req;
+        exact.task_id = "worker-exact-cpu";
+        exact.payload = pack_doubles({1.0, 2.0, 3.0});
+        exact.worker_class = WorkerClass::ExactCpu;
+        exact.worker_class_explicit = true;
+        exact.device_preference = "gpu";
+        const BrokerResponse exact_response = class_service.handle_request(exact);
+        assert(exact_response.status == TaskStatus::Ok);
+        assert(exact_response.backend == BackendKind::Cpu);
+        assert(exact_response.selected_gpu == -1);
+
+        BrokerRequest throughput = exact;
+        throughput.task_id = "worker-throughput";
+        throughput.worker_class = WorkerClass::Throughput;
+        throughput.device_preference.clear();
+        const BrokerResponse throughput_response = class_service.handle_request(throughput);
+        assert(throughput_response.status == TaskStatus::Ok);
+        assert(throughput_response.backend == BackendKind::Gpu);
+        assert(throughput_response.selected_gpu == 0);
+    }
+
     std::cout << "broker_service_test passed\n";
     return 0;
 }

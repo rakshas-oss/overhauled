@@ -183,7 +183,7 @@ Placement validates non-empty GPU topology, model registry access is synchronize
 
 - [Broker protocol](docs/BROKER_PROTOCOL.md) · [BRK2 conformance](docs/BRK2_CONFORMANCE_V1.md) · [Executable BRK corpus](docs/BRK_CONFORMANCE_V1.md)
 - [YuKKi-OS interoperability](docs/YUKKI_INTEROP.md) · [WASM interoperability](docs/WASM_INTEROP.md)
-- [Ethos-U85 bundle and hardware boundary](docs/ETHOSU_U85_BUNDLE.md)
+- [Ethos-U85 bundle and hardware boundary](docs/ETHOSU_U85_BUNDLE.md) · [YuKKi-aware worker fabric](docs/YUKKI_WORKER_FABRIC.md)
 - [Architecture and runtime decision model](docs/ARCHITECTURE.md) · [Heuristic and backend-selection verification](docs/SYSADMIN_HOWTO.md) · [Versioning](docs/VERSIONING.md)
 - [Architecture and decision model](docs/ARCHITECTURE.md) · [Library guide](docs/LIBRARY.md) · [Versioning](docs/VERSIONING.md)
 - [System administration step-by-step](docs/SYSADMIN_HOWTO.md) · [Operations runbook](OPERATIONS_RUNBOOK.md) · [Deployment guide](DEPLOYMENT_GUIDE.md)

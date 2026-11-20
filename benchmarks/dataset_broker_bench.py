@@ -139,10 +139,23 @@ def tlv(field_id, kind, flags, payload):
     return struct.pack("!HBBI", field_id, kind, flags, len(payload)) + payload
 
 
-def request_frame(request_id, dataset_id, record, device="cpu"):
+def request_frame(
+    request_id, dataset_id, record, device="cpu", worker_class="throughput",
+    spatial_affinity_key=None, preferred_numa_node=None, deadline_ms=None,
+):
     sequence, timestamp_ns, values = record
     payload = struct.pack("!QQ" + "d" * len(values), sequence, timestamp_ns, *values)
-    body = b"".join((
+    if worker_class not in {"control", "realtime-spatial", "throughput", "exact-cpu", "inference"}:
+        raise ValueError("unknown worker class")
+    if worker_class == "realtime-spatial" and spatial_affinity_key is None:
+        raise ValueError("realtime-spatial requires --spatial-affinity-key")
+    if spatial_affinity_key is not None and not 0 <= spatial_affinity_key <= 0xFFFFFFFFFFFFFFFF:
+        raise ValueError("spatial affinity key must be an unsigned 64-bit integer")
+    if preferred_numa_node is not None and not 0 <= preferred_numa_node <= 0xFFFFFFFF:
+        raise ValueError("preferred NUMA node must be an unsigned 32-bit integer")
+    if deadline_ms is not None and not 1 <= deadline_ms <= 300000:
+        raise ValueError("deadline-ms must be in 1..300000")
+    fields = [
         tlv(1, 8, 1, b"dataset-benchmark"),
         tlv(2, 8, 1, dataset_id.encode("utf-8")),
         tlv(3, 8, 1, b"overhauled"),
@@ -151,7 +164,16 @@ def request_frame(request_id, dataset_id, record, device="cpu"):
         tlv(6, 3, 1, struct.pack("!I", 10000)),
         tlv(7, 9, 1, payload),
         tlv(10, 8, 0, device.encode("ascii")),
-    ))
+        tlv(11, 8, 0, worker_class.encode("ascii")),
+    ]
+    if deadline_ms is not None:
+        deadline_unix_ns = time.time_ns() + deadline_ms * 1_000_000
+        fields.append(tlv(9, 4, 0, struct.pack("!Q", deadline_unix_ns)))
+    if spatial_affinity_key is not None:
+        fields.append(tlv(12, 4, 0, struct.pack("!Q", spatial_affinity_key)))
+    if preferred_numa_node is not None:
+        fields.append(tlv(13, 3, 0, struct.pack("!I", preferred_numa_node)))
+    body = b"".join(fields)
     header = HEADER.pack(MAGIC, 2, 0, 32, 3, 0, request_id, 1, 1, 0, len(body))
     frame = header + body
     return struct.pack("!I", len(frame)) + frame
@@ -174,7 +196,10 @@ def recv_response(sock):
     return recv_exact(sock, size)
 
 
-def decode_response(response, expected_request_id, expected_task_id, device_preference, expected_result_bytes):
+def decode_response(
+    response, expected_request_id, expected_task_id, device_preference,
+    expected_result_bytes, expected_worker_class=None,
+):
     if len(response) < HEADER.size:
         raise ValueError("truncated BRK2 response header")
     magic, major, minor, header_len, message_type, flags, request_id, schema, version, reserved, payload_len = HEADER.unpack_from(response)
@@ -198,7 +223,7 @@ def decode_response(response, expected_request_id, expected_task_id, device_pref
         offset += 8
         if field_flags & ~0x03 or wire_type < 1 or wire_type > 12 or value_len > len(response) - offset:
             raise ValueError("invalid or truncated BRK2 response TLV")
-        if field_id not in range(1, 8) and (field_flags & 1):
+        if field_id not in range(1, 13) and (field_flags & 1):
             raise ValueError(f"unknown critical BRK2 response field {field_id}")
         if field_id in fields:
             raise ValueError(f"duplicate BRK2 response field {field_id}")
@@ -222,6 +247,27 @@ def decode_response(response, expected_request_id, expected_task_id, device_pref
     except UnicodeDecodeError as error:
         raise ValueError("invalid UTF-8 in BRK2 response") from error
 
+    worker_telemetry_available = any(field_id in fields for field_id in range(8, 13))
+    worker_class = None
+    queue_wait_us = None
+    service_time_us = None
+    worker_id = None
+    worker_numa_node = None
+    if worker_telemetry_available:
+        try:
+            worker_class = required(8, 8).decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ValueError("invalid UTF-8 in worker-class telemetry") from error
+        if worker_class not in {"control", "realtime-spatial", "throughput", "exact-cpu", "inference"}:
+            raise ValueError(f"unknown broker worker class {worker_class!r}")
+        queue_wait_us = struct.unpack("!Q", required(9, 4, 8))[0]
+        service_time_us = struct.unpack("!Q", required(10, 4, 8))[0]
+        worker_id = struct.unpack("!I", required(11, 3, 4))[0]
+        if 12 in fields:
+            worker_numa_node = struct.unpack("!I", required(12, 3, 4))[0]
+        if expected_worker_class is not None and worker_class != expected_worker_class:
+            raise ValueError(f"requested worker class {expected_worker_class} but broker reported {worker_class}")
+
     if task_id != expected_task_id:
         raise ValueError(f"BRK2 task correlation mismatch: expected {expected_task_id!r}, got {task_id!r}")
     if len(result) != expected_result_bytes or len(result) % 8:
@@ -244,14 +290,25 @@ def decode_response(response, expected_request_id, expected_task_id, device_pref
         "latency_ms": latency_ms,
         "result_bytes": len(result),
         "fallback": backend != device_preference,
+        "worker_class": worker_class,
+        "queue_wait_us": queue_wait_us,
+        "service_time_us": service_time_us,
+        "worker_id": worker_id,
+        "worker_numa_node": worker_numa_node,
+        "worker_telemetry_available": worker_telemetry_available,
     }
 
 
-def run_worker(host, port, dataset_id, records, batch_size, timeout, device):
+def run_worker(host, port, dataset_id, records, batch_size, timeout, device, worker_class="throughput", spatial_affinity_key=None, preferred_numa_node=None, deadline_ms=None):
     latencies = []
     backend_counts = {}
     selected_gpus = set()
     fallback_requests = 0
+    queue_wait_samples = []
+    service_time_samples = []
+    numa_nodes = set()
+    worker_ids = set()
+    worker_telemetry_requests = 0
     with socket.create_connection((host, port), timeout=timeout) as connection:
         connection.settimeout(timeout)
         for offset in range(0, len(records), batch_size):
@@ -261,7 +318,10 @@ def run_worker(host, port, dataset_id, records, batch_size, timeout, device):
             for record in batch:
                 request_id = next(REQUEST_IDS)
                 sent_at[request_id] = time.perf_counter_ns()
-                frames.append(request_frame(request_id, dataset_id, record, device))
+                frames.append(request_frame(
+                    request_id, dataset_id, record, device, worker_class,
+                    spatial_affinity_key, preferred_numa_node, deadline_ms,
+                ))
             connection.sendall(b"".join(frames))
             for _ in batch:
                 response = recv_response(connection)
@@ -269,18 +329,31 @@ def run_worker(host, port, dataset_id, records, batch_size, timeout, device):
                 started = sent_at.pop(response_id, None)
                 if started is None:
                     raise ValueError(f"unexpected or duplicate response request_id={response_id}")
-                telemetry = decode_response(response, response_id, "dataset-benchmark", device, 8 * (2 + len(record[2])))
+                telemetry = decode_response(
+                    response, response_id, "dataset-benchmark", device,
+                    8 * (2 + len(record[2])), worker_class,
+                )
                 latencies.append(time.perf_counter_ns() - started)
                 backend_counts[telemetry["backend"]] = backend_counts.get(telemetry["backend"], 0) + 1
                 if telemetry["selected_gpu"] >= 0:
                     selected_gpus.add(telemetry["selected_gpu"])
                 fallback_requests += int(telemetry["fallback"])
+                if telemetry["worker_telemetry_available"]:
+                    worker_telemetry_requests += 1
+                    queue_wait_samples.append(telemetry["queue_wait_us"])
+                    service_time_samples.append(telemetry["service_time_us"])
+                    worker_ids.add(telemetry["worker_id"])
+                    if telemetry["worker_numa_node"] is not None:
+                        numa_nodes.add(telemetry["worker_numa_node"])
             if sent_at:
                 raise ValueError(f"missing responses for request_ids={sorted(sent_at)}")
-    return latencies, backend_counts, selected_gpus, fallback_requests
+    return (
+        latencies, backend_counts, selected_gpus, fallback_requests,
+        queue_wait_samples, service_time_samples, numa_nodes, worker_ids, worker_telemetry_requests,
+    )
 
 
-def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout, device):
+def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout, device, worker_class="throughput", spatial_affinity_key=None, preferred_numa_node=None, deadline_ms=None):
     if not records:
         raise ValueError("candidate has no records")
     active_workers = min(workers, len(records))
@@ -290,14 +363,29 @@ def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout,
     backend_counts = {}
     selected_gpus = set()
     fallback_requests = 0
+    queue_wait_samples = []
+    service_time_samples = []
+    numa_nodes = set()
+    worker_ids = set()
+    worker_telemetry_requests = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=active_workers) as pool:
         futures = [
-            pool.submit(run_worker, host, port, dataset_id, part, batch_size, timeout, device)
+            pool.submit(
+                run_worker, host, port, dataset_id, part, batch_size, timeout, device,
+                worker_class, spatial_affinity_key, preferred_numa_node, deadline_ms,
+            )
             for part in partitions if part
         ]
         for future in concurrent.futures.as_completed(futures):
-            worker_latencies, worker_backends, worker_gpus, worker_fallbacks = future.result()
+            (worker_latencies, worker_backends, worker_gpus, worker_fallbacks,
+             worker_queue_wait, worker_service_time, worker_numa_nodes,
+             worker_ids_seen, worker_telemetry_count) = future.result()
             latencies_ns.extend(worker_latencies)
+            queue_wait_samples.extend(worker_queue_wait)
+            service_time_samples.extend(worker_service_time)
+            numa_nodes.update(worker_numa_nodes)
+            worker_ids.update(worker_ids_seen)
+            worker_telemetry_requests += worker_telemetry_count
             for backend, count in worker_backends.items():
                 backend_counts[backend] = backend_counts.get(backend, 0) + count
             selected_gpus.update(worker_gpus)
@@ -309,6 +397,12 @@ def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout,
             return 0.0
         index = min(len(latencies_ms) - 1, math.ceil((len(latencies_ms) - 1) * p))
         return latencies_ms[index]
+    def percentile_of(values, p):
+        ordered = sorted(values)
+        if not ordered:
+            return None
+        index = min(len(ordered) - 1, math.ceil((len(ordered) - 1) * p))
+        return ordered[index]
     return {
         "batch_size": batch_size,
         "workers": active_workers,
@@ -322,10 +416,18 @@ def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout,
         "actual_backend_counts": dict(sorted(backend_counts.items())),
         "selected_gpu_ids": sorted(selected_gpus),
         "fallback_requests": fallback_requests,
+        "worker_class": worker_class,
+        "worker_telemetry_requests": worker_telemetry_requests,
+        "mean_queue_wait_us": statistics.fmean(queue_wait_samples) if queue_wait_samples else None,
+        "p95_queue_wait_us": percentile_of(queue_wait_samples, 0.95),
+        "mean_service_time_us": statistics.fmean(service_time_samples) if service_time_samples else None,
+        "p95_service_time_us": percentile_of(service_time_samples, 0.95),
+        "worker_numa_nodes": sorted(numa_nodes),
+        "worker_ids": sorted(worker_ids),
     }
 
 
-def run_profile(host, port, dataset_id, rows, profile, timeout, dry_run, device):
+def run_profile(host, port, dataset_id, rows, profile, timeout, dry_run, device, worker_class="throughput", spatial_affinity_key=None, preferred_numa_node=None, deadline_ms=None):
     objective = profile.get("objective")
     if objective not in ("latency", "throughput"):
         return None
@@ -358,10 +460,16 @@ def run_profile(host, port, dataset_id, rows, profile, timeout, dry_run, device)
         }
 
     if warmup:
-        run_candidate(host, port, dataset_id, warmup, 1, 1, timeout, device)
+        run_candidate(
+            host, port, dataset_id, warmup, 1, 1, timeout, device,
+            worker_class, spatial_affinity_key, preferred_numa_node, deadline_ms,
+        )
 
     candidates = [
-        run_candidate(host, port, dataset_id, sample, batch, workers, timeout, device)
+        run_candidate(
+            host, port, dataset_id, sample, batch, workers, timeout, device,
+            worker_class, spatial_affinity_key, preferred_numa_node, deadline_ms,
+        )
         for batch in batch_sizes for workers in worker_counts
     ]
     limit = profile.get("max_p95_request_ms")
@@ -399,11 +507,23 @@ def main():
     parser.add_argument("--profile", default="all")
     parser.add_argument("--timeout", type=float, default=20.0)
     parser.add_argument("--device", choices=("cpu", "gpu", "npu"), default="cpu", help="execution preference passed through BRK2")
+    parser.add_argument("--worker-class", choices=("control", "realtime-spatial", "throughput", "exact-cpu", "inference"), default="throughput")
+    parser.add_argument("--spatial-affinity-key", type=lambda value: int(value, 0), help="logical U64 affinity key (required for realtime-spatial)")
+    parser.add_argument("--preferred-numa-node", type=int, help="advisory local NUMA node ID")
+    parser.add_argument("--deadline-ms", type=int, help="absolute deadline window from submission, in milliseconds (1..300000)")
     parser.add_argument("--output", type=pathlib.Path)
     parser.add_argument("--dry-run", action="store_true", help="validate dataset/profile and show candidate workload without network I/O")
     args = parser.parse_args()
     if not 1 <= args.port <= 65535 or not 0.1 <= args.timeout <= 120.0:
         parser.error("port must be 1..65535 and timeout must be 0.1..120 seconds")
+    if args.worker_class == "realtime-spatial" and args.spatial_affinity_key is None:
+        parser.error("--worker-class realtime-spatial requires --spatial-affinity-key")
+    if args.spatial_affinity_key is not None and not 0 <= args.spatial_affinity_key <= 0xFFFFFFFFFFFFFFFF:
+        parser.error("--spatial-affinity-key must be an unsigned 64-bit integer")
+    if args.preferred_numa_node is not None and not 0 <= args.preferred_numa_node <= 0xFFFFFFFF:
+        parser.error("--preferred-numa-node must be an unsigned 32-bit integer")
+    if args.deadline_ms is not None and not 1 <= args.deadline_ms <= 300000:
+        parser.error("--deadline-ms must be in 1..300000")
 
     manifest = read_manifest(args.manifest)
     base = args.manifest.parent
@@ -429,7 +549,8 @@ def main():
             if applicable is not None and dataset.get("domain") not in applicable:
                 continue
             result = run_profile(
-                args.host, args.port, dataset["id"], rows, profile, args.timeout, args.dry_run, args.device
+                args.host, args.port, dataset["id"], rows, profile, args.timeout, args.dry_run, args.device,
+                args.worker_class, args.spatial_affinity_key, args.preferred_numa_node, args.deadline_ms,
             )
             if result is not None:
                 result["dataset_sha256"] = sha256_file(source_path)
@@ -440,7 +561,13 @@ def main():
     report = {
         "manifest_version": manifest["version"],
         "manifest_sha256": sha256_file(args.manifest),
-        "broker": {"host": args.host, "port": args.port, "protocol": "BRK2", "device_preference": args.device},
+        "broker": {
+            "host": args.host, "port": args.port, "protocol": "BRK2",
+            "device_preference": args.device, "worker_class": args.worker_class,
+            "spatial_affinity_key": args.spatial_affinity_key,
+            "preferred_numa_node": args.preferred_numa_node,
+            "deadline_ms": args.deadline_ms,
+        },
         "measured": not args.dry_run,
         "results": results,
     }

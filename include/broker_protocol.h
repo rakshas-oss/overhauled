@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,21 @@ enum class TaskStatus : uint8_t {
     Timeout = 3,
 };
 
+// The worker class is supplied by YuKKi-OS as workload intent. Overhauled
+// validates it and applies local admission/placement without reclassifying the
+// workload. BRK1 and BRK2 requests without the optional directive default to
+// Throughput for compatibility.
+enum class WorkerClass : uint8_t {
+    Control = 0,
+    RealtimeSpatial = 1,
+    Throughput = 2,
+    ExactCpu = 3,
+    Inference = 4,
+};
+
+const char* worker_class_name(WorkerClass value) noexcept;
+bool parse_worker_class(const std::string& value, WorkerClass* out) noexcept;
+
 struct ProtocolLimits {
     std::size_t max_frame_bytes = 1024 * 1024;
     std::size_t max_payload_bytes = 512 * 1024;
@@ -48,6 +64,12 @@ struct BrokerRequest {
     // Values: "" (unset), "cpu", "gpu", "npu", "auto". Old servers ignore it;
     // new servers map "npu" to an inference profile (see BrokerService).
     std::string device_preference;
+    WorkerClass worker_class = WorkerClass::Throughput;
+    bool worker_class_explicit = false;
+    std::optional<uint64_t> spatial_affinity_key;
+    std::optional<uint32_t> preferred_numa_node;
+    // BRK2 field 9 is an absolute Unix timestamp in nanoseconds.
+    std::optional<uint64_t> deadline_unix_ns;
 };
 
 struct BrokerResponse {
@@ -61,6 +83,12 @@ struct BrokerResponse {
     // not encoded in the BRK1 frame.
     BackendKind backend = BackendKind::Cpu;
     bool fell_back_to_cpu = false;
+    WorkerClass worker_class = WorkerClass::Throughput;
+    uint64_t queue_wait_us = 0;
+    uint64_t service_time_us = 0;
+    uint32_t worker_id = 0;
+    std::optional<uint32_t> worker_numa_node;
+    bool worker_telemetry_available = false;
 };
 
 bool validate_request(const BrokerRequest& request, std::string* error, const ProtocolLimits& limits);

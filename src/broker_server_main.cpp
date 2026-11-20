@@ -28,8 +28,16 @@ void print_usage(const char* argv0) {
     std::cout
         << "Usage: " << argv0 << " [port] [--cpu-only] [--default-backend cpu|gpu|npu]\n"
         << "       [--gpu-offload-threshold BYTES] [--npu-enabled] [--npu-simulated]\n"
+        << "       [--workers TOTAL] [--workers-control N] [--workers-realtime N]\n"
+        << "       [--workers-throughput N] [--workers-exact-cpu N] [--workers-inference N]\n"
+        << "       [--max-outstanding N] [--max-inflight-bytes N]\n"
         << "       [--npu-ethosu-bundle FILE] [--ethosu-device /dev/dri/renderD*]\n"
         << "  --npu-ethosu-bundle: execute a Vela-compiled YU85BND1 model via mainline DRM.\n"
+        << "  --workers TOTAL: legacy total worker budget; reserved classes are allocated first.\n"
+        << "  --workers-throughput N: explicitly size the throughput worker pool.\n"
+        << "  --workers-control/realtime/exact-cpu/inference N: class pool sizes.\n"
+        << "  --max-outstanding N: process-wide outstanding request cap (0 derives from client limits, max 65536).\n"
+        << "  --max-inflight-bytes N: queued plus executing request and metadata memory budget (default 64 MiB).\n"
         << "  --npu-simulated: enable the CPU-emulated NPU executor for\n"
         << "    conformance/CI only. It is NOT hardware acceleration.\n"
         << "Starts broker interoperability server for YuKKi-OS task dispatch.\n";
@@ -64,6 +72,38 @@ int main(int argc, char** argv) {
                 std::cerr << "Unknown backend: " << value << "\n";
                 return 1;
             }
+            continue;
+        }
+        if (arg == "--workers" && i + 1 < argc) {
+            config.worker_threads = std::stoull(argv[++i]);
+            continue;
+        }
+        if (arg == "--workers-control" && i + 1 < argc) {
+            config.control_worker_threads = std::stoull(argv[++i]);
+            continue;
+        }
+        if (arg == "--workers-realtime" && i + 1 < argc) {
+            config.realtime_spatial_worker_threads = std::stoull(argv[++i]);
+            continue;
+        }
+        if (arg == "--workers-throughput" && i + 1 < argc) {
+            config.throughput_worker_threads = std::stoull(argv[++i]);
+            continue;
+        }
+        if (arg == "--workers-exact-cpu" && i + 1 < argc) {
+            config.exact_cpu_worker_threads = std::stoull(argv[++i]);
+            continue;
+        }
+        if (arg == "--max-outstanding" && i + 1 < argc) {
+            config.max_outstanding_requests = std::stoull(argv[++i]);
+            continue;
+        }
+        if (arg == "--max-inflight-bytes" && i + 1 < argc) {
+            config.max_inflight_memory_bytes = std::stoull(argv[++i]);
+            continue;
+        }
+        if (arg == "--workers-inference" && i + 1 < argc) {
+            config.inference_worker_threads = std::stoull(argv[++i]);
             continue;
         }
         if (arg == "--gpu-offload-threshold" && i + 1 < argc) {

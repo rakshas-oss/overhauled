@@ -373,3 +373,9 @@ Confirm the broker was started with `--npu-simulated` for conformance or with an
 ### Client connects but times out or disconnects
 
 Check proxy TCP pass-through, the default 5-second socket timeout, client in-flight cap (32), maximum concurrent clients (128), and whether the client is sending complete frames. Increasing a client timeout does not preempt work already executing on the broker.
+
+## YuKKi-aware worker pools
+
+The broker accepts optional BRK2 worker directives and routes them into isolated FIFO pools. Configure dedicated worker counts with `--workers-control`, `--workers-realtime`, `--workers-throughput`, `--workers-exact-cpu`, and `--workers-inference`. The defaults reserve one worker for each dedicated class and allocate the remaining automatic worker budget to Throughput.
+
+Queues grow dynamically; they do not have a per-class fixed length. Memory exhaustion is still prevented by broker-wide admission controls: `--max-outstanding N` (0 derives from client/in-flight limits, hard capped at 65,536) and `--max-inflight-bytes N` (default 64 MiB, includes request metadata). Requests retain these reservations through completion, even if a client disconnects. Control, Throughput, ExactCpu, and Inference queues are FIFO. RealtimeSpatial queues are earliest-deadline-first when an absolute deadline is supplied, with FIFO tie-breaking; requests without a deadline remain behind deadline-bearing requests. There is no cross-class global ordering. Linux NUMA affinity is reported only when successfully applied. See [YUKKI_WORKER_FABRIC.md](YUKKI_WORKER_FABRIC.md) for full semantics and example configurations.

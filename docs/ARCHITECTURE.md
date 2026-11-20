@@ -124,7 +124,7 @@ TensorRT is a separate optional `gpu_runtime_server` target; it is not an automa
 
 ## 7. Concurrency, limits, and lifecycle
 
-The server uses a bounded worker pool, per-client sessions, a bounded in-flight request count, a global queued-task ceiling, a default maximum of 128 connected clients, a default per-connection in-flight cap of 32, and a default socket timeout of 5 seconds. Worker count is auto-selected and capped at 256 unless configured through the C++ API.
+The server uses per-client sessions and five isolated worker-class pools. Each class has a reserved worker pool and its own dynamically growing queue; queue memory is protected by a process-wide outstanding-request cap and in-flight-memory budget. Defaults are 128 clients, 32 in-flight requests per client, 4,096 derived process-wide outstanding requests, 64 MiB in-flight request memory, and a 5-second socket timeout. The combined class worker count is capped at 256 and can be configured through the CLI. Linux worker threads attempt NUMA-aware CPU affinity within the broker process's allowed CPU mask.
 
 The listener binds to all interfaces (`0.0.0.0`). Restrict ingress with firewall rules or a private network. Shutdown closes the listener and active client sockets and drains/stops worker activity according to the server lifecycle.
 
@@ -200,6 +200,7 @@ For the full operational sequence, use [System administration](SYSADMIN_HOWTO.md
 | Build features and target graph | `CMakeLists.txt` |
 | BRK1/BRK2 framing and schemas | `src/broker_protocol.cpp`, `src/brk2_protocol.cpp`, corresponding headers |
 | TCP listener, sessions, limits | `src/broker_server.cpp`, `include/broker_server.h` |
+| Class worker pools, admission budgets, Linux NUMA affinity | `src/worker_scheduler.cpp`, `include/worker_scheduler.h` |
 | CLI and runtime backend wiring | `src/broker_server_main.cpp` |
 | Backend policy and NPU interface | `include/backend_dispatch.h`, `include/npu_device.h` |
 | Broker routing and execution | `src/broker_service.cpp`, `include/broker_service.h` |
@@ -207,3 +208,7 @@ For the full operational sequence, use [System administration](SYSADMIN_HOWTO.md
 | Ethos-U DRM execution | `src/ethosu_u85_drm_executor.cpp`, `include/ethosu_u85_drm_executor.h` |
 | NXR1 and MED1 handlers | `src/geospatial_frame.cpp`, `src/media_stream.cpp` |
 | WASM sandbox | `src/wasm_sandbox.cpp`, `include/wasm_sandbox.h` |
+
+## YuKKi-directed worker fabric
+
+Overhauled has class-isolated, dynamically growing queues for Control, RealtimeSpatial, Throughput, ExactCpu, and Inference work. YuKKi-OS supplies optional BRK2 worker intent; Overhauled performs broker admission, Linux NUMA CPU affinity, accelerator dispatch, and telemetry. Control, Throughput, ExactCpu, and Inference queues are FIFO; RealtimeSpatial is earliest-deadline-first when an absolute deadline is supplied, with FIFO tie-breaking. A process-wide outstanding-request and in-flight-memory budget protects the broker from memory exhaustion, and reservations remain held after client disconnect until task completion. Isolated class pools intentionally do not provide a single global ordering. See [YUKKI_WORKER_FABRIC.md](YUKKI_WORKER_FABRIC.md) for the BRK2 field contract, ownership rules, capacity controls, NUMA behavior, and operational validation.
