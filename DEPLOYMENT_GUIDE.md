@@ -1,6 +1,6 @@
 # Overhauled GPU Runtime - Production Deployment Guide (published v1.1.4 baseline)
 
-This guide retains the production deployment sequence for the published v1.1.4 baseline. The current v1.1.5 benchmark/validation candidate is not a new production runtime interface; qualify and deploy it only after its release checks, tag and archive are complete. For broker-specific configuration, also consult docs/SYSADMIN_HOWTO.md.
+This guide retains the production deployment sequence for the published v1.1.4 baseline. The current v1.2.0 benchmark/validation candidate is not a new production runtime interface; qualify and deploy it only after its release checks, tag and archive are complete. For broker-specific configuration, also consult docs/SYSADMIN_HOWTO.md.
 
 Table of contents
 1. Architecture Overview
