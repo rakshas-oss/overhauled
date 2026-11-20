@@ -307,6 +307,7 @@ def run_worker(host, port, dataset_id, records, batch_size, timeout, device, wor
     queue_wait_samples = []
     service_time_samples = []
     numa_nodes = set()
+    worker_ids = set()
     worker_telemetry_requests = 0
     with socket.create_connection((host, port), timeout=timeout) as connection:
         connection.settimeout(timeout)
@@ -341,6 +342,7 @@ def run_worker(host, port, dataset_id, records, batch_size, timeout, device, wor
                     worker_telemetry_requests += 1
                     queue_wait_samples.append(telemetry["queue_wait_us"])
                     service_time_samples.append(telemetry["service_time_us"])
+                    worker_ids.add(telemetry["worker_id"])
                     if telemetry["worker_numa_node"] is not None:
                         numa_nodes.add(telemetry["worker_numa_node"])
             if sent_at:
@@ -419,6 +421,7 @@ def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout,
         "mean_service_time_us": statistics.fmean(service_time_samples) if service_time_samples else None,
         "p95_service_time_us": percentile_of(service_time_samples, 0.95),
         "worker_numa_nodes": sorted(numa_nodes),
+        "worker_ids": sorted(worker_ids),
     }
 
 
