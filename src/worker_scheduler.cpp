@@ -165,12 +165,13 @@ public:
 #endif
     }
 
-    // Pin once per task only when its logical NUMA target changes. CPU choice
-    // is stable for a worker on a given node, avoiding arbitrary per-task
-    // rotation and needless cache disruption.
-    std::optional<uint32_t> pin(std::optional<uint32_t> requested_node,
-                                std::optional<uint64_t> affinity_key,
-                                std::size_t worker_index) const noexcept {
+    // CPU choice is stable for a worker on a given node. Avoid repeating the
+    // pthread affinity syscall when consecutive tasks resolve to the same CPU.
+    std::optional<uint32_t> pin(
+        std::optional<uint32_t> requested_node,
+        std::optional<uint64_t> affinity_key,
+        std::size_t worker_index,
+        std::optional<std::pair<uint32_t, int>>& current_pin) const noexcept {
 #if defined(__linux__)
         if (nodes_.empty()) return std::nullopt;
         const CpuNode* selected = nullptr;
@@ -188,16 +189,22 @@ public:
         }
         if (selected->cpus.empty()) return std::nullopt;
         const int cpu = selected->cpus[worker_index % selected->cpus.size()];
+        if (current_pin && current_pin->first == selected->id &&
+            current_pin->second == cpu) return selected->id;
         cpu_set_t mask;
         CPU_ZERO(&mask);
         CPU_SET(cpu, &mask);
-        if (pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask) != 0)
+        if (pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask) != 0) {
+            current_pin.reset();
             return std::nullopt;
+        }
+        current_pin = std::make_pair(selected->id, cpu);
         return selected->id;
 #else
         (void)requested_node;
         (void)affinity_key;
         (void)worker_index;
+        (void)current_pin;
         return std::nullopt;
 #endif
     }
@@ -272,7 +279,14 @@ public:
 
     void stop() noexcept {
         stopping_.store(true, std::memory_order_release);
-        for (auto& queue : queues_) queue.cv.notify_all();
+        for (auto& queue : queues_) {
+            // Synchronise with any enqueue already inside this class's critical
+            // section before waking workers to drain and exit.
+            {
+                std::lock_guard<std::mutex> lock(queue.mutex);
+            }
+            queue.cv.notify_all();
+        }
     }
 
     void join() noexcept {
@@ -330,6 +344,7 @@ private:
             global_worker_index += threads_[prior_class].size();
 
         auto& queue = queues_[class_id];
+        std::optional<std::pair<uint32_t, int>> current_pin;
         for (;;) {
             QueuedTask queued_task;
             {
@@ -350,7 +365,8 @@ private:
             context.worker_id = static_cast<uint32_t>(class_id * 256 + worker_index);
             context.queue_wait_us = wait > 0 ? static_cast<uint64_t>(wait) : 0;
             context.numa_node = topology_.pin(
-                queued_task.preferred_node, queued_task.affinity_key, global_worker_index);
+                queued_task.preferred_node, queued_task.affinity_key,
+                global_worker_index, current_pin);
             try { queued_task.task(context); }
             catch (...) {
                 // A task failure is isolated to this worker and its client completion guard.
