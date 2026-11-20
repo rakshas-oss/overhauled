@@ -1,3 +1,45 @@
+## v1.2.0 (release candidate; tag pending)
+Date: 2026-11-19
+
+### Highlights
+
+- **YuKKi-aware broker worker fabric:** adds Control, RealtimeSpatial,
+  Throughput, ExactCpu and Inference queues with reserved worker pools.
+- **Deadline-aware spatial scheduling:** RealtimeSpatial uses earliest-deadline
+  first ordering for deadline-bearing requests, with stable admission-order
+  tie breaking; expired queued work is not started and late results are not
+  reported as success.
+- **Admission and memory protection:** process-wide outstanding-request and
+  in-flight memory budgets retain reservations through execution completion,
+  including client disconnects.
+- **Linux NUMA placement:** discovers node CPU sets, intersects them with the
+  process-allowed CPU mask, and reports NUMA placement only after successful
+  worker-thread affinity application.
+- **BRK2 worker metadata:** optional request fields 11–13 carry class, logical
+  spatial affinity and preferred NUMA node; optional response fields 8–12
+  report class, queue wait, service time, worker ID and applied NUMA node.
+- **Benchmark and operations guidance:** adds class/affinity/NUMA/deadline
+  benchmark controls and operational guidance for mixed-class saturation,
+  deadlines and resource budgets.
+
+### Compatibility and release boundary
+
+- BRK1, BRK2 and WSM1 envelope identities and existing required fields remain
+  unchanged. New BRK2 request fields are optional/non-critical and response
+  telemetry is optional.
+- BRK1 and legacy BRK2 requests retain the Throughput queue and legacy backend
+  selection semantics.
+- NUMA affinity is implemented for Linux and may be unavailable in restricted
+  environments. Deadlines are not native-code preemption or hard real-time
+  guarantees.
+- CMake, Conan and vcpkg metadata are aligned to 1.2.0. External registry
+  submissions and archive checksums remain pending the exact final tag.
+- v1.2.0 is a candidate only; do not tag or publish before required CI,
+  review, sanitizer, package-consumer and cross-repository interoperability
+  checks pass.
+
+---
+
 # Release Notes
 
 Repository: rakshas-oss/overhauled
