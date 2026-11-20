@@ -70,16 +70,26 @@ request fields. The WSM1 payload is unchanged.
 
 ## Queue ordering, capacity, and overload protection
 
-Each class has its own dynamically growing ordered queue, queue mutex,
-condition variable, and reserved worker pool. Enqueue operations notify one
-worker in the target class rather than waking unrelated class pools.
-Control, Throughput, ExactCpu, and Inference preserve FIFO admission order.
-RealtimeSpatial is FIFO when no deadline is supplied; requests with an
-absolute deadline are inserted earliest-deadline-first using ordered insertion
-(O(log n)), with equal deadlines preserving admission order and
-deadline-bearing tasks preceding tasks with no deadline. There is no cross-class
-global ordering. Class isolation is intentional: a throughput backlog cannot
-occupy the reserved control or real-time workers.
+Each worker class has a separate ordered queue on every NUMA node
+where that class can be serviced. Each queue has its own mutex and condition
+variable; enqueueing wakes a worker in that node/class rather than unrelated
+pools. FIFO is preserved within each node-local queue. RealtimeSpatial uses
+earliest-deadline-first when a deadline is present; equal deadlines preserve
+admission order and deadline-bearing work precedes work without a deadline.
+Different NUMA shards execute independently, and there is no cross-class
+global ordering.
+
+Node routing follows this precedence:
+
+1. A preferred NUMA node is used when that class has a worker queue on it.
+2. Otherwise a logical spatial-affinity key selects a stable eligible node.
+3. Without either hint, requests are distributed round-robin across the
+   nodes eligible for that worker class.
+
+A class is eligible on a node only when a dedicated worker or a permitted
+elastic worker can drain that node's queue. This prevents requests from being
+placed in an orphaned queue. A requested node may be substituted when that
+class has no worker capacity on it.
 
 The queues have no fixed per-class entry limit. They allocate on demand, but
 the broker still applies a process-wide admission budget to prevent memory
@@ -104,6 +114,35 @@ The per-client in-flight cap remains active. Global admission accounting also
 closes the disconnect/reconnect loophole: queued work retains its reservation
 until its completion guard runs.
 
+## Bounded class-aware elastic workers
+
+Elastic workers are optional additional threads (--workers-elastic N), with
+a hard maximum of 64 and an overall dedicated-plus-elastic process limit of
+256. The default is zero, preserving the dedicated-only worker budget until
+elastic capacity is explicitly enabled.
+
+Elastic service is restricted to three classes:
+
+| Class | Default concurrent elastic ceiling | Policy |
+|---|---:|---|
+| RealtimeSpatial | 1 | Deadline queue ordering is retained |
+| Throughput | 4 | Primary source of elastic batch capacity |
+| Inference | 2 | Shares only its configured elastic ceiling |
+| Control | 0 | Dedicated capacity only |
+| ExactCpu | 0 | Dedicated CPU-only capacity |
+
+Each elastic worker services only queues on its own NUMA node. It selects
+eligible classes with weighted rotation (3 RealtimeSpatial : 4 Throughput :
+2 Inference slots), subject to a process-wide concurrent-service ceiling per
+class. A busy class cannot consume another class's configured elastic
+allowance. Elastic workers never service Control or ExactCpu.
+
+The worker ID telemetry range 1280–1343 identifies elastic workers. The
+existing BRK2 response schema is unchanged. The elastic flag is available in
+the broker's in-process WorkerExecutionContext, not as a new wire field.
+The ceilings can be tuned with --elastic-realtime-max N,
+--elastic-throughput-max N, and --elastic-inference-max N.
+
 ## NUMA placement
 
 On Linux, the worker fabric reads node CPU lists from
@@ -111,13 +150,16 @@ On Linux, the worker fabric reads node CPU lists from
 current `sched_getaffinity` mask, and applies worker-thread affinity with
 `pthread_setaffinity_np`.
 
-A requested NUMA node is used when it exists in the process-allowed topology.
-Otherwise the broker falls back to a node selected from the logical affinity
-key or worker identity. CPU selection is deterministic for a worker on a given
-node, so repeated tasks with the same target do not rotate through CPUs. The
-worker caches its last successfully applied node/CPU pair and skips redundant
-affinity syscalls until the target changes. The response reports the node only
-when affinity application succeeds.
+A request is routed to a node-local class queue before execution.
+If its preferred node has an eligible queue for that class, the broker uses
+it; otherwise the logical affinity key selects an eligible node, or requests
+without either hint are distributed round-robin. Dedicated and elastic
+workers consume only queues on their assigned home node.
+
+On Linux, a worker pins itself to a CPU in that queue's node. CPU selection is
+deterministic for the worker, and the last successfully applied node/CPU pair
+is cached to avoid redundant affinity syscalls. The response reports a NUMA
+node only when affinity application succeeds.
 
 On non-Linux systems, restricted containers, or hosts where affinity cannot
 be applied, worker execution continues without claiming NUMA pinning. A
@@ -152,13 +194,22 @@ Example:
   --workers-throughput 8 \
   --workers-exact-cpu 1 \
   --workers-inference 2 \
+  --workers-elastic 4 \
+  --elastic-realtime-max 1 \
+  --elastic-throughput-max 4 \
+  --elastic-inference-max 2 \
   --max-outstanding 4096 \
   --max-inflight-bytes 67108864
 ```
 
-The combined worker count must be 1..256. Every dedicated class pool must
-have at least one worker. If `--workers-throughput` is omitted, the legacy
-`--workers TOTAL` or automatic total determines the throughput remainder.
+The combined dedicated-plus-elastic worker count must be 1..256.
+Dedicated Control, RealtimeSpatial, ExactCpu, and Inference pools each need
+at least one worker. Elastic threads are added after the reserved workers; if
+`--workers-throughput` is omitted, `--workers TOTAL` or the automatic
+budget determines the Throughput remainder after accounting for elastic slots.
+The legacy automatic worker target remains `min(256, max(5, 2 *
+hardware_concurrency))`; enabling elastic workers can increase the total
+above that target when needed to retain at least one Throughput worker.
 
 ## Operational measurements
 
