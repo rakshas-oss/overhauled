@@ -205,15 +205,28 @@ public:
             }
             reserved += count;
         }
+        constexpr std::size_t kMaximumElasticWorkers = 64;
+        const std::size_t elastic_workers = config_.elastic_worker_threads;
+        if (elastic_workers > kMaximumElasticWorkers ||
+            elastic_workers > 256 - reserved) {
+            throw std::invalid_argument("elastic worker count must be in 0..64 and fit the 256 worker process cap");
+        }
+
         std::size_t throughput_workers = config_.throughput_worker_threads;
         if (throughput_workers == 0) {
             const std::size_t total_budget = config_.worker_threads == 0
                 ? automatic_total
                 : std::max<std::size_t>(5, config_.worker_threads);
-            throughput_workers = total_budget > reserved ? total_budget - reserved : 1;
+            const std::size_t required = reserved + elastic_workers;
+            if (config_.worker_threads != 0 && total_budget <= required) {
+                throw std::invalid_argument(
+                    "--workers TOTAL must leave at least one throughput worker after reserved and elastic workers");
+            }
+            throughput_workers = total_budget > required ? total_budget - required : 1;
         }
-        if (throughput_workers == 0 || throughput_workers > 256 - reserved) {
-            throw std::invalid_argument("class worker total must be in 1..256");
+        if (throughput_workers == 0 ||
+            throughput_workers > 256 - reserved - elastic_workers) {
+            throw std::invalid_argument("dedicated plus elastic worker total must be in 1..256");
         }
         WorkerPoolConfig pool_config;
         pool_config.workers = {{
@@ -223,6 +236,8 @@ public:
             config_.exact_cpu_worker_threads,
             config_.inference_worker_threads
         }};
+        pool_config.elastic_workers = elastic_workers;
+        pool_config.elastic_max_per_class = config_.elastic_max_workers_per_class;
         worker_pool_ = std::make_unique<ClassWorkerPool>(pool_config);
     }
 
