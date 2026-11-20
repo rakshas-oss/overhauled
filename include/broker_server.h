@@ -21,9 +21,10 @@ struct BrokerServerConfig {
     std::size_t max_outstanding_requests = 0;
     // Accounts queued/executing payload plus request metadata; protects heap use during bursts.
     std::size_t max_inflight_memory_bytes = 64 * 1024 * 1024;
-    // Legacy total worker budget. When set, dedicated class workers are
-    // reserved first and the remainder is assigned to throughput workers.
-    std::size_t worker_threads = 0; // 0 = auto-detect
+    // Legacy total worker budget. Dedicated class workers are reserved
+    // first, optional elastic workers are carved out next, and the remainder
+    // is assigned to Throughput (at least one worker is retained).
+    std::size_t worker_threads = 0; // 0 = automatic sizing
     std::size_t control_worker_threads = 1;
     std::size_t realtime_spatial_worker_threads = 1;
     std::size_t throughput_worker_threads = 0; // 0 = use legacy/automatic budget
