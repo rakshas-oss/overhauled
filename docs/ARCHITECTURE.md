@@ -2,7 +2,7 @@
 
 ## 1. System boundary
 
-Overhauled is the broker execution plane. It accepts bounded binary broker frames, validates workload directives, admits requests into isolated worker-class queues, applies local CPU/NUMA placement where supported, selects an execution backend, and returns structured results and telemetry. YuKKi-OS owns workload semantics, spatial resolution, and advisory locality hints; Overhauled owns the broker's local worker scheduling, Linux NUMA discovery/CPU affinity, GPU topology, accelerator placement, and execution. This repository does not embed YuKKi-OS or Wasmtime.
+Overhauled is the broker execution plane. It accepts bounded binary broker frames, validates optional YuKKi worker directives, admits requests into isolated worker-class queues, applies broker-local CPU/NUMA placement where supported, selects an execution backend, and returns structured results and telemetry. YuKKi-OS owns workload semantics, class selection, spatial resolution, logical affinity keys, deadlines, and advisory preferred-NUMA hints; Overhauled owns local class queues, request admission budgets, Linux process-allowed CPU discovery/worker affinity, GPU topology, accelerator placement, and execution. This repository does not embed YuKKi-OS or Wasmtime.
 
 ```text
 YuKKi-OS / external client
@@ -36,10 +36,12 @@ The broker is not an authentication, encryption, HTTP, or general-purpose model-
 ![Overhauled broker and execution architecture diagram](diagrams/overhauled-architecture.svg)
 
 A terminal-renderable ANSI-colour version is available with
-`bash docs/diagrams/print-ansi.sh`. The illustration distinguishes the
-BRK1 compatibility response (no backend-identity field) from BRK2 response
-field 7 (authoritative backend identity). It also shows the NPU simulator as
-CPU emulation, not physical acceleration.
+`bash docs/diagrams/print-ansi.sh`. The updated map adds the five isolated
+worker-class pools, request/memory admission budget, deadline ordering and
+broker-local Linux NUMA affinity. BRK2 fields 11–13 carry optional class and
+locality intent; response fields 8–12 report executed worker and successfully
+applied NUMA telemetry. BRK1 retains its legacy Throughput queue and has no
+backend-identity field. The NPU simulator is CPU emulation, not acceleration.
 
 
 ## 2. Transport and protocol boundary
