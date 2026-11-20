@@ -259,6 +259,9 @@ public:
                         [](std::size_t value) { return value == 0; }))
             throw std::invalid_argument("elastic workers require at least one eligible class limit");
 
+        for (auto& cursor : node_cursors_) cursor.store(0, std::memory_order_relaxed);
+        for (auto& active : elastic_active_) active.store(0, std::memory_order_relaxed);
+
         const std::size_t nodes = topology_.node_count();
         nodes_.reserve(nodes);
         for (std::size_t index = 0; index < nodes; ++index) {
@@ -295,7 +298,9 @@ public:
                 for (std::size_t node_index = 0; node_index < nodes_.size(); ++node_index) {
                     const auto& node = *nodes_[node_index];
                     if (node.dedicated_workers[class_id] > 0 ||
-                        (elastic_eligible(worker_class) && node.elastic_workers > 0)) {
+                        (elastic_eligible(worker_class) &&
+                         config_.elastic_max_per_class[class_id] > 0 &&
+                         node.elastic_workers > 0)) {
                         class_node_indices_[class_id].push_back(node_index);
                     }
                 }
