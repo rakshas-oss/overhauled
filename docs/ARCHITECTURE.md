@@ -200,6 +200,7 @@ For the full operational sequence, use [System administration](SYSADMIN_HOWTO.md
 | Build features and target graph | `CMakeLists.txt` |
 | BRK1/BRK2 framing and schemas | `src/broker_protocol.cpp`, `src/brk2_protocol.cpp`, corresponding headers |
 | TCP listener, sessions, limits | `src/broker_server.cpp`, `include/broker_server.h` |
+| Class worker pools, admission budgets, Linux NUMA affinity | `src/worker_scheduler.cpp`, `include/worker_scheduler.h` |
 | CLI and runtime backend wiring | `src/broker_server_main.cpp` |
 | Backend policy and NPU interface | `include/backend_dispatch.h`, `include/npu_device.h` |
 | Broker routing and execution | `src/broker_service.cpp`, `include/broker_service.h` |
