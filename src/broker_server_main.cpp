@@ -30,12 +30,17 @@ void print_usage(const char* argv0) {
         << "       [--gpu-offload-threshold BYTES] [--npu-enabled] [--npu-simulated]\n"
         << "       [--workers TOTAL] [--workers-control N] [--workers-realtime N]\n"
         << "       [--workers-throughput N] [--workers-exact-cpu N] [--workers-inference N]\n"
-        << "       [--max-outstanding N] [--max-inflight-bytes N]\n"
+        << "       [--workers-elastic N] [--elastic-realtime-max N] [--elastic-throughput-max N]\n"
+        << "       [--elastic-inference-max N] [--max-outstanding N] [--max-inflight-bytes N]\n"
         << "       [--npu-ethosu-bundle FILE] [--ethosu-device /dev/dri/renderD*]\n"
         << "  --npu-ethosu-bundle: execute a Vela-compiled YU85BND1 model via mainline DRM.\n"
         << "  --workers TOTAL: legacy total worker budget; reserved classes are allocated first.\n"
-        << "  --workers-throughput N: explicitly size the throughput worker pool.\n"
-        << "  --workers-control/realtime/exact-cpu/inference N: class pool sizes.\n"
+        << "  --workers-throughput N: explicitly size the dedicated throughput worker pool.\n"
+        << "  --workers-elastic N: add at most 64 NUMA-local elastic worker threads (default 0).\n"
+        << "  Elastic workers serve RealtimeSpatial, Throughput and Inference only.\n"
+        << "  --elastic-realtime/throughput/inference-max N: concurrent elastic ceiling per class.\n"
+        << "  Control and ExactCpu never borrow elastic workers.\n"
+        << "  --workers-control/realtime/exact-cpu/inference N: dedicated class pool sizes.\n"
         << "  --max-outstanding N: process-wide outstanding request cap (0 derives from client limits, max 65536).\n"
         << "  --max-inflight-bytes N: queued plus executing request and metadata memory budget (default 64 MiB).\n"
         << "  --npu-simulated: enable the CPU-emulated NPU executor for\n"
@@ -104,6 +109,25 @@ int main(int argc, char** argv) {
         }
         if (arg == "--workers-inference" && i + 1 < argc) {
             config.inference_worker_threads = std::stoull(argv[++i]);
+            continue;
+        }
+        if (arg == "--workers-elastic" && i + 1 < argc) {
+            config.elastic_worker_threads = std::stoull(argv[++i]);
+            continue;
+        }
+        if (arg == "--elastic-realtime-max" && i + 1 < argc) {
+            config.elastic_max_workers_per_class[static_cast<std::size_t>(
+                nvlink::broker::WorkerClass::RealtimeSpatial)] = std::stoull(argv[++i]);
+            continue;
+        }
+        if (arg == "--elastic-throughput-max" && i + 1 < argc) {
+            config.elastic_max_workers_per_class[static_cast<std::size_t>(
+                nvlink::broker::WorkerClass::Throughput)] = std::stoull(argv[++i]);
+            continue;
+        }
+        if (arg == "--elastic-inference-max" && i + 1 < argc) {
+            config.elastic_max_workers_per_class[static_cast<std::size_t>(
+                nvlink::broker::WorkerClass::Inference)] = std::stoull(argv[++i]);
             continue;
         }
         if (arg == "--gpu-offload-threshold" && i + 1 < argc) {
