@@ -217,7 +217,7 @@ int main() {
              &elastic_active, &elastic_peak, &completed, &elastic_tasks_done]
             (const WorkerExecutionContext& context) mutable {
                 CHECK(context.worker_class == WorkerClass::Throughput);
-                if (context.elastic_worker) {
+                if (context.worker_id >= kFirstElasticWorkerId) {
                     const std::size_t now = elastic_active.fetch_add(1) + 1;
                     std::size_t peak = elastic_peak.load();
                     while (now > peak && !elastic_peak.compare_exchange_weak(peak, now)) {}
@@ -225,7 +225,7 @@ int main() {
                         two_elastic_started.set_value();
                 }
                 elastic_release_future.wait();
-                if (context.elastic_worker) elastic_active.fetch_sub(1);
+                if (context.worker_id >= kFirstElasticWorkerId) elastic_active.fetch_sub(1);
                 if (completed.fetch_add(1) + 1 == kElasticTestTasks)
                     elastic_tasks_done.set_value();
             }));
@@ -266,7 +266,7 @@ int main() {
     CHECK(control_started_future.wait_for(std::chrono::seconds(2)) == std::future_status::ready);
     CHECK(isolation_pool.enqueue(WorkerClass::Control, std::nullopt, control_node,
         [&second_control_done](const WorkerExecutionContext& context) {
-            CHECK(!context.elastic_worker);
+            CHECK(context.worker_id < kFirstElasticWorkerId);
             second_control_done.set_value();
         }));
     CHECK(isolation_pool.queued_on_node(WorkerClass::Control, control_node) == 1);
