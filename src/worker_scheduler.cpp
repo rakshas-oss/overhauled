@@ -519,6 +519,9 @@ private:
     void worker_loop(std::size_t class_id, std::size_t worker_index,
                      std::size_t node_index) noexcept {
         const WorkerClass worker_class = static_cast<WorkerClass>(class_id);
+        std::size_t topology_worker_index = worker_index;
+        for (std::size_t prior_class = 0; prior_class < class_id; ++prior_class)
+            topology_worker_index += config_.workers[prior_class];
         NodeState& node = *nodes_[node_index];
         ClassQueue& queue = node.queues[class_id];
         std::optional<std::pair<uint32_t, int>> current_pin;
@@ -533,7 +536,7 @@ private:
                 auto item = queue.tasks.extract(queue.tasks.begin());
                 queued_task = std::move(item.value());
             }
-            execute_task(worker_class, class_id * 256 + worker_index, class_id * 256 + worker_index,
+            execute_task(worker_class, class_id * 256 + worker_index, topology_worker_index,
                          node, queued_task, false, current_pin);
         }
     }
@@ -573,6 +576,9 @@ private:
     void elastic_worker_loop(std::size_t worker_index, std::size_t node_index) noexcept {
         NodeState& node = *nodes_[node_index];
         std::size_t schedule_cursor = worker_index % kElasticServiceSchedule.size();
+        std::size_t topology_worker_index = config_.elastic_workers;
+        for (const std::size_t count : config_.workers) topology_worker_index += count;
+        topology_worker_index += worker_index;
         std::optional<std::pair<uint32_t, int>> current_pin;
         for (;;) {
             uint64_t observed_generation = 0;
@@ -586,7 +592,7 @@ private:
             if (try_take_elastic(node, schedule_cursor, worker_class, queued_task)) {
                 const std::size_t class_id = class_index(worker_class);
                 execute_task(worker_class, kElasticWorkerIdBase + worker_index,
-                             kElasticWorkerIdBase + worker_index, node, queued_task,
+                             topology_worker_index, node, queued_task,
                              true, current_pin);
                 elastic_active_[class_id].fetch_sub(1, std::memory_order_acq_rel);
                 // Wake another elastic worker that may have been held back by
