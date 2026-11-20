@@ -88,7 +88,7 @@ namespace {
 using Clock = std::chrono::steady_clock;
 constexpr std::size_t kMaximumWorkers = 256;
 constexpr std::size_t kMaximumElasticWorkers = 64;
-constexpr std::size_t kElasticWorkerIdBase = kWorkerClassCount * 256;
+constexpr std::size_t kElasticWorkerIdBase = kFirstElasticWorkerId;
 
 // Weighted round-robin slots: RealtimeSpatial 3, Throughput 4, Inference 2.
 // Control and ExactCpu are intentionally absent from the elastic service set.
@@ -488,7 +488,9 @@ private:
     // Elastic ceilings are process-wide per class. Releasing a slot on one
     // node must wake waiters on every other node that may have queued work.
     void signal_all_elastic() noexcept {
-        for (auto& node : nodes_) signal_elastic(*node, false);
+        // Capacity is global by class, so wake all node-local waiters after a
+        // slot is released; otherwise one notification can strand parallelism.
+        for (auto& node : nodes_) signal_elastic(*node, true);
     }
 
     static bool queue_nonempty(const ClassQueue& queue) {
@@ -510,7 +512,6 @@ private:
         std::size_t worker_index,
         NodeState& node,
         QueuedTask& queued_task,
-        bool elastic_worker,
         std::optional<std::pair<uint32_t, int>>& current_pin) noexcept {
         const auto started = Clock::now();
         const auto wait = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -520,7 +521,6 @@ private:
         context.worker_id = static_cast<uint32_t>(worker_id);
         context.queue_wait_us = wait > 0 ? static_cast<uint64_t>(wait) : 0;
         context.numa_node = topology_.pin_to_node(node.node_id, worker_index, current_pin);
-        context.elastic_worker = elastic_worker;
         try { queued_task.task(context); }
         catch (...) {
             // A task failure is isolated to this worker and its client completion guard.
@@ -551,7 +551,7 @@ private:
             // queue that an elastic worker was waiting to service.
             signal_elastic(node, false);
             execute_task(worker_class, class_id * 256 + worker_index, topology_worker_index,
-                         node, queued_task, false, current_pin);
+                         node, queued_task, current_pin);
         }
     }
 
@@ -617,7 +617,7 @@ private:
                 const std::size_t class_id = class_index(worker_class);
                 execute_task(worker_class, kElasticWorkerIdBase + worker_index,
                              topology_worker_index, node, queued_task,
-                             true, current_pin);
+                             current_pin);
                 elastic_active_[class_id].fetch_sub(1, std::memory_order_acq_rel);
                 // A released class slot is globally available, so wake node
                 // queues beyond this worker's own NUMA node as well.
