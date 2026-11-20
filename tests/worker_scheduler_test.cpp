@@ -2,7 +2,9 @@
 #include "worker_scheduler.h"
 
 #include <cstdlib>
+#include <atomic>
 #include <chrono>
+#include <thread>
 #include <future>
 #include <iostream>
 #include <mutex>
@@ -151,6 +153,136 @@ int main() {
     }
     deadline_pool.stop();
     deadline_pool.join();
+
+    // Preferred NUMA targets route into a queue owned by that node. When the
+    // host cannot apply affinity, execution still completes but reports no pin.
+    WorkerPoolConfig routing_config;
+    routing_config.workers = {{1, 1, 1, 1, 1}};
+    ClassWorkerPool routing_pool(routing_config);
+    const auto realtime_nodes = routing_pool.queue_nodes(WorkerClass::RealtimeSpatial);
+    CHECK(!realtime_nodes.empty());
+    const uint32_t realtime_node = realtime_nodes.front();
+    std::promise<void> local_started;
+    auto local_started_future = local_started.get_future();
+    std::promise<void> local_release;
+    auto local_release_future = local_release.get_future().share();
+    std::promise<void> local_second_done;
+    auto local_second_future = local_second_done.get_future();
+    CHECK(routing_pool.enqueue(WorkerClass::RealtimeSpatial, 0x991, realtime_node,
+        [&local_started, local_release_future, realtime_node]
+        (const WorkerExecutionContext& context) mutable {
+            CHECK(!context.numa_node || *context.numa_node == realtime_node);
+            local_started.set_value();
+            local_release_future.wait();
+        }));
+    CHECK(local_started_future.wait_for(std::chrono::seconds(2)) == std::future_status::ready);
+    CHECK(routing_pool.enqueue(WorkerClass::RealtimeSpatial, 0x991, realtime_node,
+        [&local_second_done, realtime_node](const WorkerExecutionContext& context) {
+            CHECK(!context.numa_node || *context.numa_node == realtime_node);
+            local_second_done.set_value();
+        }));
+    CHECK(routing_pool.queued_on_node(WorkerClass::RealtimeSpatial, realtime_node) == 1);
+    local_release.set_value();
+    CHECK(local_second_future.wait_for(std::chrono::seconds(2)) == std::future_status::ready);
+    routing_pool.stop();
+    routing_pool.join();
+
+    // Elastic workers add bounded capacity to RealtimeSpatial, Throughput and
+    // Inference only. The Throughput ceiling below permits at most two
+    // simultaneous elastic executions regardless of how many slots are idle.
+    WorkerPoolConfig elastic_config;
+    elastic_config.workers = {{1, 1, 1, 1, 1}};
+    elastic_config.elastic_workers = 4;
+    elastic_config.elastic_max_per_class = {{0, 1, 2, 0, 1}};
+    ClassWorkerPool elastic_pool(elastic_config);
+    const auto throughput_nodes = elastic_pool.queue_nodes(WorkerClass::Throughput);
+    CHECK(!throughput_nodes.empty());
+
+    std::promise<void> two_elastic_started;
+    auto two_elastic_started_future = two_elastic_started.get_future();
+    std::promise<void> elastic_release;
+    auto elastic_release_future = elastic_release.get_future().share();
+    std::promise<void> elastic_tasks_done;
+    auto elastic_tasks_done_future = elastic_tasks_done.get_future();
+    std::atomic<std::size_t> elastic_started{0};
+    std::atomic<std::size_t> elastic_active{0};
+    std::atomic<std::size_t> elastic_peak{0};
+    std::atomic<std::size_t> completed{0};
+    constexpr std::size_t kElasticTestTasks = 32;
+    for (std::size_t value = 0; value < kElasticTestTasks; ++value) {
+        const uint32_t node = throughput_nodes[value % throughput_nodes.size()];
+        CHECK(elastic_pool.enqueue(WorkerClass::Throughput, value, node,
+            [&two_elastic_started, elastic_release_future, &elastic_started,
+             &elastic_active, &elastic_peak, &completed, &elastic_tasks_done]
+            (const WorkerExecutionContext& context) mutable {
+                CHECK(context.worker_class == WorkerClass::Throughput);
+                if (context.elastic_worker) {
+                    const std::size_t now = elastic_active.fetch_add(1) + 1;
+                    std::size_t peak = elastic_peak.load();
+                    while (now > peak && !elastic_peak.compare_exchange_weak(peak, now)) {}
+                    if (elastic_started.fetch_add(1) + 1 == 2)
+                        two_elastic_started.set_value();
+                }
+                elastic_release_future.wait();
+                if (context.elastic_worker) elastic_active.fetch_sub(1);
+                if (completed.fetch_add(1) + 1 == kElasticTestTasks)
+                    elastic_tasks_done.set_value();
+            }));
+    }
+    CHECK(two_elastic_started_future.wait_for(std::chrono::seconds(3)) == std::future_status::ready);
+    CHECK(elastic_pool.active_elastic(WorkerClass::Throughput) == 2);
+    CHECK(elastic_pool.active_elastic(WorkerClass::Control) == 0);
+    CHECK(elastic_pool.active_elastic(WorkerClass::ExactCpu) == 0);
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    CHECK(elastic_started.load() == 2);
+    CHECK(elastic_peak.load() == 2);
+    elastic_release.set_value();
+    CHECK(elastic_tasks_done_future.wait_for(std::chrono::seconds(3)) ==
+          std::future_status::ready);
+    elastic_pool.stop();
+    elastic_pool.join();
+
+    // Even while a dedicated Control worker is occupied, elastic slots do not
+    // steal its second request; the reserved Control queue remains isolated.
+    WorkerPoolConfig isolation_config;
+    isolation_config.workers = {{1, 1, 1, 1, 1}};
+    isolation_config.elastic_workers = 2;
+    ClassWorkerPool isolation_pool(isolation_config);
+    const auto control_nodes = isolation_pool.queue_nodes(WorkerClass::Control);
+    CHECK(!control_nodes.empty());
+    const uint32_t control_node = control_nodes.front();
+    std::promise<void> control_started;
+    auto control_started_future = control_started.get_future();
+    std::promise<void> control_release;
+    auto control_release_future = control_release.get_future().share();
+    std::promise<void> second_control_done;
+    auto second_control_future = second_control_done.get_future();
+    CHECK(isolation_pool.enqueue(WorkerClass::Control, std::nullopt, control_node,
+        [&control_started, control_release_future](const WorkerExecutionContext&) mutable {
+            control_started.set_value();
+            control_release_future.wait();
+        }));
+    CHECK(control_started_future.wait_for(std::chrono::seconds(2)) == std::future_status::ready);
+    CHECK(isolation_pool.enqueue(WorkerClass::Control, std::nullopt, control_node,
+        [&second_control_done](const WorkerExecutionContext& context) {
+            CHECK(!context.elastic_worker);
+            second_control_done.set_value();
+        }));
+    CHECK(isolation_pool.queued_on_node(WorkerClass::Control, control_node) == 1);
+    CHECK(isolation_pool.active_elastic(WorkerClass::Control) == 0);
+    control_release.set_value();
+    CHECK(second_control_future.wait_for(std::chrono::seconds(2)) == std::future_status::ready);
+    isolation_pool.stop();
+    isolation_pool.join();
+
+    // Protected classes cannot be assigned elastic execution ceilings.
+    WorkerPoolConfig invalid_elastic_config;
+    invalid_elastic_config.elastic_workers = 1;
+    invalid_elastic_config.elastic_max_per_class[static_cast<std::size_t>(WorkerClass::Control)] = 1;
+    bool rejected_control_elastic = false;
+    try { ClassWorkerPool invalid_pool(invalid_elastic_config); }
+    catch (const std::invalid_argument&) { rejected_control_elastic = true; }
+    CHECK(rejected_control_elastic);
 
     std::cout << "worker_scheduler_test passed\n";
     return 0;
