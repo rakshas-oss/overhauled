@@ -349,7 +349,7 @@ def run_worker(host, port, dataset_id, records, batch_size, timeout, device, wor
                 raise ValueError(f"missing responses for request_ids={sorted(sent_at)}")
     return (
         latencies, backend_counts, selected_gpus, fallback_requests,
-        queue_wait_samples, service_time_samples, numa_nodes, worker_telemetry_requests,
+        queue_wait_samples, service_time_samples, numa_nodes, worker_ids, worker_telemetry_requests,
     )
 
 
@@ -366,6 +366,7 @@ def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout,
     queue_wait_samples = []
     service_time_samples = []
     numa_nodes = set()
+    worker_ids = set()
     worker_telemetry_requests = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=active_workers) as pool:
         futures = [
@@ -378,11 +379,12 @@ def run_candidate(host, port, dataset_id, records, batch_size, workers, timeout,
         for future in concurrent.futures.as_completed(futures):
             (worker_latencies, worker_backends, worker_gpus, worker_fallbacks,
              worker_queue_wait, worker_service_time, worker_numa_nodes,
-             worker_telemetry_count) = future.result()
+             worker_ids_seen, worker_telemetry_count) = future.result()
             latencies_ns.extend(worker_latencies)
             queue_wait_samples.extend(worker_queue_wait)
             service_time_samples.extend(worker_service_time)
             numa_nodes.update(worker_numa_nodes)
+            worker_ids.update(worker_ids_seen)
             worker_telemetry_requests += worker_telemetry_count
             for backend, count in worker_backends.items():
                 backend_counts[backend] = backend_counts.get(backend, 0) + count
