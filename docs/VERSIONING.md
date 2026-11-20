@@ -2,51 +2,51 @@
 
 ## Current release candidate
 
-- **Proposed version:** `1.1.5`
-- **CMake project version:** `1.1.5`
-- **Conan recipe version:** `1.1.5`
-- **vcpkg manifest version:** `1.1.5`
+- **Proposed version:** `1.2.0`
+- **CMake project version:** `1.2.0`
+- **Conan recipe version:** `1.2.0`
+- **vcpkg manifest version:** `1.2.0`
 - **Runtime/package identity:** `OverhauledTensorRuntime` / `nvlink_placement`
-- **Release state:** candidate; the v1.1.5 tag and release archive are pending
+- **Release state:** candidate; tag, release archive, and external registry submissions are pending
 
 ## Version assessment
 
-The patch increment is based on the merged work after published v1.1.4:
+The 1.2.0 minor increment follows the published v1.1.4 baseline and the merged
+benchmark/interop qualification work (#49–#51), plus the broker worker-fabric
+feature in #53.
 
-- PR #49 hardens dataset manifest parsing, bounds unsigned sequence/timestamp
-  fields, protects dataset-root path resolution, validates BRK2 response
-  correlation/status/backend telemetry, and reports actual backend/fallback
-  counts in the benchmark output.
-- PR #50 clarifies the browser-WASM-to-BRK2 benchmark bridge and distinguishes
-  direct benchmark inference from the WSM1 guest lifecycle path.
-- PR #51 adds full-colour system diagrams and makes the YuKKi-OS versus
-  Overhauled responsibility boundary explicit.
+PR #53 adds five explicit worker classes (Control, RealtimeSpatial, Throughput,
+ExactCpu, Inference), isolated worker queues and reserved pools, deadline-aware
+EDF ordering for real-time spatial work, process-wide request/memory admission
+budgets, Linux NUMA discovery and worker-thread CPU affinity, and queue/service
+telemetry. It also extends BRK2 with optional request fields 11–13 and optional
+response fields 8–12. Existing BRK1, BRK2 and WSM1 envelope identities and
+required fields remain compatible; older peers can ignore the optional
+non-critical request fields and response telemetry.
 
-These changes improve qualification tools, validation and documentation.
-They do not add a new public C++ API, change backend dispatch semantics, or
-revise BRK1/BRK2/WSM1 wire formats. A patch increment to 1.1.5 is therefore
-more appropriate than a minor or major increment.
+This is a new broker runtime capability and protocol extension, not merely a
+documentation or benchmark patch. A minor increment to 1.2.0 is appropriate.
+The prior 1.1.5 candidate is superseded by this feature release candidate; it
+must not be described as published unless a matching tag/release is verified.
 
 ## Release policy
 
-- v1.1.4 is the latest published Overhauled release.
-- Do not create or publish v1.1.5 until its release PR is merged, required CI
-  passes, and the intended release commit is confirmed.
-- Updating this repository does not publish Conan Center, vcpkg, Homebrew,
+- The last verified published baseline is v1.1.4.
+- Do not create or publish v1.2.0 until the release PR is reviewed and required
+  C++ builds/tests, BRK2 conformance, sanitizers, package-consumer tests, and
+  cross-repository live interoperability checks pass.
+- Updating repository metadata does not publish Conan Center, vcpkg, Homebrew,
   apt or dnf packages. Verify each external registry separately.
-- The vcpkg manifest is set to candidate version 1.1.5, but the portfile's
-  source reference/checksum must be refreshed from the final tagged source
-  archive before registry submission.
-- The checked-in Homebrew formula still references v1.1.1. Do not change its
-  archive URL or SHA-256 without obtaining the exact v1.1.5 release archive.
-- Keep YuKKi-OS as the separate Wasmtime guest/runtime and composition host.
-  Overhauled owns broker framing, task dispatch, GPU placement and its
-  configured CPU/GPU/NPU executor boundary.
+- Refresh vcpkg source references/checksums and Homebrew archive URL/SHA-256
+  only from the exact final tagged release archive. Do not invent checksums.
+- YuKKi-OS owns workload meaning, spatial resolution, and policy directives.
+  Overhauled validates/adopts worker class intent and owns local queue
+  admission, Linux CPU/NUMA placement, backend selection and execution.
+- Deadlines suppress expired queued/late results but do not preempt arbitrary
+  native code or provide a hard real-time guarantee.
 
 ## Published release history
 
-- `v1.1.4` — published 2026-11-18; architecture/heuristic and release
-  metadata alignment.
+- `v1.1.4` — published 2026-11-18; architecture/heuristic and release metadata alignment.
 - `v1.1.3` — published 2026-11-18; release metadata and prior broker hardening.
 - `v1.1.2` — prior published release.
-
