@@ -26,6 +26,10 @@ Overhauled is a C++17 placement and execution library with an interoperable brok
 - Optional CUDA/TensorRT GPU runtime features; deterministic CPU-only broker operation remains available.
 - Isolated Control, RealtimeSpatial, Throughput, ExactCpu and Inference worker pools with bounded process-wide admission and in-flight memory budgets.
 - Deadline-aware spatial queue ordering and Linux worker-thread NUMA affinity, with BRK2 queue/service/worker telemetry.
+- Per-class queue locks and condition variables isolate scheduler contention;
+  realtime deadline insertion uses ordered queue entries, while worker CPU
+  selection remains stable for a worker on a given NUMA target and avoids
+  redundant affinity syscalls.
 
 ## What's new in v1.2.0
 
