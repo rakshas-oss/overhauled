@@ -66,7 +66,7 @@ For the currently published baseline, check out the v1.1.4 tag:
 git checkout v1.1.4
 ```
 
-Use `git checkout v1.1.5` only after the v1.1.5 candidate has passed review, merged, and its release tag has actually been created.
+Use `git checkout v1.2.0` only after the v1.2.0 candidate has passed review, merged, and its release tag has actually been created.
 
 If the tag has not yet been created, use the reviewed release commit or the intended branch supplied by your release process. Do not assume an open pull request is already part of `main` or a published release.
 
@@ -379,3 +379,48 @@ Check proxy TCP pass-through, the default 5-second socket timeout, client in-fli
 The broker accepts optional BRK2 worker directives and routes them into isolated FIFO pools. Configure dedicated worker counts with `--workers-control`, `--workers-realtime`, `--workers-throughput`, `--workers-exact-cpu`, and `--workers-inference`. The defaults reserve one worker for each dedicated class and allocate the remaining automatic worker budget to Throughput.
 
 Queues grow dynamically; they do not have a per-class fixed length. Memory exhaustion is still prevented by broker-wide admission controls: `--max-outstanding N` (0 derives from client/in-flight limits, hard capped at 65,536) and `--max-inflight-bytes N` (default 64 MiB, includes request metadata). Requests retain these reservations through completion, even if a client disconnects. Control, Throughput, ExactCpu, and Inference queues are FIFO. RealtimeSpatial queues are earliest-deadline-first when an absolute deadline is supplied, with FIFO tie-breaking; requests without a deadline remain behind deadline-bearing requests. There is no cross-class global ordering. Linux NUMA affinity is reported only when successfully applied. See [YUKKI_WORKER_FABRIC.md](YUKKI_WORKER_FABRIC.md) for full semantics and example configurations.
+
+
+## Worker-class scheduling and NUMA placement
+
+The broker accepts optional BRK2 worker directives from YuKKi-OS. The
+available classes are `control`, `realtime-spatial`, `throughput`,
+`exact-cpu`, and `inference`. BRK1 clients and BRK2 clients that omit the
+class retain the legacy Throughput queue and legacy backend-selection
+semantics.
+
+Configure reserved worker pools explicitly when the workload mix is known:
+
+```bash
+./build-cpu/broker_server 9090 \
+  --workers-control 1 \
+  --workers-realtime 2 \
+  --workers-throughput 8 \
+  --workers-exact-cpu 1 \
+  --workers-inference 2 \
+  --max-outstanding 4096 \
+  --max-inflight-bytes 67108864
+```
+
+The combined worker count must be 1–256 and every dedicated pool must retain
+at least one worker. If `--workers-throughput` is omitted, the legacy
+`--workers TOTAL` or automatic sizing determines its remainder. A zero
+`--max-outstanding` derives the cap from client/in-flight limits, up to
+65,536; the default in-flight request-memory budget is 64 MiB.
+
+On Linux, Overhauled reads NUMA CPU lists from sysfs, intersects them with the
+process-allowed CPU mask, and attempts worker-thread affinity. On other
+platforms or when affinity is denied, it continues without claiming NUMA
+pinning. A preferred NUMA node and logical spatial-affinity key are hints, not
+CPU IDs or geographic coordinates.
+
+RealtimeSpatial requests with an absolute deadline are ordered earliest
+deadline first; equal deadlines retain admission order. Expired queued work is
+not started and late results are not returned as success. This does not
+preempt arbitrary native code or provide hard real-time guarantees.
+
+Monitor BRK2 worker telemetry (class, queue wait, service time, worker ID and
+applied NUMA node) alongside end-to-end p50/p95/p99 latency, rejected
+admissions, backend counts and resident memory. Use
+[YuKKi-aware worker fabric](YUKKI_WORKER_FABRIC.md) for the complete wire
+contract, limits, sizing behavior and cross-repository ownership.
