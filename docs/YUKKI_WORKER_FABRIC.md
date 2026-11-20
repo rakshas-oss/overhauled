@@ -70,14 +70,16 @@ request fields. The WSM1 payload is unchanged.
 
 ## Queue ordering, capacity, and overload protection
 
-Each class has its own dynamically growing queue and reserved worker pool.
+Each class has its own dynamically growing ordered queue, queue mutex,
+condition variable, and reserved worker pool. Enqueue operations notify one
+worker in the target class rather than waking unrelated class pools.
 Control, Throughput, ExactCpu, and Inference preserve FIFO admission order.
 RealtimeSpatial is FIFO when no deadline is supplied; requests with an
-absolute deadline are inserted earliest-deadline-first, with equal deadlines
-preserving admission order and deadline-bearing tasks preceding tasks with no
-deadline. There is no cross-class global ordering. Class isolation is
-intentional: a throughput backlog cannot occupy the reserved control or
-real-time workers.
+absolute deadline are inserted earliest-deadline-first using ordered insertion
+(O(log n)), with equal deadlines preserving admission order and
+deadline-bearing tasks preceding tasks with no deadline. There is no cross-class
+global ordering. Class isolation is intentional: a throughput backlog cannot
+occupy the reserved control or real-time workers.
 
 The queues have no fixed per-class entry limit. They allocate on demand, but
 the broker still applies a process-wide admission budget to prevent memory
@@ -111,9 +113,11 @@ current `sched_getaffinity` mask, and applies worker-thread affinity with
 
 A requested NUMA node is used when it exists in the process-allowed topology.
 Otherwise the broker falls back to a node selected from the logical affinity
-key or worker identity. CPU selection rotates within the selected node to
-avoid every worker pinning itself to the first CPU. The response reports the
-node only when affinity application succeeds.
+key or worker identity. CPU selection is deterministic for a worker on a given
+node, so repeated tasks with the same target do not rotate through CPUs. The
+worker caches its last successfully applied node/CPU pair and skips redundant
+affinity syscalls until the target changes. The response reports the node only
+when affinity application succeeds.
 
 On non-Linux systems, restricted containers, or hosts where affinity cannot
 be applied, worker execution continues without claiming NUMA pinning. A
