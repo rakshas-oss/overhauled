@@ -4,16 +4,17 @@
 #include "worker_scheduler.h"
 
 #include <algorithm>
+#include <atomic>
 #include <new>
 #include <chrono>
 #include <condition_variable>
-#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <limits>
 #include <mutex>
 #include <stdexcept>
 #include <string>
+#include <set>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -164,10 +165,12 @@ public:
 #endif
     }
 
+    // Pin once per task only when its logical NUMA target changes. CPU choice
+    // is stable for a worker on a given node, avoiding arbitrary per-task
+    // rotation and needless cache disruption.
     std::optional<uint32_t> pin(std::optional<uint32_t> requested_node,
                                 std::optional<uint64_t> affinity_key,
-                                std::size_t worker_index,
-                                uint64_t rotation) const noexcept {
+                                std::size_t worker_index) const noexcept {
 #if defined(__linux__)
         if (nodes_.empty()) return std::nullopt;
         const CpuNode* selected = nullptr;
@@ -184,8 +187,7 @@ public:
             selected = &nodes_[static_cast<std::size_t>(slot)];
         }
         if (selected->cpus.empty()) return std::nullopt;
-        const int cpu = selected->cpus[static_cast<std::size_t>(
-            (worker_index + rotation) % selected->cpus.size())];
+        const int cpu = selected->cpus[worker_index % selected->cpus.size()];
         cpu_set_t mask;
         CPU_ZERO(&mask);
         CPU_SET(cpu, &mask);
@@ -196,7 +198,6 @@ public:
         (void)requested_node;
         (void)affinity_key;
         (void)worker_index;
-        (void)rotation;
         return std::nullopt;
 #endif
     }
@@ -250,39 +251,28 @@ public:
         Task task) {
         if (!task) return false;
         const std::size_t index = class_index(worker_class);
+        auto& queue = queues_[index];
         {
-            std::lock_guard<std::mutex> lock(mutex_);
-            if (stopping_) return false;
+            // Each class owns its queue lock. Traffic in one class no longer
+            // serialises admission or wakes workers belonging to other classes.
+            std::lock_guard<std::mutex> lock(queue.mutex);
+            if (stopping_.load(std::memory_order_acquire)) return false;
             QueuedTask queued_task{
-                Clock::now(), affinity_key, preferred_node, deadline, std::move(task)};
-            // Realtime spatial work is deadline ordered within its isolated
-            // queue. Equal deadlines retain FIFO order; requests without a
-            // deadline remain behind deadline-bearing work.
+                Clock::now(), affinity_key, preferred_node, deadline,
+                queue.next_sequence++, std::move(task)};
             try {
-                auto& queue = queues_[index];
-                if (worker_class == WorkerClass::RealtimeSpatial && deadline) {
-                    const auto position = std::find_if(queue.begin(), queue.end(),
-                        [&deadline](const QueuedTask& existing) {
-                            return !existing.deadline || *deadline < *existing.deadline;
-                        });
-                    queue.insert(position, std::move(queued_task));
-                } else {
-                    queue.push_back(std::move(queued_task));
-                }
+                queue.tasks.insert(std::move(queued_task));
             } catch (const std::bad_alloc&) {
                 return false;
             }
         }
-        cv_.notify_all();
+        queue.cv.notify_one();
         return true;
     }
 
     void stop() noexcept {
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            stopping_ = true;
-        }
-        cv_.notify_all();
+        stopping_.store(true, std::memory_order_release);
+        for (auto& queue : queues_) queue.cv.notify_all();
     }
 
     void join() noexcept {
@@ -296,8 +286,9 @@ public:
     std::size_t queued(WorkerClass worker_class) const noexcept {
         try {
             const std::size_t index = class_index(worker_class);
-            std::lock_guard<std::mutex> lock(mutex_);
-            return queues_[index].size();
+            const auto& queue = queues_[index];
+            std::lock_guard<std::mutex> lock(queue.mutex);
+            return queue.tasks.size();
         } catch (...) {
             return 0;
         }
@@ -305,11 +296,31 @@ public:
 
 private:
     struct QueuedTask {
-        Clock::time_point enqueued_at;
+        Clock::time_point enqueued_at{};
         std::optional<uint64_t> affinity_key;
         std::optional<uint32_t> preferred_node;
         std::optional<Clock::time_point> deadline;
+        uint64_t sequence = 0;
         Task task;
+    };
+
+    struct QueuedTaskCompare {
+        bool operator()(const QueuedTask& left, const QueuedTask& right) const noexcept {
+            if (left.deadline && right.deadline && *left.deadline != *right.deadline)
+                return *left.deadline < *right.deadline;
+            if (left.deadline.has_value() != right.deadline.has_value())
+                return left.deadline.has_value();
+            return left.sequence < right.sequence;
+        }
+    };
+
+    struct ClassQueue {
+        mutable std::mutex mutex;
+        std::condition_variable cv;
+        // Ordered insertion gives O(log n) deadline admission and preserves
+        // FIFO order for equal deadlines and all non-deadline classes.
+        std::multiset<QueuedTask, QueuedTaskCompare> tasks;
+        uint64_t next_sequence = 0;
     };
 
     void worker_loop(std::size_t class_id, std::size_t worker_index) noexcept {
@@ -317,17 +328,18 @@ private:
         std::size_t global_worker_index = worker_index;
         for (std::size_t prior_class = 0; prior_class < class_id; ++prior_class)
             global_worker_index += threads_[prior_class].size();
-        uint64_t rotation = 0;
+
+        auto& queue = queues_[class_id];
         for (;;) {
             QueuedTask queued_task;
             {
-                std::unique_lock<std::mutex> lock(mutex_);
-                cv_.wait(lock, [this, class_id] {
-                    return stopping_ || !queues_[class_id].empty();
+                std::unique_lock<std::mutex> lock(queue.mutex);
+                queue.cv.wait(lock, [this, &queue] {
+                    return stopping_.load(std::memory_order_acquire) || !queue.tasks.empty();
                 });
-                if (stopping_ && queues_[class_id].empty()) return;
-                queued_task = std::move(queues_[class_id].front());
-                queues_[class_id].pop_front();
+                if (stopping_.load(std::memory_order_acquire) && queue.tasks.empty()) return;
+                auto node = queue.tasks.extract(queue.tasks.begin());
+                queued_task = std::move(node.value());
             }
 
             const auto started = Clock::now();
@@ -338,7 +350,7 @@ private:
             context.worker_id = static_cast<uint32_t>(class_id * 256 + worker_index);
             context.queue_wait_us = wait > 0 ? static_cast<uint64_t>(wait) : 0;
             context.numa_node = topology_.pin(
-                queued_task.preferred_node, queued_task.affinity_key, global_worker_index, rotation++);
+                queued_task.preferred_node, queued_task.affinity_key, global_worker_index);
             try { queued_task.task(context); }
             catch (...) {
                 // A task failure is isolated to this worker and its client completion guard.
@@ -347,12 +359,10 @@ private:
     }
 
     std::mutex join_mutex_;
-    mutable std::mutex mutex_;
-    std::condition_variable cv_;
-    std::array<std::deque<QueuedTask>, kWorkerClassCount> queues_;
+    std::array<ClassQueue, kWorkerClassCount> queues_;
     std::array<std::vector<std::thread>, kWorkerClassCount> threads_;
     CpuNumaTopology topology_;
-    bool stopping_ = false;
+    std::atomic<bool> stopping_{false};
 };
 
 ClassWorkerPool::ClassWorkerPool(const WorkerPoolConfig& config)
