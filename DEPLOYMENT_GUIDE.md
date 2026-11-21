@@ -1,6 +1,6 @@
-# Overhauled GPU Runtime - Production Deployment Guide (published v1.1.4 baseline)
+# Overhauled GPU Runtime - Historical Deployment Guide (v1.1.4)
 
-This guide retains the production deployment sequence for the published v1.1.4 baseline. The current v1.2.0 benchmark/validation candidate is not a new production runtime interface; qualify and deploy it only after its release checks, tag and archive are complete. For broker-specific configuration, also consult docs/SYSADMIN_HOWTO.md.
+This page preserves the earlier v1.1.4 deployment examples. The latest published release is v1.2.0, and v1.3.0 is the current hierarchical worker-fabric candidate. For current broker build, worker, NUMA and CPU-group configuration, use [docs/SYSADMIN_HOWTO.md](docs/SYSADMIN_HOWTO.md) and [docs/YUKKI_WORKER_FABRIC.md](docs/YUKKI_WORKER_FABRIC.md).
 
 Table of contents
 1. Architecture Overview

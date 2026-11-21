@@ -2,51 +2,59 @@
 
 ## Current release candidate
 
-- **Proposed version:** `1.2.0`
-- **CMake project version:** `1.2.0`
-- **Conan recipe version:** `1.2.0`
-- **vcpkg manifest version:** `1.2.0`
+- **Proposed version:** `1.3.0`
+- **CMake project version:** `1.3.0`
+- **Conan recipe version:** `1.3.0`
+- **vcpkg manifest version:** `1.3.0`
 - **Runtime/package identity:** `OverhauledTensorRuntime` / `nvlink_placement`
-- **Release state:** candidate; tag, release archive, and external registry submissions are pending
+- **Release state:** minor candidate; v1.3.0 tag and release archive are pending
 
 ## Version assessment
 
-The 1.2.0 minor increment follows the published v1.1.4 baseline and the merged
-benchmark/interop qualification work (#49–#51), plus the broker worker-fabric
-feature in #53.
+The 1.3.0 minor increment follows published v1.2.0 and adds a materially
+expanded worker-topology and scheduling architecture:
 
-PR #53 adds five explicit worker classes (Control, RealtimeSpatial, Throughput,
-ExactCpu, Inference), isolated worker queues and reserved pools, deadline-aware
-EDF ordering for real-time spatial work, process-wide request/memory admission
-budgets, Linux NUMA discovery and worker-thread CPU affinity, and queue/service
-telemetry. It also extends BRK2 with optional request fields 11–13 and optional
-response fields 8–12. Existing BRK1, BRK2 and WSM1 envelope identities and
-required fields remain compatible; older peers can ignore the optional
-non-critical request fields and response telemetry.
+- PR #57 isolates per-class queue contention, stabilizes worker CPU selection
+  and avoids redundant affinity syscalls.
+- PR #58 shards each worker class across eligible NUMA-local queues and adds
+  optional bounded elastic worker capacity for RealtimeSpatial, Throughput
+  and Inference, while Control and ExactCpu retain dedicated capacity.
+- PRs #59–#62 add repeatable A/B throughput, pipelined mixed-class saturation,
+  benchmark measurement-quality controls, and fixed-total worker-budget sweeps.
+- PR #63 adds a validated machine-cpuset -> NUMA -> LLC/CPU-group hierarchy,
+  per-group leaf queues, home-group/sibling-group/remote-NUMA work stealing,
+  dynamically sized CPU masks, and bounded large-host sizing up to 16,384
+  total workers (4,096 elastic).
 
-This is a new broker runtime capability and protocol extension, not merely a
-documentation or benchmark patch. A minor increment to 1.2.0 is appropriate.
-The prior 1.1.5 candidate is superseded by this feature release candidate; it
-must not be described as published unless a matching tag/release is verified.
+These are additive runtime capabilities and a new scaling topology, not just
+a performance-test or documentation update. A minor increment to 1.3.0 is
+appropriate. The existing BRK1/BRK2/WSM1 wire contracts are preserved; the
+new CPU-group placement detail is internal to broker scheduling.
 
 ## Release policy
 
-- The last verified published baseline is v1.1.4.
-- Do not create or publish v1.2.0 until the release PR is reviewed and required
-  C++ builds/tests, BRK2 conformance, sanitizers, package-consumer tests, and
-  cross-repository live interoperability checks pass.
-- Updating repository metadata does not publish Conan Center, vcpkg, Homebrew,
+- v1.2.0 is the latest published Overhauled release (2026-11-20).
+- Do not create or publish v1.3.0 until its release PR is reviewed and required
+  C++ builds/tests, worker-topology tests, BRK2 conformance, sanitizers,
+  package-consumer tests and cross-repository interoperability checks pass.
+- Updating this repository does not publish Conan Center, vcpkg, Homebrew,
   apt or dnf packages. Verify each external registry separately.
-- Refresh vcpkg source references/checksums and Homebrew archive URL/SHA-256
-  only from the exact final tagged release archive. Do not invent checksums.
-- YuKKi-OS owns workload meaning, spatial resolution, and policy directives.
-  Overhauled validates/adopts worker class intent and owns local queue
-  admission, Linux CPU/NUMA placement, backend selection and execution.
-- Deadlines suppress expired queued/late results but do not preempt arbitrary
+- The root vcpkg manifest is set to candidate 1.3.0; update the vcpkg portfile
+  source reference and SHA512 only from the exact final tagged archive.
+- The checked-in Homebrew formula still points to v1.1.1. Refresh its URL,
+  version and SHA-256 only from the final v1.3.0 release archive.
+- YuKKi-OS owns workload semantics, spatial resolution and directives.
+  Overhauled owns local worker queues, admission budgets, CPU/NUMA/CPU-group
+  placement, GPU topology, accelerator placement and execution.
+- Deadlines order and reject expired queued work; they do not preempt arbitrary
   native code or provide a hard real-time guarantee.
 
 ## Published release history
 
-- `v1.1.4` — published 2026-11-18; architecture/heuristic and release metadata alignment.
+- `v1.2.0` — published 2026-11-20; YuKKi-aware worker classes, broker-local
+  NUMA affinity, process-wide admission budgets and BRK2 worker telemetry.
+- `v1.1.4` — published 2026-11-18; architecture/heuristic and release
+  metadata alignment.
 - `v1.1.3` — published 2026-11-18; release metadata and prior broker hardening.
 - `v1.1.2` — prior published release.
+
