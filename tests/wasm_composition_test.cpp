@@ -65,7 +65,10 @@ int main() {
             std::cerr << "invocation on unknown module unexpectedly succeeded\n";
             return EXIT_FAILURE;
         }
-        // A consumer with the wrong import result type must fail at link time.
+
+        // Change the consumer's shared function type from () -> i32 to
+        // () -> i64. The linker validates registered imports immediately,
+        // so the mismatch must be rejected by compile_and_register.
         auto wrong_signature = consumer;
         for (auto& byte : wrong_signature) {
             if (byte == 0x7f) {
@@ -74,13 +77,12 @@ int main() {
             }
         }
         nvlink::wasm::WasmCompositionRuntime mismatch_runtime;
-        if (!mismatch_runtime.compile_and_register("provider", provider, &error) ||
-            !mismatch_runtime.compile_and_register("consumer", wrong_signature, &error)) {
-            std::cerr << "signature mismatch fixture registration failed: " << error << '\n';
+        if (!mismatch_runtime.compile_and_register("provider", provider, &error)) {
+            std::cerr << "mismatch provider registration failed: " << error << '\n';
             return EXIT_FAILURE;
         }
-        if (mismatch_runtime.instantiate("consumer", &error)) {
-            std::cerr << "signature-mismatched import unexpectedly linked\n";
+        if (mismatch_runtime.compile_and_register("consumer", wrong_signature, &error)) {
+            std::cerr << "signature-mismatched import unexpectedly registered\n";
             return EXIT_FAILURE;
         }
 
