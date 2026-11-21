@@ -13,6 +13,18 @@
 #include <thread>
 #include <vector>
 
+namespace nvlink::broker {
+class WorkerSchedulerTestAccess {
+public:
+    static std::unique_ptr<ClassWorkerPool> create(
+        const WorkerPoolConfig& config,
+        const WorkerTopologySnapshot& topology) {
+        return std::unique_ptr<ClassWorkerPool>(
+            new ClassWorkerPool(config, topology));
+    }
+};
+} // namespace nvlink::broker
+
 #define CHECK(condition) do { \
     if (!(condition)) { \
         std::cerr << "CHECK failed: " #condition << " at " << __FILE__ << ':' << __LINE__ << std::endl; \
@@ -308,9 +320,8 @@ int main() {
 
         WorkerPoolConfig nested_config;
         nested_config.workers = {{1, 2, 1, 1, 1}};
-        nested_config.topology_for_testing =
-            std::make_shared<const WorkerTopologySnapshot>(synthetic);
-        ClassWorkerPool nested_pool(nested_config);
+        auto nested_pool =
+            WorkerSchedulerTestAccess::create(nested_config, synthetic);
 
         constexpr uint32_t kRealtimeWorkerBase =
             static_cast<uint32_t>(WorkerClass::RealtimeSpatial) *
@@ -342,7 +353,7 @@ int main() {
             };
 
         // Affinity key 0 selects CPU group 17; key 1 selects sibling group 19.
-        CHECK(nested_pool.enqueue(WorkerClass::RealtimeSpatial, 0, std::nullopt,
+        CHECK(nested_pool->enqueue(WorkerClass::RealtimeSpatial, 0, std::nullopt,
                                   block_assigned_worker));
         // The scheduler may wake either sibling worker first. Record which
         // one took the group-17 task, then occupy the other with group 19.
@@ -362,7 +373,7 @@ int main() {
             worker_one_started_future.wait_for(std::chrono::milliseconds(0)) ==
             std::future_status::ready;
         CHECK(worker_zero_was_first != worker_one_was_first);
-        CHECK(nested_pool.enqueue(WorkerClass::RealtimeSpatial, 1, std::nullopt,
+        CHECK(nested_pool->enqueue(WorkerClass::RealtimeSpatial, 1, std::nullopt,
                                   block_assigned_worker));
         auto& remaining_started = worker_zero_was_first
             ? worker_one_started_future : worker_zero_started_future;
@@ -372,11 +383,11 @@ int main() {
         // Both dedicated RealtimeSpatial workers are now occupied. This work
         // is queued to group 17; releasing the group-19 worker must steal it
         // within the shared NUMA parent, while the other worker stays busy.
-        CHECK(nested_pool.enqueue(WorkerClass::RealtimeSpatial, 0, std::nullopt,
+        CHECK(nested_pool->enqueue(WorkerClass::RealtimeSpatial, 0, std::nullopt,
             [&stolen_task_done](const WorkerExecutionContext& context) {
                 stolen_task_done.set_value(context);
             }));
-        CHECK(nested_pool.queued_on_node(WorkerClass::RealtimeSpatial, 5000) == 1);
+        CHECK(nested_pool->queued_on_node(WorkerClass::RealtimeSpatial, 5000) == 1);
         release_worker_one.set_value();
         CHECK(stolen_task_future.wait_for(std::chrono::seconds(2)) ==
               std::future_status::ready);
@@ -386,8 +397,8 @@ int main() {
             CHECK(*stolen_context.cpu_group_id == 19);
 
         release_worker_zero.set_value();
-        nested_pool.stop();
-        nested_pool.join();
+        nested_pool->stop();
+        nested_pool->join();
     }
 
     std::cout << "worker_scheduler_test passed\n";
