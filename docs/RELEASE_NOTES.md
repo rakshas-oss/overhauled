@@ -1,4 +1,21 @@
-## v1.5.0 (release candidate; tag pending)
+## v1.5.1 (patch release candidate; tag pending)
+Date: 2026-11-21
+
+### Highlights
+
+- **Wasmtime v51 C API build correction:** replace unavailable `wasm_message_new_empty` / `wasm_message_delete` calls with the supported `wasm_name_t` buffer lifecycle and remove invalid deletion of an immediate scalar `wasmtime_val_t`.
+- **Linker validation test correction:** Wasmtime validates import signatures while registering the consumer module, so incompatible imports are now asserted to fail at registration rather than instantiation.
+- **Release scope:** no BRK1/BRK2/WSM1 wire changes and no change to the default build with `ENABLE_WASM_RUNTIME=OFF`.
+
+### Validation
+
+- The published v1.5.0 tag was created before the correction and its Wasmtime-enabled build failed with the unavailable C API symbols.
+- The correction is merged on main; the Wasmtime compile/runtime-composition lane, default CI, sanitizer, BRK2, package-consumer and paired YuKKi interoperability checks pass on the corrected main commit.
+- v1.5.1 remains a candidate until its own exact release commit passes the full gate. Do not tag or publish this candidate before those checks pass.
+
+---
+
+## v1.5.0 (published 2026-11-21)
 Date: 2026-11-21
 
 ### Highlights
