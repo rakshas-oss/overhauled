@@ -1,18 +1,18 @@
-# Overhauled v1.3.0 (release candidate)
+# Overhauled v1.4.0 (release candidate)
 
-> **Release candidate v1.3.0:** extends the published v1.2.0 worker fabric with validated hierarchical CPU-group/NUMA placement, class-local leaf queues, hierarchical work stealing, dynamic CPU masks and bounded large-host worker capacity.
+> **Release candidate v1.4.0:** extends the published v1.3.0 worker fabric with validated hierarchical CPU-group/NUMA placement, class-local leaf queues, hierarchical work stealing, dynamic CPU masks and bounded large-host worker capacity.
 
 > **Route workloads by topology, not guesswork.**
 >
 > Turn GPU interconnect awareness into higher throughput, better tail latency, and more effective use of accelerator infrastructure.
 
-> **Release status:** v1.3.0 is a minor-release candidate based on the published v1.2.0 release. Required CI, review, release tag/archive and external package-manager submissions are pending.
+> **Release status:** v1.4.0 is a minor-release candidate based on the published v1.3.0 release. Required CI, review, release tag/archive and external package-manager submissions are pending.
 
 Overhauled is a C++17 placement and execution library with an interoperable broker service. It provides topology-aware GPU scheduling and broker dispatch for CPU, GPU, and optional NPU execution.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
-[![Release](https://img.shields.io/badge/Release-v1.3.0-blueviolet)](#)
+[![Release](https://img.shields.io/badge/Release-v1.4.0-blueviolet)](#)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2FBRK2-orange)](#)
 
 ## Capabilities
@@ -68,9 +68,9 @@ fields are unchanged. Deadlines are broker request bounds, not preemption or
 hard real-time guarantees. See
 [YuKKi-aware worker fabric](docs/YUKKI_WORKER_FABRIC.md).
 
-## What's new in v1.3.0
+## What's new in v1.4.0
 
-The v1.3.0 candidate adds a hierarchical worker fabric for large CPU hosts.
+The v1.4.0 candidate adds a hierarchical worker fabric for large CPU hosts.
 It builds on the worker-class and deadline features in v1.2.0:
 
 - **Nested topology:** validates the process-allowed machine CPU set, NUMA
