@@ -1,19 +1,25 @@
-# Overhauled v1.4.0 (release candidate)
+# Overhauled v1.5.0 (release candidate)
 
-> **Release candidate v1.4.0:** adds BRK2 locality-placement intent/result codec support on top of the published v1.3.0 hierarchical worker fabric.
+> **Release candidate v1.5.0:** adds optional native Wasmtime runtime composition on top of the v1.4.0 BRK2 locality codec baseline.
 
 > **Route workloads by topology, not guesswork.**
 >
 > Turn GPU interconnect awareness into higher throughput, better tail latency, and more effective use of accelerator infrastructure.
 
-> **Release status:** v1.4.0 is a minor-release candidate based on the published v1.3.0 release. Required CI, review, release tag/archive and external package-manager submissions are pending.
+> **Release status:** v1.5.0 is a minor-release candidate based on the v1.4.0 BRK2 locality codec baseline. Required CI, review, release tag/archive and external package-manager submissions are pending.
 
 Overhauled is a C++17 placement and execution library with an interoperable broker service. It provides topology-aware GPU scheduling and broker dispatch for CPU, GPU, and optional NPU execution.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
-[![Release](https://img.shields.io/badge/Release-v1.4.0-blueviolet)](#)
+[![Release](https://img.shields.io/badge/Release-v1.5.0-blueviolet)](#)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2FBRK2-orange)](#)
+
+## What's new in v1.5.0
+
+- **Optional native Wasmtime runtime composition:** compile core-Wasm modules and register them in a native linker for runtime import resolution. The feature is opt-in through `ENABLE_WASM_RUNTIME`; the default build remains unchanged.
+- **Retained instances and typed invocation:** the initial host API retains instantiated roots and supports exported `() -> i32` calls with explicit errors for missing exports, traps and incompatible results.
+- **Composition conformance coverage:** provider/consumer fixtures exercise cross-module imports and result propagation. Wasmtime-enabled CI is a release gate; this candidate does not claim production tenant isolation.
 
 ## Capabilities
 

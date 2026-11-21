@@ -1,3 +1,25 @@
+## v1.5.0 (release candidate; tag pending)
+Date: 2026-11-21
+
+### Highlights
+
+- **Optional native Wasmtime runtime composition:** compile core-Wasm modules and register them in a linker under module namespaces; dependent modules resolve imports at instantiation. This is runtime composition, not static binary merging.
+- **Retained instances and initial invocation API:** expose a narrow `() -> i32` export call with explicit error handling for missing exports, traps and incompatible results.
+- **Cross-module test fixture:** provider/consumer modules exercise import resolution and verify the returned value. The Wasmtime-enabled CI lane must pass before release.
+
+### Security and compatibility boundary
+
+- `ENABLE_WASM_RUNTIME` is opt-in; the default native build remains unchanged.
+- Registered modules and instances share one Wasmtime Store and resource domain. This is not per-module or tenant isolation.
+- Fuel metering, epoch interruption, WASI capability grants, artifact signing, cache eviction and task-level instance teardown are not yet complete. Do not expose this initial embedding as a complete untrusted-workload sandbox.
+- Existing BRK1/BRK2/WSM1 envelope identities are unchanged.
+
+### Release gate
+
+Require default native CI, the pinned Wasmtime-enabled compile/runtime test, sanitizer, package-consumer and paired YuKKi interoperability checks on the exact release candidate. Do not tag or publish until all required checks pass.
+
+---
+
 ## v1.4.0 (release candidate; tag pending)
 Date: 2026-11-21
 
