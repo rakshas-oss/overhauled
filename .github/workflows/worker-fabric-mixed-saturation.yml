@@ -1,0 +1,283 @@
+name: Worker Fabric Mixed-Class Saturation
+
+on:
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  saturation:
+    name: Release mixed-class pipelined A/B benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libssl-dev python3
+
+      - name: Record runner topology
+        run: |
+          {
+            uname -a
+            lscpu
+            cat /sys/devices/system/node/online 2>/dev/null || true
+            cat /sys/devices/system/node/node*/cpulist 2>/dev/null || true
+          } | tee benchmark-topology.txt
+
+      - name: Validate saturation driver
+        run: |
+          python3 -m py_compile benchmarks/worker_fabric_saturation.py tests/test_worker_fabric_saturation.py
+          python3 tests/test_worker_fabric_saturation.py
+
+      - name: Prepare baseline and merged source trees
+        env:
+          BASE_SHA: accd334bd6964213cb6eb9c1eed295901b83b5e6
+          MERGED_SHA: ea2c1ae21e3e31fb402223e42f78801b73ed6b29
+        run: |
+          mkdir -p /tmp/worker-fabric-src
+          git worktree add /tmp/worker-fabric-src/baseline "$BASE_SHA"
+          git worktree add /tmp/worker-fabric-src/merged "$MERGED_SHA"
+
+      - name: Build optimized broker binaries
+        run: |
+          set -euo pipefail
+          for variant in baseline merged; do
+            cmake -S "/tmp/worker-fabric-src/$variant" -B "/tmp/worker-fabric-build/$variant" \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_BROKER=ON \
+              -DBUILD_TESTING=OFF \
+              -DBUILD_EXAMPLES=OFF \
+              -DENABLE_CUDA=OFF \
+              -DENABLE_TENSORRT=OFF
+            cmake --build "/tmp/worker-fabric-build/$variant" --target broker_server --parallel 2
+          done
+
+      - name: Run alternating baseline, dedicated, and elastic saturation trials
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-results
+          port_index=0
+          server_pid=""
+          monitor_pid=""
+
+          stop_server() {
+            if [ -n "$monitor_pid" ]; then
+              kill "$monitor_pid" 2>/dev/null || true
+              wait "$monitor_pid" 2>/dev/null || true
+              monitor_pid=""
+            fi
+            if [ -n "$server_pid" ]; then
+              kill "$server_pid" 2>/dev/null || true
+              wait "$server_pid" 2>/dev/null || true
+              server_pid=""
+            fi
+          }
+          trap stop_server EXIT
+
+          run_arm() {
+            arm="$1"
+            repetition="$2"
+            variant="$3"
+            elastic="$4"
+            port=$((19200 + port_index))
+            port_index=$((port_index + 1))
+            binary="/tmp/worker-fabric-build/$variant/broker_server"
+
+            if [ "$elastic" = "yes" ]; then
+              "$binary" "$port" \
+                --workers-control 1 --workers-realtime 2 --workers-throughput 6 \
+                --workers-exact-cpu 1 --workers-inference 2 \
+                --workers-elastic 8 --elastic-realtime-max 2 \
+                --elastic-throughput-max 4 --elastic-inference-max 2 \
+                > "benchmark-results/$arm-r$repetition-server.log" 2>&1 &
+            else
+              "$binary" "$port" \
+                --workers-control 1 --workers-realtime 2 --workers-throughput 6 \
+                --workers-exact-cpu 1 --workers-inference 2 \
+                > "benchmark-results/$arm-r$repetition-server.log" 2>&1 &
+            fi
+            server_pid=$!
+
+            ready=0
+            for _ in $(seq 1 80); do
+              if ! kill -0 "$server_pid" 2>/dev/null; then
+                cat "benchmark-results/$arm-r$repetition-server.log"
+                return 1
+              fi
+              if python3 -c "import socket; s=socket.create_connection(('127.0.0.1',$port),timeout=0.2); s.close()" >/dev/null 2>&1; then
+                ready=1
+                break
+              fi
+              sleep 0.25
+            done
+            if [ "$ready" -ne 1 ]; then
+              cat "benchmark-results/$arm-r$repetition-server.log"
+              return 1
+            fi
+
+            (while kill -0 "$server_pid" 2>/dev/null; do
+              ps -o %cpu=,rss= -p "$server_pid" | awk '{print $1 "," $2}'
+              sleep 0.25
+            done) > "benchmark-results/$arm-r$repetition-resources.csv" &
+            monitor_pid=$!
+
+            python3 benchmarks/worker_fabric_saturation.py \
+              --host 127.0.0.1 --port "$port" \
+              --client-counts 8 16 32 \
+              --pipeline-depths 1 8 32 \
+              --requests-per-client 256 \
+              --features 64 \
+              --timeout 30 \
+              --seed "$repetition" \
+              --output "benchmark-results/$arm-r$repetition.json"
+
+            stop_server
+          }
+
+          for repetition in 1 2 3; do
+            case "$repetition" in
+              1)
+                run_arm baseline "$repetition" baseline no
+                run_arm merged-dedicated "$repetition" merged no
+                run_arm merged-elastic "$repetition" merged yes
+                ;;
+              2)
+                run_arm merged-elastic "$repetition" merged yes
+                run_arm baseline "$repetition" baseline no
+                run_arm merged-dedicated "$repetition" merged no
+                ;;
+              3)
+                run_arm merged-dedicated "$repetition" merged no
+                run_arm merged-elastic "$repetition" merged yes
+                run_arm baseline "$repetition" baseline no
+                ;;
+            esac
+          done
+
+      - name: Summarize saturation results
+        run: |
+          python3 - <<'PY'
+          import glob, json, statistics
+          from pathlib import Path
+
+          root = Path("benchmark-results")
+          arms = ["baseline", "merged-dedicated", "merged-elastic"]
+          classes = ["control", "realtime-spatial", "throughput", "exact-cpu", "inference"]
+          grouped = {arm: {} for arm in arms}
+          for arm in arms:
+              for file in sorted(glob.glob(str(root / f"{arm}-r[123].json"))):
+                  doc = json.loads(Path(file).read_text())
+                  for item in doc["results"]:
+                      key = (item["clients"], item["pipeline_depth"])
+                      grouped[arm].setdefault(key, []).append(item)
+
+          def med(arm, key, field):
+              return statistics.median(item[field] for item in grouped[arm][key])
+
+          rows = [
+              "# Mixed-class pipelined worker-fabric saturation",
+              "",
+              "Release C++ broker; 64 numeric features; 256 requests per client; five-class mix; three alternating repetitions.",
+              "",
+              "| Clients | Pipeline depth | Baseline req/s | Merged dedicated req/s | Merged + elastic req/s | Dedicated delta | Elastic vs dedicated |",
+              "|---:|---:|---:|---:|---:|---:|---:|"
+          ]
+          summary = {"arms": {}, "comparisons": {}, "classes": classes}
+          for arm in arms:
+              summary["arms"][arm] = {}
+              for key in sorted(grouped[arm]):
+                  label = f"{key[0]}x{key[1]}"
+                  items = grouped[arm][key]
+                  summary["arms"][arm][label] = {
+                      "requests_per_second_median": med(arm, key, "requests_per_second"),
+                      "p50_latency_ms_median": med(arm, key, "p50_latency_ms"),
+                      "p95_latency_ms_median": med(arm, key, "p95_latency_ms"),
+                      "p99_latency_ms_median": med(arm, key, "p99_latency_ms"),
+                      "p95_queue_wait_us_median": med(arm, key, "p95_queue_wait_us"),
+                      "mean_service_time_us_median": med(arm, key, "mean_service_time_us"),
+                      "per_class": {
+                          name: {
+                              "requests_per_second_median": statistics.median(
+                                  x["per_class"][name]["requests_per_second"] for x in items
+                              ),
+                              "p95_latency_ms_median": statistics.median(
+                                  x["per_class"][name]["p95_latency_ms"] for x in items
+                              ),
+                              "p95_queue_wait_us_median": statistics.median(
+                                  x["per_class"][name]["p95_queue_wait_us"] for x in items
+                              ),
+                              "elastic_worker_ids": sorted({
+                                  worker_id for x in items
+                                  for worker_id in x["per_class"][name]["elastic_worker_ids"]
+                              })
+                          } for name in classes
+                      }
+                  }
+
+          for key in sorted(grouped["baseline"]):
+              base = med("baseline", key, "requests_per_second")
+              dedicated = med("merged-dedicated", key, "requests_per_second")
+              elastic = med("merged-elastic", key, "requests_per_second")
+              delta_dedicated = (dedicated / base - 1) * 100
+              delta_elastic = (elastic / dedicated - 1) * 100
+              rows.append(
+                  f"| {key[0]} | {key[1]} | {base:,.0f} | {dedicated:,.0f} | {elastic:,.0f} | "
+                  f"{delta_dedicated:+.1f}% | {delta_elastic:+.1f}% |"
+              )
+              summary["comparisons"][f"{key[0]}x{key[1]}"] = {
+                  "dedicated_vs_baseline_pct": delta_dedicated,
+                  "elastic_vs_dedicated_pct": delta_elastic,
+                  "elastic_vs_baseline_pct": (elastic / base - 1) * 100
+              }
+
+          def read_resource(path):
+              samples = []
+              if path.exists():
+                  for line in path.read_text().splitlines():
+                      try:
+                          cpu, rss = line.split(",", 1)
+                          samples.append((float(cpu), int(rss)))
+                      except (ValueError, TypeError):
+                          pass
+              if not samples:
+                  return {"peak_cpu_percent": None, "peak_rss_mib": None}
+              return {
+                  "peak_cpu_percent": max(x[0] for x in samples),
+                  "peak_rss_mib": max(x[1] for x in samples) / 1024.0
+              }
+
+          summary["resources"] = {}
+          for arm in arms:
+              summary["resources"][arm] = {
+                  file.stem: read_resource(file)
+                  for file in sorted(root.glob(f"{arm}-r[123]-resources.csv"))
+              }
+          topology = Path("benchmark-topology.txt").read_text()
+          (root / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+          (root / "summary.md").write_text("\n".join(rows) + "\n")
+          print((root / "summary.md").read_text())
+          print("\nRunner topology:\n" + topology)
+          if "NUMA node(s):                            1" in topology:
+              print("NOTE: runner exposes one NUMA node; physical multi-node locality remains untested.")
+          PY
+          cat benchmark-results/summary.md >> "$GITHUB_STEP_SUMMARY"
+          cat benchmark-topology.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload raw trials and saturation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-fabric-mixed-class-saturation
+          path: |
+            benchmark-results/
+            benchmark-topology.txt
+          if-no-files-found: error
+          retention-days: 30
