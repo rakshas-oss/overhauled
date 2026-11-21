@@ -30,9 +30,9 @@ struct BrokerServerConfig {
     std::size_t throughput_worker_threads = 0; // 0 = use legacy/automatic budget
     std::size_t exact_cpu_worker_threads = 1;
     std::size_t inference_worker_threads = 1;
-    // Optional additional worker slots. Zero keeps the legacy dedicated-only
-    // sizing. Elastic workers are capped at 64 total and may serve only
-    // RealtimeSpatial, Throughput and Inference within per-class ceilings.
+    // Optional additional worker slots. Zero keeps dedicated-only sizing.
+    // Elastic workers are capped at 4,096; the process-wide worker cap is 16,384.
+    // They may serve only RealtimeSpatial, Throughput and Inference.
     std::size_t elastic_worker_threads = 0;
     std::array<std::size_t, kWorkerClassCount> elastic_max_workers_per_class{{0, 1, 4, 0, 2}};
     bool verbose = false;
