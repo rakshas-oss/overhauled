@@ -11,7 +11,7 @@
 
 ## Version assessment
 
-The v1.5.0 increment follows the v1.4.0 BRK2 locality-codec baseline and adds optional native Wasmtime runtime composition:
+The v1.5.1 patch follows published v1.5.0 and repairs the opt-in Wasmtime v51 runtime-composition build and test:
 
 - Optional `ENABLE_WASM_RUNTIME` embeds the Wasmtime C API to compile core-Wasm binaries and register modules under linker namespaces.
 - Dependent modules resolve typed imports at instantiation; runtime composition does not merge or rewrite module binaries.
@@ -29,10 +29,10 @@ This is an additive runtime capability, not a complete multi-tenant sandbox. Mod
   pass on the exact release candidate commit.
 - Updating this repository does not publish Conan Center, vcpkg, Homebrew,
   apt or dnf packages. Verify each external registry separately.
-- The root vcpkg manifest is set to candidate 1.5.0; update the vcpkg portfile
+- The root vcpkg manifest is set to candidate 1.5.1; update the vcpkg portfile
   source reference and SHA512 only from the exact final tagged archive.
 - The checked-in Homebrew formula still points to v1.1.1. Refresh its URL,
-  version and SHA-256 only from the final v1.5.0 release archive.
+  version and SHA-256 only from the final v1.5.1 release archive.
 - YuKKi-OS owns workload semantics, spatial resolution and directives.
   Overhauled owns broker queues, admission, local physical CPU/NUMA worker
   placement, GPU topology, accelerator placement and execution.
