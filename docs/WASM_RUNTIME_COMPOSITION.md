@@ -25,6 +25,11 @@ compiles a module, then registers it in the Wasmtime linker under `name`.
 A dependent module can declare imports from that namespace and call its exports.
 Register dependencies before registering/instantiating dependants. Instantiate
 the selected root module only after its dependency namespaces have been added.
+The runtime retains the resulting instance handle. The initial public invocation
+surface is deliberately limited to exported functions with signature
+`() -> i32`; `invoke_i32(module, export, &result, ...)` reports missing exports,
+non-function exports, traps and incompatible result types instead of coercing
+values. This is an initial host ABI, not a general-purpose Wasm value API.
 
 Modules remain separate compiled artifacts and retain their own versions. The
 linker resolves import names and types; no static module merge or rewriting occurs.
@@ -33,8 +38,11 @@ or trapped start function is reported as an error.
 
 ## Isolation and current boundaries
 
-The runtime owns one Wasmtime engine, store and linker. The store applies configured
-linear-memory, table, instance and memory-count limits. The default memory ceiling
+The runtime owns one Wasmtime engine, store and linker. All registered modules
+and retained instances share that Store and therefore one resource/isolation
+domain. The store applies configured linear-memory, table, instance and
+memory-count limits. Repeated instantiation of the same registered root name is
+rejected; this initial API does not yet expose instance teardown or replacement. The default memory ceiling
 is 256 MiB per memory, with bounded table/instance counts. Production callers should
 create a runtime per tenant or trust domain where isolation boundaries differ.
 Fuel metering, epoch interruption, WASI capability grants, artifact persistence,

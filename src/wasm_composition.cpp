@@ -39,14 +39,14 @@ WasmCompositionRuntime::WasmCompositionRuntime() : WasmCompositionRuntime(Limits
 WasmCompositionRuntime::WasmCompositionRuntime(Limits limits)
     : engine_(wasm_engine_new()),
       store_(engine_ ? wasmtime_store_new(engine_.get(), nullptr, nullptr) : nullptr),
-      linker_(engine_ ? wasmtime_linker_new(engine_.get()) : nullptr) {
+      linker_(engine_ ? wasmtime_linker_new(engine_.get()) : nullptr),
+      max_module_bytes_(limits.max_module_bytes) {
     if (!engine_ || !store_ || !linker_) {
         throw std::runtime_error("failed to initialize Wasmtime runtime");
     }
     wasmtime_store_limiter(store_.get(), limits.max_memory_bytes,
                            limits.max_table_elements, limits.max_instances,
                            limits.max_tables, limits.max_memories);
-    max_module_bytes_ = limits.max_module_bytes;
 }
 
 WasmCompositionRuntime::~WasmCompositionRuntime() = default;
@@ -88,6 +88,7 @@ bool WasmCompositionRuntime::instantiate(const std::string& module_name,
     };
     const auto found = modules_.find(module_name);
     if (found == modules_.end()) return fail("root module is not registered");
+    if (instances_.count(module_name)) return fail("module is already instantiated");
 
     wasmtime_instance_t instance;
     wasm_trap_t* trap = nullptr;
@@ -97,6 +98,47 @@ bool WasmCompositionRuntime::instantiate(const std::string& module_name,
         return fail(error_message(link_error));
     }
     if (trap) return fail(trap_message(trap));
+    instances_.emplace(module_name, instance);
+    if (error) error->clear();
+    return true;
+}
+
+bool WasmCompositionRuntime::invoke_i32(
+    const std::string& module_name, const std::string& export_name,
+    std::int32_t* result, std::string* error) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto fail = [&](const std::string& message) {
+        if (error) *error = message;
+        return false;
+    };
+    if (!result) return fail("result pointer must not be null");
+    const auto found = instances_.find(module_name);
+    if (found == instances_.end()) return fail("module is not instantiated");
+
+    auto* context = wasmtime_store_context(store_.get());
+    wasmtime_extern_t item;
+    if (!wasmtime_instance_export_get(context, &found->second,
+                                      export_name.data(), export_name.size(), &item)) {
+        return fail("export not found: " + export_name);
+    }
+    if (item.kind != WASMTIME_EXTERN_FUNC) {
+        wasmtime_extern_delete(&item);
+        return fail("export is not a function: " + export_name);
+    }
+
+    wasmtime_val_t value;
+    wasm_trap_t* trap = nullptr;
+    auto* call_error = wasmtime_func_call(context, &item.of.func,
+                                          nullptr, 0, &value, 1, &trap);
+    wasmtime_extern_delete(&item);
+    if (call_error) return fail(error_message(call_error));
+    if (trap) return fail(trap_message(trap));
+    if (value.kind != WASMTIME_I32) {
+        wasmtime_val_delete(&value);
+        return fail("export result is not i32: " + export_name);
+    }
+    *result = value.of.i32;
+    wasmtime_val_delete(&value);
     if (error) error->clear();
     return true;
 }
