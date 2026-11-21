@@ -200,7 +200,7 @@ jobs:
                           worker_id
                           for repetition in parsed[arm][workers]
                           for worker_id in repetition["worker_ids"]
-                          if worker_id >= 1280
+                          if worker_id >= 81920
                       }),
                       "numa_nodes_seen": sorted({
                           node
