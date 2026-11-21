@@ -2,6 +2,7 @@
 // Copyright (c) 2024 NVLink Placement Contributors
 
 #include "broker_server.h"
+#include "worker_topology.h"
 #include "brk2_protocol.h"
 
 #include <arpa/inet.h>
@@ -189,11 +190,14 @@ public:
         admission_budget_ = std::make_shared<WorkerAdmissionBudget>(
             request_limit, config_.max_inflight_memory_bytes);
 
-        const std::size_t hw = std::max<std::size_t>(1, std::thread::hardware_concurrency());
-        // Default to at most one broker worker per visible logical CPU. Large
-        // hosts may configure a different budget explicitly after profiling.
+        const WorkerTopologySnapshot topology = discover_worker_topology();
+        const std::size_t physical_cores = std::max<std::size_t>(
+            1, topology.physical_core_count);
+        // Avoid creating thousands of OS threads blindly. Large hosts get a
+        // conservative physical-core default; operators can explicitly size
+        // up to kMaximumWorkerThreads after measuring workload and stack cost.
         const std::size_t automatic_total = std::min<std::size_t>(
-            kMaximumWorkerThreads, std::max<std::size_t>(5, hw));
+            kAutomaticWorkerThreadCap, std::max<std::size_t>(5, physical_cores));
         const std::array<std::size_t, 4> reserved_counts{{
             config_.control_worker_threads,
             config_.realtime_spatial_worker_threads,
