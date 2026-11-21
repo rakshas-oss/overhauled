@@ -142,6 +142,14 @@ The listener binds to all interfaces (`0.0.0.0`). Restrict ingress with firewall
 
 The broker has stdout/stderr startup and shutdown diagnostics. It does not currently expose a built-in HTTP health endpoint or metrics endpoint; monitoring must be supplied by the process supervisor, host telemetry, or the authenticated proxy layer.
 
+### Cross-repository discovery, memory locality, and deterministic execution
+
+YuKKi-OS is the control-plane discovery authority for this broker. Its current BrokerServiceRecord is relayed through the authenticated bootstrap/gossip mesh with bounded leases and hop counts. Overhauled is an advertised service, not a direct DHT participant. The present registry is not Kademlia, is not persistent across bootstrap restarts, and does not authorize execution. The broker listener remains raw BRK1/BRK2 TCP; deployments must protect it with a private trusted network or an independently authenticated mTLS proxy. Service capability labels are discovery hints, not proof of hardware availability. See YuKKi-OS [broker service discovery](https://github.com/rakshas-oss/YuKKi-OS/blob/main/docs/BROKER_SERVICE_DISCOVERY.md).
+
+The current locality path is deliberately split. YuKKi-OS selects workload intent, logical affinity, deadline and an advisory preferred NUMA node. Overhauled validates its own process-allowed CPU topology, routes to a local CPU-group queue, attempts worker-thread affinity, and reports the applied NUMA node only when the pin succeeds. This does not place request payloads, Wasm linear memory, datasets, or accelerator staging buffers in NUMA-local memory. There is no negotiated memory-placement policy/result field in the current BRK2 contract. A future optional, versioned extension should carry bounded prefer/bind/interleave intent and return an explicit honored/rejected/fallback status; YuKKi-OS owns policy, while the process that owns each allocation must apply and verify it. Never let a remote hint widen the broker cpuset or bypass local memory quotas.
+
+RealtimeSpatial uses isolated worker capacity and cooperative EDF ordering within a leaf queue. Running tasks are not preempted by this queue policy, and there is no WCET, interrupt-latency, or deadline-completion guarantee. Hard real-time claims require a separately qualified OS/hardware profile with CPU and IRQ isolation, locked/preallocated memory, bounded allocation and syscall paths, priority-inversion controls, admission/WCET budgets, and worst-case jitter validation. Until that qualification exists, describe the path as deadline-aware / soft-real-time, not hard real-time.
+
 ## 8. Build-time feature matrix
 
 | CMake option | Default | Effect |
