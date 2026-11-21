@@ -60,13 +60,13 @@ cd overhauled
 git fetch --tags origin
 ```
 
-For the currently published baseline, check out the v1.3.0 tag:
+For the currently published release baseline, check out the v1.5.0 tag:
 
 ```bash
-git checkout v1.3.0
+git checkout v1.5.0
 ```
 
-Use `git checkout v1.4.0` only after the v1.4.0 candidate has passed review, merged, and its release tag has actually been created.
+`v1.5.0` is published. The Wasmtime v51 C API correction is being prepared for v1.5.1; do not use or describe v1.5.1 as released until its tag and release are published.
 
 If the tag has not yet been created, use the reviewed release commit or the intended branch supplied by your release process. Do not assume an open pull request is already part of `main` or a published release.
 
