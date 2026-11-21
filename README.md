@@ -25,14 +25,19 @@ Overhauled is a C++17 placement and execution library with an interoperable brok
 - Opt-in mainline Linux DRM Ethos-U85 executor, with a documented Vela-generated `YU85BND1` bundle format.
 - Optional CUDA/TensorRT GPU runtime features; deterministic CPU-only broker operation remains available.
 - Isolated Control, RealtimeSpatial, Throughput, ExactCpu and Inference worker pools with bounded process-wide admission and in-flight memory budgets.
-- Deadline-aware spatial queue ordering and Linux worker-thread NUMA affinity, with BRK2 queue/service/worker telemetry.
+- Deadline-aware spatial queue ordering, dynamically sized Linux CPU masks, nested NUMA/CPU-group placement, and BRK2 queue/service/worker telemetry.
 - Per-class queue locks and condition variables isolate scheduler contention;
   realtime deadline insertion uses ordered queue entries, while worker CPU
   selection remains stable for a worker on a given NUMA target and avoids
   redundant affinity syscalls.
-- Worker queues are sharded by process-visible NUMA node. Optional elastic
-  workers add bounded capacity for RealtimeSpatial, Throughput and Inference
-  while Control and ExactCpu retain protected dedicated pools.
+- Worker queues are sharded by LLC/CPU group within each process-visible NUMA
+  node. Workers prefer their home group, steal within the NUMA parent next, and
+  cross NUMA domains only as a fallback.
+- Topology validation enforces machine cpuset -> NUMA node -> CPU-group
+  containment, sibling disjointness, and bounded depth/fanout. Dynamic CPU masks
+  support CPU IDs beyond the legacy CPU_SETSIZE boundary.
+- Large-host worker limits are 16,384 total (4,096 elastic); automatic sizing
+  targets physical cores and is capped at 4,096 workers.
 
 ## What's new in v1.2.0
 
@@ -45,15 +50,16 @@ YuKKi-OS workload directives:
   absolute deadline is present; equal deadlines retain admission order.
 - Process-wide outstanding-request and in-flight-memory budgets remain held
   until execution completes, including after client disconnect.
-- Linux NUMA topology discovery intersects node CPU sets with the process
-  affinity mask and attempts worker-thread pinning. Telemetry reports a NUMA
-  node only when affinity was successfully applied.
+- Linux topology discovery builds a bounded machine -> NUMA -> LLC/CPU-group
+  tree from the process affinity mask and sysfs, validates every child cpuset
+  against its parent, and uses dynamically sized worker affinity masks.
+  Telemetry reports a NUMA node only when affinity was successfully applied.
 - Optional BRK2 request fields 11–13 carry worker class, logical spatial
   affinity and preferred NUMA node. Optional response fields 8–12 report
   worker class, queue wait, service time, worker ID and applied NUMA node.
 - The dataset benchmark can exercise class, affinity, NUMA and deadline
   behavior and report queue/service measurements.
-- Per-class queues are sharded across eligible NUMA nodes. Optional elastic
+- Per-class queues are sharded across eligible CPU groups inside NUMA nodes. Optional elastic
   workers use weighted RealtimeSpatial/Throughput/Inference service with
   process-wide per-class ceilings; Control and ExactCpu remain dedicated.
 
@@ -134,8 +140,9 @@ and [YuKKi-OS interoperability](docs/YUKKI_INTEROP.md).
 
 Overhauled is the broker and execution tier. It validates BRK1/BRK2 frames,
 applies bounded admission, routes requests into five isolated worker-class
-queues with NUMA-local shards, performs broker-local Linux CPU/NUMA
-affinity where supported, and can use bounded class-aware elastic workers
+queues with nested CPU-group/NUMA shards, performs broker-local Linux
+CPU-group/NUMA affinity where supported, and uses hierarchical work stealing
+(home group -> sibling groups -> remote NUMA) with bounded class-aware elasticity
 before dispatching eligible work to CPU/GPU/NPU backends. It does not duplicate
 YuKKi-OS workload semantics or spatial resolution: YuKKi selects the class
 and sends an optional affinity key, deadline and preferred-NUMA hint;
