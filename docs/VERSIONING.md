@@ -11,8 +11,8 @@
 
 ## Version assessment
 
-The 1.4.0 minor increment follows published v1.2.0 and adds a materially
-expanded worker-topology and scheduling architecture:
+The 1.4.0 minor increment follows published v1.3.0 and adds the BRK2
+locality-placement intent/result codec across the YuKKi-OS/Overhauled boundary:
 
 - PR #57 isolates per-class queue contention, stabilizes worker CPU selection
   and avoids redundant affinity syscalls.
