@@ -17,7 +17,8 @@ Overhauled is a C++17 placement and execution library with an interoperable brok
 
 ## What's new in v1.5.1
 
-- **Wasmtime v51 C API compatibility:** use the supported `wasm_name_t` trap-message helpers and correct scalar result handling so the opt-in runtime compiles against the pinned Wasmtime v51 C API. The feature remains opt-in through `ENABLE_WASM_RUNTIME`; the default build remains unchanged.\n- **Runtime composition regression coverage:** validate import-signature mismatch at module registration, matching Wasmtime linker validation semantics.
+- **Wasmtime v51 C API compatibility:** use the supported `wasm_name_t` trap-message helpers and correct scalar result handling so the opt-in runtime compiles against the pinned Wasmtime v51 C API. The feature remains opt-in through `ENABLE_WASM_RUNTIME`; the default build remains unchanged.
+- **Runtime composition regression coverage:** validate import-signature mismatch at module registration, matching Wasmtime linker validation semantics.
 - **Retained instances and typed invocation:** the initial host API retains instantiated roots and supports exported `() -> i32` calls with explicit errors for missing exports, traps and incompatible results.
 - **Composition conformance coverage:** provider/consumer fixtures exercise cross-module imports and result propagation. Wasmtime-enabled CI is a release gate; this candidate does not claim production tenant isolation.
 
