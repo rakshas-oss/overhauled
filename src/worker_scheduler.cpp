@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// YuKKi-directed class-aware worker pools, NUMA-local queues and bounded elastic capacity.
+// YuKKi-directed class-aware worker pools, nested CPU-group queues and bounded elasticity.
 
 #include "worker_scheduler.h"
 #include "worker_topology.h"
