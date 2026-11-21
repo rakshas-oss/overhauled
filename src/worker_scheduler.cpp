@@ -573,11 +573,13 @@ private:
         context.worker_class = worker_class;
         context.worker_id = static_cast<uint32_t>(worker_id);
         context.queue_wait_us = wait > 0 ? static_cast<uint64_t>(wait) : 0;
+        const std::pair<uint32_t, int> desired_pin{
+            placement.numa_node_id, static_cast<int>(placement.cpu_id)};
         if (topology_.affinity_supported &&
-            pin_current_thread_to_cpu(placement.cpu_id, topology_.maximum_cpu_id,
-                                      topology_.affinity_mask_bits)) {
-            current_pin = std::make_pair(placement.numa_node_id,
-                                         static_cast<int>(placement.cpu_id));
+            ((current_pin && *current_pin == desired_pin) ||
+             pin_current_thread_to_cpu(placement.cpu_id, topology_.maximum_cpu_id,
+                                       topology_.affinity_mask_bits))) {
+            current_pin = desired_pin;
             context.numa_node = placement.numa_node_id;
             context.cpu_group_id = placement.cpu_group_id;
         } else {
@@ -608,7 +610,7 @@ private:
             }
             if (stopping_.load(std::memory_order_acquire) && !class_has_work(class_id))
                 return;
-            std::unique_lock<std::mutex> lock(wake_mutex_);
+            std::unique_lock<std::mutex> lock(class_wake_mutex_[class_id]);
             class_wake_cv_[class_id].wait(lock, [this, class_id, observed] {
                 return stopping_.load(std::memory_order_acquire) ||
                        class_wake_generation_[class_id].load(std::memory_order_acquire) != observed;
@@ -639,7 +641,7 @@ private:
             }
             if (stopping_.load(std::memory_order_acquire) && !any_elastic_work())
                 return;
-            std::unique_lock<std::mutex> lock(wake_mutex_);
+            std::unique_lock<std::mutex> lock(elastic_wake_mutex_);
             elastic_wake_cv_.wait(lock, [this, observed] {
                 return elastic_wake_generation_.load(std::memory_order_acquire) != observed ||
                        (stopping_.load(std::memory_order_acquire) && !any_elastic_work());
@@ -649,7 +651,8 @@ private:
 
     WorkerPoolConfig config_;
     std::mutex join_mutex_;
-    std::mutex wake_mutex_;
+    std::array<std::mutex, kWorkerClassCount> class_wake_mutex_;
+    std::mutex elastic_wake_mutex_;
     WorkerTopologySnapshot topology_;
     std::vector<std::unique_ptr<NodeState>> nodes_;
     std::array<std::vector<std::thread>, kWorkerClassCount> threads_;
