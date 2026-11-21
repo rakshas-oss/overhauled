@@ -18,13 +18,37 @@ Start with the smallest working configuration:
 
 Do not begin with optional accelerators. Prove the CPU-only path first, then enable one backend at a time.
 
-### WASM task integration is host-side
+### WASM integration paths
 
-Overhauled does not build or run the Wasm guest. Do not upload a `.wasm` file to the broker expecting it to compile or execute it. Build and validate the guest in YuKKi-OS, instantiate it with the YuKKi-OS Wasmtime host, and send only the host-mediated task input and lifecycle messages to this broker.
+Overhauled supports two distinct paths; do not conflate them.
 
-For YuKKi-OS, the WSM1 adapter is opt-in and configured in the **YuKKi-OS process**, not here: set `YUKKI_GPU_ADAPTER_ENABLED=true`, set `YUKKI_GPU_USE_WSM1=true` when using the WSM1 task/lifecycle wire mode, and point `YUKKI_GPU_BROKER_ENDPOINT` at this broker. See [YuKKi-OS SYSADMIN_HOWTO](https://github.com/rakshas-oss/YuKKi-OS/blob/main/docs/SYSADMIN_HOWTO.md) for guest compilation, Wasmtime limits, host authentication, and module version lifecycle.
+**WSM1 host-mediated task/lifecycle path (the YuKKi-OS integration):** YuKKi-OS
+validates, compiles, instantiates and runs guest modules. Overhauled receives
+host-prepared task data and module-version lifecycle messages. Do not upload a
+`.wasm` file through WSM1 expecting the broker to compile or execute it.
 
-The broker's `Prepare` operation registers a module/version identity and placement lease; it does not receive the executable artifact or compile it. The broker's `TaskRequest` carries application task data and is dispatched to the configured compute callback or broker reference path. Wasm bytecode compilation, multi-module linking/merge compilation, guest-memory isolation and guest instantiation stay in YuKKi-OS.
+For YuKKi-OS, the WSM1 adapter is opt-in and configured in the **YuKKi-OS
+process**, not here: set `YUKKI_GPU_ADAPTER_ENABLED=true`, set
+`YUKKI_GPU_USE_WSM1=true` when using the WSM1 task/lifecycle wire mode, and
+point `YUKKI_GPU_BROKER_ENDPOINT` at this broker. See [YuKKi-OS
+SYSADMIN_HOWTO](https://github.com/rakshas-oss/YuKKi-OS/blob/main/docs/SYSADMIN_HOWTO.md)
+for guest compilation, Wasmtime limits, host authentication and module
+lifecycle.
+
+The broker's `Prepare` operation registers a module/version identity and
+placement lease; it does not receive the executable artifact or compile it.
+The `TaskRequest` carries application task data and is dispatched to the
+configured compute callback or broker reference path.
+
+**Optional native Wasmtime composition path:** applications may explicitly
+enable `ENABLE_WASM_RUNTIME=ON` to compile and compose core-Wasm modules
+inside the Overhauled process through `WasmCompositionRuntime`. This is a
+separate native API, not a WSM1 feature and not an automatic handoff from
+YuKKi-OS. The CI-supported C API is pinned to Wasmtime v51.0.0 on Linux
+x86_64. See [Native Wasmtime runtime composition](WASM_RUNTIME_COMPOSITION.md)
+for dependency layout, configuration, runtime tests and security limits.
+The native embedding shares a Store/resource domain; it is not a complete
+multi-tenant sandbox.
 
 ## 2. Install prerequisites
 
