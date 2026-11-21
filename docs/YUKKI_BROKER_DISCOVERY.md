@@ -16,7 +16,8 @@ UUID, endpoint, BRK1/BRK2 protocol versions, coarse capabilities, frame limit,
 lease timestamps, message UUID, and gossip hop budget. YuKKi validates records,
 caps leases at 300 seconds, refreshes its own record every 30 seconds, expires
 stale records, caps the registry at 4,096 entries, and limits forwarding to
-eight hops.
+eight hops. The bootstrap caches active leases in memory and replays them to
+newly joining peers; records are not persisted across bootstrap restarts.
 
 ## Security
 
