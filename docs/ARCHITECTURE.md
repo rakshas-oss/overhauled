@@ -2,7 +2,7 @@
 
 ## 1. System boundary
 
-Overhauled is the broker execution plane. It accepts bounded binary broker frames, validates optional YuKKi worker directives, admits requests into NUMA-local worker-class queue shards, applies broker-local CPU affinity where supported, optionally borrows bounded elastic worker capacity for eligible classes, selects an execution backend, and returns structured results and telemetry. YuKKi-OS owns workload semantics, class selection, spatial resolution, logical affinity keys, deadlines, and advisory preferred-NUMA hints; Overhauled owns local queue shards, dedicated and elastic worker admission, Linux process-allowed CPU discovery/worker affinity, GPU topology, accelerator placement, and execution. This repository does not embed YuKKi-OS or Wasmtime.
+Overhauled is the broker execution plane. It accepts bounded binary broker frames, validates optional YuKKi worker directives, admits requests into nested CPU-group/NUMA worker-class queue shards, applies process-cpuset-bounded CPU-group affinity where supported, optionally borrows bounded elastic worker capacity for eligible classes, selects an execution backend, and returns structured results and telemetry. YuKKi-OS owns workload semantics, class selection, spatial resolution, logical affinity keys, deadlines, and advisory preferred-NUMA hints; Overhauled owns local queue shards, dedicated and elastic worker admission, Linux process-allowed CPU discovery/worker affinity, GPU topology, accelerator placement, and execution. This repository does not embed YuKKi-OS or Wasmtime.
 
 ```text
 YuKKi-OS / external client
@@ -21,7 +21,7 @@ BrokerServer (default TCP port 9090)
         |      +-- media.stream.v1 (MED1 validation / echo)
         |      +-- WASM task and lifecycle operations
         |
-        +-- worker scheduler (five classes × eligible NUMA nodes)\n        |      +-- dedicated class pools and node-local ordered queues\n        |      +-- optional bounded elastic workers (RealtimeSpatial / Throughput / Inference)\n        |      +-- preferred node → logical affinity → round-robin routing\n        |\n        +-- backend dispatcher (CPU / GPU / NPU)
+        +-- hierarchical worker scheduler (machine → NUMA → LLC/CPU group)\n        |      +-- per-class ordered leaf queues and dedicated worker pools\n        |      +-- home group → sibling group → remote NUMA work stealing\n        |      +-- bounded elastic workers (RealtimeSpatial / Throughput / Inference)\n        |      +-- validated process cpuset → NUMA → CPU-group nesting\n        |\n        +-- backend dispatcher (CPU / GPU / NPU)
                +-- CPU reference compute path
                +-- GPU compute path -> GpuTopology -> Placer
                +-- optional NPU executor
@@ -206,7 +206,8 @@ For the full operational sequence, use [System administration](SYSADMIN_HOWTO.md
 | Build features and target graph | `CMakeLists.txt` |
 | BRK1/BRK2 framing and schemas | `src/broker_protocol.cpp`, `src/brk2_protocol.cpp`, corresponding headers |
 | TCP listener, sessions, limits | `src/broker_server.cpp`, `include/broker_server.h` |
-| Class worker pools, admission budgets, Linux NUMA affinity | `src/worker_scheduler.cpp`, `include/worker_scheduler.h` |
+| Class worker pools, leaf queues and hierarchical stealing | `src/worker_scheduler.cpp`, `include/worker_scheduler.h` |
+| Bounded CPU topology discovery, cpuset validation and dynamic affinity masks | `src/worker_topology.cpp`, `include/worker_topology.h` |
 | CLI and runtime backend wiring | `src/broker_server_main.cpp` |
 | Backend policy and NPU interface | `include/backend_dispatch.h`, `include/npu_device.h` |
 | Broker routing and execution | `src/broker_service.cpp`, `include/broker_service.h` |
@@ -217,17 +218,28 @@ For the full operational sequence, use [System administration](SYSADMIN_HOWTO.md
 
 ## YuKKi-directed worker fabric
 
-Overhauled maintains five worker classes with one ordered queue per eligible
-NUMA node. Dedicated workers remain assigned to a home node and consume only
-that node's queue. Optional elastic worker threads are separately capped at
-64 (256 combined workers maximum) and may service RealtimeSpatial, Throughput
-and Inference queues on their own node, subject to process-wide concurrent
-ceilings per class. Control and ExactCpu never use elastic capacity.
-RealtimeSpatial retains earliest-deadline-first order within each node queue;
-other classes preserve FIFO order. Preferred-node hints are honoured only
-when that class has an eligible queue there; otherwise routing uses the
-logical affinity key or round-robin. The process-wide outstanding-request
-and in-flight-memory budget remains the queue bound and reservations remain
-held through completion. The feature adds no BRK2 fields and does not change
-BRK1 behavior. See [YUKKI_WORKER_FABRIC.md](YUKKI_WORKER_FABRIC.md) for CLI
-settings, limits, ownership and operational validation.
+Overhauled maintains five worker classes with an ordered queue on each
+eligible CPU-group leaf beneath a process-visible NUMA parent. Dedicated
+workers are pinned to a home CPU group. When local work is unavailable, they
+steal from sibling groups in the same NUMA node, then remote NUMA nodes.
+Optional elastic workers follow the same locality order and are capped at
+4,096; the combined dedicated-plus-elastic process limit is 16,384. Elastic
+service remains restricted to RealtimeSpatial, Throughput and Inference,
+subject to process-wide concurrent ceilings per class. Control and ExactCpu
+never use elastic capacity.
+
+RealtimeSpatial retains earliest-deadline-first order within each leaf queue;
+other classes preserve FIFO order within a leaf. Preferred-NUMA hints are
+honoured only when an eligible leaf exists under that node; otherwise routing
+uses the logical affinity key or round-robin. Linux topology discovery uses
+dynamic CPU masks and validates strict machine-cpuset -> NUMA -> CPU-group
+containment, sibling disjointness and exact child coverage. No request hint can
+widen the process CPU set. This is placement isolation, not multi-tenant
+identity isolation: mutually untrusted tenants require separate broker
+processes/containers with disjoint cgroup cpusets and memory limits.
+
+The process-wide outstanding-request and in-flight-memory budget remains the
+queue admission bound and reservations remain held through completion. The
+feature adds no BRK2 fields and does not change BRK1 behavior. See
+[YUKKI_WORKER_FABRIC.md](YUKKI_WORKER_FABRIC.md) for CLI settings, limits,
+security boundaries and operational validation.
