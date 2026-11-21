@@ -1,4 +1,46 @@
-## v1.2.0 (release candidate; tag pending)
+## v1.3.0 (release candidate; tag pending)
+Date: 2026-11-21
+
+### Highlights
+
+- **Hierarchical worker topology:** added validated machine-cpuset -> NUMA ->
+  LLC/CPU-group placement domains. Child sets remain inside their parents,
+  sibling groups are disjoint, and the topology must cover the process-allowed
+  CPU set without broadening it.
+- **Dynamic CPU affinity masks:** Linux placement supports CPU IDs beyond the
+  legacy `CPU_SETSIZE` boundary, with bounded cpulist parsing and topology
+  limits.
+- **Per-class CPU-group queues:** each worker class has ordered CPU-group
+  leaf queues. Workers prefer their home group, steal within sibling groups
+  next, and consider remote NUMA domains last. Stealing remains class-preserving.
+- **Bounded large-host worker capacity:** explicit sizing supports up to
+  16,384 total workers and 4,096 elastic workers. Automatic sizing targets
+  physical cores and is capped at 4,096.
+- **Admission and scheduler contention:** worker admission uses atomic
+  bounded reservations; queue locks and wakeups are isolated by worker class
+  and CPU group.
+- **Reproducible measurement:** follow-up PRs add repeatable throughput A/B,
+  pipelined mixed-class saturation, measurement-quality controls and
+  fixed-total worker-budget sweeps.
+
+### Compatibility and release boundary
+
+- The work builds on published v1.2.0 worker classes, deadlines, budgets,
+  NUMA placement and BRK2 worker telemetry. It does not change BRK1/BRK2/WSM1
+  envelope identities or add CPU-group IDs to the wire protocol.
+- CPU-group placement and worker stealing are internal broker scheduling
+  details. Preferred NUMA and affinity hints cannot widen the broker's
+  process-allowed CPU set.
+- The 1.3.0 version is a candidate. Do not tag or publish it until topology,
+  scheduler, BRK2, sanitizer, package-consumer and cross-repository CI gates
+  pass and the release commit is approved.
+- The vcpkg archive SHA512 and Homebrew archive URL/SHA256 must be generated
+  from the exact final v1.3.0 release archive. External registries are
+  submitted and verified separately.
+
+---
+
+## v1.2.0 (published 2026-11-20)
 Date: 2026-11-19
 
 ### Highlights
@@ -32,11 +74,9 @@ Date: 2026-11-19
 - NUMA affinity is implemented for Linux and may be unavailable in restricted
   environments. Deadlines are not native-code preemption or hard real-time
   guarantees.
-- CMake, Conan and vcpkg metadata are aligned to 1.2.0. External registry
-  submissions and archive checksums remain pending the exact final tag.
-- v1.2.0 is a candidate only; do not tag or publish before required CI,
-  review, sanitizer, package-consumer and cross-repository interoperability
-  checks pass.
+- CMake, Conan and vcpkg repository metadata were aligned to 1.2.0. The
+  v1.2.0 GitHub tag and release were published on 2026-11-20. External
+  package-manager submissions must still be verified independently.
 
 ---
 
