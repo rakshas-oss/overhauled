@@ -16,6 +16,14 @@ process-wide admission controls, broker-local Linux NUMA affinity, backend
 dispatch and BRK2 response telemetry. It is paired with the terminal renderer
 at `docs/diagrams/print-ansi.sh`.
 
+## Discovery, memory locality, and real-time qualification
+
+YuKKi-OS advertises this broker through its bounded lease-based authenticated peer-mesh registry. That registry is gossip relayed, not Kademlia; it returns candidate endpoints and is not execution authorization. BRK1/BRK2 TCP still requires a trusted network or independent authenticated proxy.
+
+The existing preferred-NUMA directive is a CPU-placement hint. Overhauled validates its process cpuset and reports a NUMA node only when worker-thread affinity succeeds. It does not currently bind request buffers, Wasm linear memory, datasets, or accelerator staging buffers to a NUMA node. There is no memory-policy TLV/result contract yet; any future prefer/bind/interleave policy must be negotiated, bounded by local memory quotas, and return honored/rejected/fallback status.
+
+RealtimeSpatial uses cooperative earliest-deadline-first queue ordering within a leaf. It cannot preempt an executing task and does not establish WCET or hard-real-time guarantees. Treat it as deadline-aware/soft-real-time unless a specific kernel and hardware profile passes CPU/IRQ isolation, locked-memory, bounded-path, admission and worst-case jitter qualification.
+
 ## Worker classes
 
 BRK2 request TLVs extend the existing request schema without changing the
