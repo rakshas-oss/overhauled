@@ -1,5 +1,5 @@
 ## v1.3.0 (release candidate; tag pending)
-Date: 2026-11-21
+Date: 2026-11-20
 
 ### Highlights
 
