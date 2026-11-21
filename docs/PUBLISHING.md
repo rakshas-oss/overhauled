@@ -203,40 +203,32 @@ sudo dnf install nvlink-placement-devel
 
 ---
 
-## Candidate packaging boundary for v1.5.0
+## Published v1.5.0 and v1.5.1 patch candidate
 
-The v1.5.0 candidate aligns CMake, Conan and the root vcpkg manifest. It is
-not a published source archive yet:
+Overhauled v1.5.0 is published. Its optional native Wasmtime composition feature was released with a Wasmtime v51 C API integration defect. The fix is being prepared as v1.5.1; do not describe v1.5.1 as released until its release PR is merged, the exact approved commit is tagged, and the GitHub release assets are verified.
 
-- After the v1.5.0 tag/archive is created, update the vcpkg portfile's source
-  reference and SHA512 together from that exact archive; test the port before
-  submitting it to the registry.
-- The checked-in Homebrew formula still points to v1.1.1. Update its URL,
-  version and SHA256 only from the final v1.5.0 archive.
-- The v1.3.0 GitHub release is published, but package-manager registry
-  submissions are separate. Verify each registry independently; do not infer
-  registry publication from a merged repository manifest or GitHub release.
+For the v1.5.1 candidate:
 
-## Release Checklist
+- CMake, Conan and the root vcpkg manifest are aligned to 1.5.1 on the candidate branch.
+- The Wasmtime C API CI lane pins v51.0.0 on Linux x86_64. The candidate must pass the Wasmtime-enabled compile **and** provider/consumer runtime test.
+- The default build, BRK2 conformance, sanitizer, package-consumer and paired YuKKi-OS interoperability gates must also pass on the exact release commit.
+- Do not update Homebrew, vcpkg portfile archive hashes, or other external package registries until the final v1.5.1 archive exists. Generate checksums from that exact archive; never reuse a checksum from a different tag.
+- A GitHub release does not automatically publish Conan Center, vcpkg, Homebrew, apt or dnf packages. Submit and verify each registry independently.
 
-> **Publication boundary:** Updating this repository's manifests and examples does not publish packages to Conan Center, vcpkg, Homebrew, apt, or dnf. Submit and verify each external registry update separately. The Homebrew formula must use the checksum of the actual tagged source archive.
+## Release checklist
 
+Before publishing a patch release:
 
-Before each release:
-
-- [ ] Update version in `CMakeLists.txt`
-- [ ] Update version in `conanfile.py`
-- [ ] Update version in `vcpkg.json`
-- [ ] Regenerate the Homebrew formula URL and SHA-256 from the final v1.5.0 release archive, then update `nvlink-placement.rb`
-- [ ] Update `README.md` with latest features
-- [ ] After the release PR is approved and merged, create and push `v1.5.0` from the exact approved merge commit; verify the tag resolves to that commit and the GitHub release archive is generated from it.
-- [ ] Verify the release workflow and GitHub release assets; do not assume publication is automatic
-- [ ] Submit PRs to Conan Center Index
-- [ ] Submit PRs to vcpkg
-- [ ] Submit PRs to Homebrew (optional)
-- [ ] Announce on social media/forums
-
----
+- [ ] Confirm the intended source tag and published baseline.
+- [ ] Update CMakeLists.txt, conanfile.py and vcpkg.json.
+- [ ] Update README, versioning and release notes with accurate candidate status.
+- [ ] Pass default native CI and the pinned Wasmtime C API compile/runtime lane.
+- [ ] Pass sanitizer, BRK2 conformance/mutation, package-consumer and paired YuKKi-OS interoperability checks on the exact release commit.
+- [ ] Review and merge the release PR.
+- [ ] Create and push the version tag from the exact approved merge commit.
+- [ ] Verify the tag target, GitHub release and source archive.
+- [ ] Generate vcpkg SHA512 and Homebrew SHA256 from that exact archive.
+- [ ] Submit and independently verify any desired external package-manager registry updates.
 
 ## Verification
 
