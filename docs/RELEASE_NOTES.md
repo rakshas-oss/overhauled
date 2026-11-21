@@ -20,7 +20,7 @@ This release adds protocol codec support only. It does not add a broker-owned pa
 ---
 
 ## v1.3.0 (published 2026-11-21)
-Date: 2026-11-20
+Date: 2026-11-21
 
 ### Highlights
 
