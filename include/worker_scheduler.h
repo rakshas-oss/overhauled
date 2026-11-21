@@ -6,6 +6,7 @@
 #include "broker_protocol.h"
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <chrono>
@@ -73,9 +74,8 @@ public:
 private:
     const std::size_t max_outstanding_requests_;
     const std::size_t max_payload_bytes_;
-    mutable std::mutex mutex_;
-    std::size_t outstanding_requests_ = 0;
-    std::size_t outstanding_payload_bytes_ = 0;
+    std::atomic<std::size_t> outstanding_requests_{0};
+    std::atomic<std::size_t> outstanding_payload_bytes_{0};
 };
 
 class ClassWorkerPool {
