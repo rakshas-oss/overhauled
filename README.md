@@ -232,7 +232,7 @@ Placement validates non-empty GPU topology, model registry access is synchronize
 
 ## Documentation
 
-- [Broker protocol](docs/BROKER_PROTOCOL.md) · [BRK2 conformance](docs/BRK2_CONFORMANCE_V1.md) · [Executable BRK corpus](docs/BRK_CONFORMANCE_V1.md)
+- [Broker protocol](docs/BROKER_PROTOCOL.md) · [BRK2 conformance](docs/BRK2_CONFORMANCE_V1.md) · [BRK2 locality placement v1](docs/BRK2_LOCALITY_PLACEMENT_V1.md) · [Executable BRK corpus](docs/BRK_CONFORMANCE_V1.md)
 - [YuKKi-OS interoperability](docs/YUKKI_INTEROP.md) · [WASM interoperability](docs/WASM_INTEROP.md)
 - [Ethos-U85 bundle and hardware boundary](docs/ETHOSU_U85_BUNDLE.md) · [YuKKi-aware worker fabric](docs/YUKKI_WORKER_FABRIC.md)
 - [Architecture and runtime decision model](docs/ARCHITECTURE.md) · [Library guide](docs/LIBRARY.md) · [Versioning](docs/VERSIONING.md)
