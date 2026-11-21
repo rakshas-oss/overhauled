@@ -138,7 +138,16 @@ void build_cpu_groups(NumaNodeTopology* node) {
         groups[key].push_back(cpu);
     }
 
+    const bool cache_groups_are_consistent = !groups.empty() &&
+        std::all_of(groups.begin(), groups.end(),
+            [](const auto& item) { return item.first == item.second; });
     node->cpu_groups.clear();
+    if (!cache_groups_are_consistent) {
+        // Inconsistent per-CPU cache metadata must not invent overlapping
+        // scheduling leaves. Keep the NUMA parent and collapse to one leaf.
+        node->cpu_groups.push_back(CpuGroupTopology{0, node->cpus});
+        return;
+    }
     uint32_t group_id = 0;
     for (auto& item : groups) {
         CpuGroupTopology group;
