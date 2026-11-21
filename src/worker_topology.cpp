@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <cctype>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -182,6 +183,13 @@ bool parse_cpu_list(const std::string& text,
             cpus->clear();
             return false;
         }
+        if (std::any_of(token.begin(), token.end(), [](unsigned char ch) {
+                return !std::isdigit(ch) && ch != '-';
+            })) {
+            set_error(error, "CPU list contains non-numeric syntax");
+            cpus->clear();
+            return false;
+        }
         const std::size_t dash = token.find('-');
         if (dash != std::string::npos && token.find('-', dash + 1) != std::string::npos) {
             set_error(error, "CPU range contains multiple separators");
@@ -235,8 +243,16 @@ bool validate_worker_topology(const WorkerTopologySnapshot& topology,
         set_error(error, "process-allowed CPU set is empty, unsorted, duplicated, or too large");
         return false;
     }
-    if (topology.allowed_cpus.back() > kMaximumCpuId) {
-        set_error(error, "process-allowed CPU ID exceeds the topology bound");
+    if (topology.allowed_cpus.back() > kMaximumCpuId ||
+        topology.maximum_cpu_id < topology.allowed_cpus.back()) {
+        set_error(error, "process-allowed CPU ID exceeds the topology or affinity-mask bound");
+        return false;
+    }
+    if (topology.affinity_supported &&
+        (topology.affinity_mask_bits == 0 ||
+         topology.affinity_mask_bits <= topology.maximum_cpu_id ||
+         topology.affinity_mask_bits > kMaximumTopologyCpus)) {
+        set_error(error, "dynamic affinity mask does not cover the process-allowed CPU set");
         return false;
     }
     if (topology.numa_nodes.empty() || topology.numa_nodes.size() > kMaximumNumaNodes) {
@@ -358,7 +374,9 @@ static WorkerTopologySnapshot discover_worker_topology_uncached() {
     std::error_code ec;
     std::unordered_set<uint32_t> allowed(
         topology.allowed_cpus.begin(), topology.allowed_cpus.end());
-    if (std::filesystem::exists(root, ec)) {
+    // If the process affinity mask could not be read, do not infer physical
+    // NUMA placement from host-wide sysfs. Use one synthetic unpinned domain.
+    if (topology.affinity_supported && std::filesystem::exists(root, ec)) {
         for (const auto& entry : std::filesystem::directory_iterator(root, ec)) {
             if (ec || topology.numa_nodes.size() >= kMaximumNumaNodes) break;
             const std::string name = entry.path().filename().string();
