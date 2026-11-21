@@ -188,6 +188,18 @@ public:
             }
         }
 
+        // Bound oversubscription relative to the process-visible cpuset as
+        // well as the absolute thread cap. The floor preserves the five
+        // mandatory class pools plus a small elastic test/configuration pool.
+        const std::size_t cpu_based_limit =
+            topology_.allowed_cpus.size() > kMaximumWorkers / kMaximumWorkerThreadsPerLogicalCpu
+                ? kMaximumWorkers
+                : topology_.allowed_cpus.size() * kMaximumWorkerThreadsPerLogicalCpu;
+        const std::size_t nested_worker_limit = std::max<std::size_t>(9, cpu_based_limit);
+        if (dedicated_total + config_.elastic_workers > nested_worker_limit)
+            throw std::invalid_argument(
+                "worker thread total exceeds the topology-relative oversubscription budget");
+
         nodes_.reserve(topology_.numa_nodes.size());
         for (const auto& numa : topology_.numa_nodes) {
             auto node = std::make_unique<NodeState>();
