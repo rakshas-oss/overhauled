@@ -344,16 +344,34 @@ int main() {
         // Affinity key 0 selects CPU group 17; key 1 selects sibling group 19.
         CHECK(nested_pool.enqueue(WorkerClass::RealtimeSpatial, 0, std::nullopt,
                                   block_assigned_worker));
-        CHECK(worker_zero_started_future.wait_for(std::chrono::seconds(2)) ==
-              std::future_status::ready);
+        // The scheduler may wake either sibling worker first. Record which
+        // one took the group-17 task, then occupy the other with group 19.
+        const auto first_deadline = std::chrono::steady_clock::now() +
+                                    std::chrono::seconds(2);
+        while (worker_zero_started_future.wait_for(std::chrono::milliseconds(0)) !=
+                   std::future_status::ready &&
+               worker_one_started_future.wait_for(std::chrono::milliseconds(0)) !=
+                   std::future_status::ready &&
+               std::chrono::steady_clock::now() < first_deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        const bool worker_zero_was_first =
+            worker_zero_started_future.wait_for(std::chrono::milliseconds(0)) ==
+            std::future_status::ready;
+        const bool worker_one_was_first =
+            worker_one_started_future.wait_for(std::chrono::milliseconds(0)) ==
+            std::future_status::ready;
+        CHECK(worker_zero_was_first != worker_one_was_first);
         CHECK(nested_pool.enqueue(WorkerClass::RealtimeSpatial, 1, std::nullopt,
                                   block_assigned_worker));
-        CHECK(worker_one_started_future.wait_for(std::chrono::seconds(2)) ==
+        auto& remaining_started = worker_zero_was_first
+            ? worker_one_started_future : worker_zero_started_future;
+        CHECK(remaining_started.wait_for(std::chrono::seconds(2)) ==
               std::future_status::ready);
 
         // Both dedicated RealtimeSpatial workers are now occupied. This work
         // is queued to group 17; releasing the group-19 worker must steal it
-        // within the shared NUMA parent, while the group-17 worker stays busy.
+        // within the shared NUMA parent, while the other worker stays busy.
         CHECK(nested_pool.enqueue(WorkerClass::RealtimeSpatial, 0, std::nullopt,
             [&stolen_task_done](const WorkerExecutionContext& context) {
                 stolen_task_done.set_value(context);
