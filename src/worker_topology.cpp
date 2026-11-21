@@ -307,7 +307,7 @@ bool validate_worker_topology(const WorkerTopologySnapshot& topology,
     return true;
 }
 
-WorkerTopologySnapshot discover_worker_topology() {
+static WorkerTopologySnapshot discover_worker_topology_uncached() {
     WorkerTopologySnapshot topology;
 #if defined(__linux__)
     topology.allowed_cpus = discover_allowed_cpus(&topology.affinity_supported,
@@ -389,12 +389,27 @@ WorkerTopologySnapshot discover_worker_topology() {
 
     std::string validation_error;
     if (!validate_worker_topology(topology, &validation_error)) {
-        // Topology metadata can be restricted in containers or unusual kernels.
-        // Fail closed to one local domain rather than constructing overlapping
-        // or incomplete nested placement boundaries.
-        collapse_to_one_numa_node(&topology);
+        // Cache topology can be incomplete in virtualized environments. Keep
+        // the validated NUMA parents but collapse each leaf to one group first.
+        for (auto& node : topology.numa_nodes) {
+            node.cpu_groups.clear();
+            node.cpu_groups.push_back(CpuGroupTopology{0, node.cpus});
+        }
+        if (!validate_worker_topology(topology, &validation_error)) {
+            // If parent metadata is also incomplete, fail closed to one local
+            // domain rather than creating overlapping or orphaned children.
+            collapse_to_one_numa_node(&topology);
+        }
     }
     return topology;
+}
+
+WorkerTopologySnapshot discover_worker_topology() {
+    // The process cpuset and NUMA tree are treated as an immutable startup
+    // security boundary. All scheduler components share the same validated
+    // snapshot; hotplug/cpuset changes require process restart.
+    static const WorkerTopologySnapshot cached = discover_worker_topology_uncached();
+    return cached;
 }
 
 std::optional<WorkerCpuPlacement> worker_cpu_placement(
