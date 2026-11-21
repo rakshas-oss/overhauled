@@ -84,7 +84,7 @@ jobs:
               "numa_node_count": len(nodes),
               "nodes": nodes,
           }
-          pathlib.Path("benchmark-topology.json").write_text(json.dumps(topology, indent=2) + "\\n")
+          pathlib.Path("benchmark-topology.json").write_text(json.dumps(topology, indent=2) + "\n")
           print(json.dumps(topology, indent=2))
           if os.environ["RUNNER_PROFILE"] == "numa2" and len(nodes) < 2:
               sys.exit("NUMA validation requested, but fewer than two NUMA nodes are visible to this runner")
@@ -117,8 +117,6 @@ jobs:
           done
 
       - name: Run alternating baseline, dedicated, and elastic saturation trials
-        env:
-          RUNNER_CPU_COUNT: ${{ runner.cpu }}
         run: |
           set -euo pipefail
           mkdir -p benchmark-results
@@ -341,7 +339,6 @@ jobs:
 
           topology = json.loads(Path("benchmark-topology.json").read_text())
           summary["topology"] = topology
-          target = grouped["merged-dedicated"][(32, 32)]
           eligible = ["realtime-spatial", "throughput", "inference"]
           numa_nodes = {
               arm: {
@@ -383,8 +380,8 @@ jobs:
           for arm in numa_nodes:
               for name in eligible:
                   rows.append(f"| {arm} | {name} | {numa_nodes[arm][name]} |")
-          (root / "summary.json").write_text(json.dumps(summary, indent=2) + "\\n")
-          (root / "summary.md").write_text("\\n".join(rows) + "\\n")
+          (root / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+          (root / "summary.md").write_text("\n".join(rows) + "\n")
           print((root / "summary.md").read_text())
           if topology["runner_profile"] == "numa2" and not numa_verified:
               raise SystemExit("NUMA profile requested, but workers were not observed on at least two NUMA nodes for every eligible class")
