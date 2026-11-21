@@ -26,6 +26,7 @@ constexpr std::size_t kWorkerClassCount = 5;
 constexpr std::size_t kMaximumWorkerThreads = 16'384;
 constexpr std::size_t kMaximumElasticWorkerThreads = 4'096;
 constexpr std::size_t kAutomaticWorkerThreadCap = 4'096;
+constexpr std::size_t kMaximumWorkerThreadsPerLogicalCpu = 8;
 constexpr std::size_t kMaximumWorkerThreadsPerClass = kMaximumWorkerThreads;
 // Worker IDs at or above this value identify opt-in elastic worker threads.
 constexpr std::size_t kFirstElasticWorkerId =
