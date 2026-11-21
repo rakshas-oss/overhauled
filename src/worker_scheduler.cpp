@@ -121,7 +121,7 @@ public:
         for (const std::size_t count : config_.workers) {
             if (count == 0) throw std::invalid_argument("every worker class needs at least one dedicated worker");
             if (count > kMaximumWorkers || dedicated_total > kMaximumWorkers - count)
-                throw std::invalid_argument("dedicated worker total must be in 1..256");
+                throw std::invalid_argument("dedicated worker total must be in 1..16384");
             dedicated_total += count;
         }
         if (config_.elastic_workers > kMaximumElasticWorkers ||
@@ -421,7 +421,8 @@ private:
         context.worker_id = static_cast<uint32_t>(worker_id);
         context.queue_wait_us = wait > 0 ? static_cast<uint64_t>(wait) : 0;
         if (topology_.affinity_supported &&
-            pin_current_thread_to_cpu(placement.cpu_id, topology_.maximum_cpu_id)) {
+            pin_current_thread_to_cpu(placement.cpu_id, topology_.maximum_cpu_id,
+                                      topology_.affinity_mask_bits)) {
             current_pin = std::make_pair(placement.numa_node_id,
                                          static_cast<int>(placement.cpu_id));
             context.numa_node = placement.numa_node_id;
