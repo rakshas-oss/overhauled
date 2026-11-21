@@ -1,18 +1,18 @@
-# Overhauled v1.3.0 (release candidate)
+# Overhauled v1.4.0 (release candidate)
 
-> **Release candidate v1.3.0:** extends the published v1.2.0 worker fabric with validated hierarchical CPU-group/NUMA placement, class-local leaf queues, hierarchical work stealing, dynamic CPU masks and bounded large-host worker capacity.
+> **Release candidate v1.4.0:** adds BRK2 locality-placement intent/result codec support on top of the published v1.3.0 hierarchical worker fabric.
 
 > **Route workloads by topology, not guesswork.**
 >
 > Turn GPU interconnect awareness into higher throughput, better tail latency, and more effective use of accelerator infrastructure.
 
-> **Release status:** v1.3.0 is a minor-release candidate based on the published v1.2.0 release. Required CI, review, release tag/archive and external package-manager submissions are pending.
+> **Release status:** v1.4.0 is a minor-release candidate based on the published v1.3.0 release. Required CI, review, release tag/archive and external package-manager submissions are pending.
 
 Overhauled is a C++17 placement and execution library with an interoperable broker service. It provides topology-aware GPU scheduling and broker dispatch for CPU, GPU, and optional NPU execution.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
-[![Release](https://img.shields.io/badge/Release-v1.3.0-blueviolet)](#)
+[![Release](https://img.shields.io/badge/Release-v1.4.0-blueviolet)](#)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2FBRK2-orange)](#)
 
 ## Capabilities
@@ -68,40 +68,28 @@ fields are unchanged. Deadlines are broker request bounds, not preemption or
 hard real-time guarantees. See
 [YuKKi-aware worker fabric](docs/YUKKI_WORKER_FABRIC.md).
 
-## What's new in v1.3.0
+## What's new in v1.4.0
 
-The v1.3.0 candidate adds a hierarchical worker fabric for large CPU hosts.
-It builds on the worker-class and deadline features in v1.2.0:
+The v1.4.0 candidate adds the BRK2 locality-placement codec shared with
+YuKKi-OS:
 
-- **Nested topology:** validates the process-allowed machine CPU set, NUMA
-  parents and LLC/CPU-group leaf domains. Child sets must remain inside their
-  parent, sibling groups must be disjoint, and nested groups must cover the
-  allowed set without widening the process cpuset.
-- **Large CPU masks:** dynamic Linux affinity masks support CPU IDs beyond the
-  legacy `CPU_SETSIZE` boundary. Invalid, duplicate, malformed or excessive
-  CPU-list/topology input is rejected.
-- **Hierarchical queue placement:** each worker class has ordered per-CPU-group
-  leaf queues. Workers prefer their home group, then steal within sibling
-  groups in the same NUMA node, and cross NUMA domains only as a fallback.
-  Work stealing preserves worker class and does not change task semantics.
-- **Bounded large-host capacity:** explicit sizing supports up to 16,384 total
-  workers, including at most 4,096 elastic workers. Automatic sizing targets
-  discovered physical cores and is capped at 4,096; operators should still
-  measure stack memory and workload behavior before increasing limits.
-- **Lower scheduling contention:** per-class/per-group queues isolate locks
-  and wakeups; admission accounting uses atomic reservations instead of one
-  global admission mutex.
-- **Benchmark coverage:** adds repeated A/B throughput runs, pipelined
-  mixed-class saturation, measurement-quality checks and fixed worker-budget
-  sweeps. These provide reproducible measurements, not a universal scaling
-  or throughput guarantee.
+- **Request field 14:** bounded nested-TLV decoding for locality intent with
+  extension version, scope, mode, optional NUMA-node, payload-size, duplicate
+  field and unknown-critical-field validation.
+- **Response field 13:** encodes the placement outcome returned by an allocator.
+  An absent result means unknown/not applied; it must never be interpreted as
+  successful placement.
+- **Old-peer behavior:** `prefer` is non-critical; `bind` and `interleave`
+  require the critical bit and cannot be silently ignored by older peers.
 
-The existing BRK1/BRK2/WSM1 contracts are preserved. BRK2 worker intent and
-telemetry fields introduced in v1.2.0 remain unchanged; the CPU-group ID is
-internal scheduling detail, not a new wire field. NUMA affinity and work
-stealing remain bounded by the process-visible CPU set and actual OS support.
-See [YuKKi-aware worker fabric](docs/YUKKI_WORKER_FABRIC.md) and
-[architecture](docs/ARCHITECTURE.md).
+This is protocol codec support only. The broker does not yet allocate,
+apply or verify payload memory placement. It does not establish physical
+NUMA locality for request buffers, WASM linear memory, datasets, accelerator
+staging, GPU VRAM or NPU memory. The existing BRK1/BRK2/WSM1 envelope
+identities remain unchanged.
+
+See [architecture](docs/ARCHITECTURE.md) and the
+[YuKKi-aware worker fabric](docs/YUKKI_WORKER_FABRIC.md).
 
 ## Throughput and energy-efficiency model
 
@@ -244,11 +232,11 @@ Placement validates non-empty GPU topology, model registry access is synchronize
 
 ## Documentation
 
-- [Broker protocol](docs/BROKER_PROTOCOL.md) · [BRK2 conformance](docs/BRK2_CONFORMANCE_V1.md) · [Executable BRK corpus](docs/BRK_CONFORMANCE_V1.md)
+- [Broker protocol](docs/BROKER_PROTOCOL.md) · [BRK2 conformance](docs/BRK2_CONFORMANCE_V1.md) · [BRK2 locality placement v1](docs/BRK2_LOCALITY_PLACEMENT_V1.md) · [Executable BRK corpus](docs/BRK_CONFORMANCE_V1.md)
 - [YuKKi-OS interoperability](docs/YUKKI_INTEROP.md) · [WASM interoperability](docs/WASM_INTEROP.md)
 - [Ethos-U85 bundle and hardware boundary](docs/ETHOSU_U85_BUNDLE.md) · [YuKKi-aware worker fabric](docs/YUKKI_WORKER_FABRIC.md)
-- [Architecture and runtime decision model](docs/ARCHITECTURE.md) · [Heuristic and backend-selection verification](docs/SYSADMIN_HOWTO.md) · [Versioning](docs/VERSIONING.md)
-- [Architecture and decision model](docs/ARCHITECTURE.md) · [Library guide](docs/LIBRARY.md) · [Versioning](docs/VERSIONING.md)
+- [Architecture and runtime decision model](docs/ARCHITECTURE.md) · [Library guide](docs/LIBRARY.md) · [Versioning](docs/VERSIONING.md)
+- [Heuristic and backend-selection verification](docs/SYSADMIN_HOWTO.md)
 - [System administration step-by-step](docs/SYSADMIN_HOWTO.md) · [Operations runbook](OPERATIONS_RUNBOOK.md) · [Deployment guide](DEPLOYMENT_GUIDE.md)
 - [Publishing](docs/PUBLISHING.md) · [Release notes](docs/RELEASE_NOTES.md) · [Benchmarks](docs/BENCHMARK_RESULTS.md) · [Dataset-driven BRK2 workloads](docs/DATASET_BROKER_BENCHMARK.md)
 - [Security hardening notes](docs/SECURITY_HARDENING_NOTES.md)

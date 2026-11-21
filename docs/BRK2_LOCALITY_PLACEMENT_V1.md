@@ -1,6 +1,6 @@
 # BRK2 Locality Placement Extension v1
 
-Status: proposal for cross-repository implementation. This document specifies an optional BRK2 request/response extension; it does not claim that a host allocator currently honours placement requests.
+Status: implemented cross-repository codec contract (Overhauled PR #67; YuKKi-OS PR #155). The request/response encoding and validation are implemented; allocator enforcement and physical-placement verification are not. This document specifies the wire contract, not completed memory placement.
 
 ## Ownership and trust boundary
 

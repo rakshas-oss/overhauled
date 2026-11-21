@@ -1,6 +1,6 @@
 # Overhauled GPU Runtime - Historical Deployment Guide (v1.1.4)
 
-This page preserves the earlier v1.1.4 deployment examples. The latest published release is v1.2.0, and v1.3.0 is the current hierarchical worker-fabric candidate. For current broker build, worker, NUMA and CPU-group configuration, use [docs/SYSADMIN_HOWTO.md](docs/SYSADMIN_HOWTO.md) and [docs/YUKKI_WORKER_FABRIC.md](docs/YUKKI_WORKER_FABRIC.md).
+This page preserves the earlier v1.1.4 deployment examples. The latest published release is v1.3.0, and v1.4.0 is the current BRK2 locality-placement codec candidate. For current broker build, worker, NUMA and CPU-group configuration, use [docs/SYSADMIN_HOWTO.md](docs/SYSADMIN_HOWTO.md) and [docs/YUKKI_WORKER_FABRIC.md](docs/YUKKI_WORKER_FABRIC.md).
 
 Table of contents
 1. Architecture Overview
