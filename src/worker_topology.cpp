@@ -2,7 +2,9 @@
 // Copyright (c) 2024 NVLink Placement Contributors
 // Bounded topology discovery with validated machine -> NUMA -> CPU-group nesting.
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include "worker_topology.h"
 
 #include <algorithm>
@@ -13,6 +15,7 @@
 #include <map>
 #include <set>
 #include <sstream>
+#include <thread>
 #include <unordered_set>
 #include <utility>
 
@@ -52,7 +55,7 @@ std::vector<uint32_t> intersection(const std::vector<uint32_t>& left,
 }
 
 #if defined(__linux__)
-std::vector<uint32_t> discover_allowed_cpus(bool* supported) {
+std::vector<uint32_t> discover_allowed_cpus(bool* supported, std::size_t* mask_bits) {
     *supported = false;
     long configured = sysconf(_SC_NPROCESSORS_CONF);
     std::size_t bits = configured > 0
@@ -74,7 +77,10 @@ std::vector<uint32_t> discover_allowed_cpus(bool* supported) {
                 if (CPU_ISSET_S(cpu, bytes, mask))
                     cpus.push_back(static_cast<uint32_t>(cpu));
             CPU_FREE(mask);
-            if (!cpus.empty()) *supported = true;
+            if (!cpus.empty()) {
+                *supported = true;
+                *mask_bits = bits;
+            }
             return cpus;
         }
         CPU_FREE(mask);
@@ -304,7 +310,8 @@ bool validate_worker_topology(const WorkerTopologySnapshot& topology,
 WorkerTopologySnapshot discover_worker_topology() {
     WorkerTopologySnapshot topology;
 #if defined(__linux__)
-    topology.allowed_cpus = discover_allowed_cpus(&topology.affinity_supported);
+    topology.allowed_cpus = discover_allowed_cpus(&topology.affinity_supported,
+                                                   &topology.affinity_mask_bits);
 #endif
     if (topology.allowed_cpus.empty()) {
         std::size_t count = 1;
@@ -319,8 +326,32 @@ WorkerTopologySnapshot discover_worker_topology() {
         for (std::size_t cpu = 0; cpu < count; ++cpu)
             topology.allowed_cpus.push_back(static_cast<uint32_t>(cpu));
         topology.affinity_supported = false;
+        topology.affinity_mask_bits = 0;
     }
     topology.maximum_cpu_id = topology.allowed_cpus.back();
+
+    // Count unique physical cores where Linux exports package/core IDs. This
+    // is diagnostic and sizing guidance only; CPU affinity remains the root
+    // authority for all worker placements.
+#if defined(__linux__)
+    {
+        std::set<std::pair<long, long>> physical_cores;
+        for (uint32_t cpu : topology.allowed_cpus) {
+            const auto cpu_root = std::filesystem::path("/sys/devices/system/cpu") /
+                                  ("cpu" + std::to_string(cpu)) / "topology";
+            std::ifstream package_file(cpu_root / "physical_package_id");
+            std::ifstream core_file(cpu_root / "core_id");
+            long package_id = -1;
+            long core_id = -1;
+            if (package_file >> package_id && core_file >> core_id)
+                physical_cores.emplace(package_id, core_id);
+        }
+        topology.physical_core_count = physical_cores.empty()
+            ? topology.allowed_cpus.size() : physical_cores.size();
+    }
+#else
+    topology.physical_core_count = topology.allowed_cpus.size();
+#endif
 
 #if defined(__linux__)
     const std::filesystem::path root("/sys/devices/system/node");
@@ -393,10 +424,13 @@ std::optional<WorkerCpuPlacement> worker_cpu_placement(
 }
 
 bool pin_current_thread_to_cpu(uint32_t cpu_id,
-                               uint32_t maximum_cpu_id) noexcept {
+                               uint32_t maximum_cpu_id,
+                               std::size_t affinity_mask_bits) noexcept {
 #if defined(__linux__)
     if (cpu_id > maximum_cpu_id || maximum_cpu_id >= kMaximumTopologyCpus) return false;
-    const std::size_t bits = static_cast<std::size_t>(maximum_cpu_id) + 1;
+    const std::size_t bits = std::max<std::size_t>(
+        static_cast<std::size_t>(maximum_cpu_id) + 1, affinity_mask_bits);
+    if (bits == 0 || bits > kMaximumTopologyCpus) return false;
     const std::size_t bytes = CPU_ALLOC_SIZE(bits);
     cpu_set_t* mask = CPU_ALLOC(bits);
     if (!mask) return false;
@@ -408,6 +442,7 @@ bool pin_current_thread_to_cpu(uint32_t cpu_id,
 #else
     (void)cpu_id;
     (void)maximum_cpu_id;
+    (void)affinity_mask_bits;
     return false;
 #endif
 }
