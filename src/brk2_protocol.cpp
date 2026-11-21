@@ -78,16 +78,16 @@ bool parse_nested_fields(const uint8_t* data,std::size_t size,std::vector<FieldV
     }return true;
 }
 bool nested_u8(const std::vector<FieldView>& fs,uint16_t id,uint8_t* out,std::string* error){
-    const auto*f=find(fs,id);if(!f||f->type!=WT_U8||f->size!=1){if(error)*error="missing or invalid nested placement u8";return false;}*out=f->data[0];return true;
+    const auto it=std::find_if(fs.begin(),fs.end(),[&](const FieldView& x){return x.id==id;});const auto*f=it==fs.end()?nullptr:&*it;if(!f||f->type!=WT_U8||f->size!=1){if(error)*error="missing or invalid nested placement u8";return false;}*out=f->data[0];return true;
 }
 bool nested_u16(const std::vector<FieldView>& fs,uint16_t id,uint16_t* out,std::string* error){
-    const auto*f=find(fs,id);if(!f||f->type!=2||f->size!=2){if(error)*error="missing or invalid nested placement u16";return false;}*out=read16(f->data);return true;
+    const auto it=std::find_if(fs.begin(),fs.end(),[&](const FieldView& x){return x.id==id;});const auto*f=it==fs.end()?nullptr:&*it;if(!f||f->type!=2||f->size!=2){if(error)*error="missing or invalid nested placement u16";return false;}*out=read16(f->data);return true;
 }
 bool nested_u32(const std::vector<FieldView>& fs,uint16_t id,uint32_t* out,std::string* error){
-    const auto*f=find(fs,id);if(!f||f->type!=WT_U32||f->size!=4){if(error)*error="missing or invalid nested placement u32";return false;}*out=read32(f->data);return true;
+    const auto it=std::find_if(fs.begin(),fs.end(),[&](const FieldView& x){return x.id==id;});const auto*f=it==fs.end()?nullptr:&*it;if(!f||f->type!=WT_U32||f->size!=4){if(error)*error="missing or invalid nested placement u32";return false;}*out=read32(f->data);return true;
 }
 bool nested_u64(const std::vector<FieldView>& fs,uint16_t id,uint64_t* out,std::string* error){
-    const auto*f=find(fs,id);if(!f||f->type!=WT_U64||f->size!=8){if(error)*error="missing or invalid nested placement u64";return false;}*out=read64(f->data);return true;
+    const auto it=std::find_if(fs.begin(),fs.end(),[&](const FieldView& x){return x.id==id;});const auto*f=it==fs.end()?nullptr:&*it;if(!f||f->type!=WT_U64||f->size!=8){if(error)*error="missing or invalid nested placement u64";return false;}*out=read64(f->data);return true;
 }
 void field_u16(std::vector<uint8_t>& p,uint16_t id,uint16_t v){std::vector<uint8_t>b;put16(b,v);put_field(p,id,2,b.data(),b.size());}
 void field_nested(std::vector<uint8_t>& p,uint16_t id,const std::vector<uint8_t>& v){put_field(p,id,11,v.data(),v.size());}
