@@ -8,8 +8,7 @@ import pathlib
 import time
 
 
-def read_process_sample(pid):
-    stat = pathlib.Path(f"/proc/{pid}/stat").read_text()
+def parse_process_stat(stat, ticks_per_second, page_size):
     closing = stat.rfind(")")
     if closing < 0:
         raise ValueError("malformed /proc process stat record")
@@ -18,9 +17,14 @@ def read_process_sample(pid):
         raise ValueError("truncated /proc process stat record")
     ticks = int(fields[11]) + int(fields[12])  # utime + stime
     rss_pages = max(0, int(fields[21]))
-    ticks_per_second = os.sysconf("SC_CLK_TCK")
-    page_size = os.sysconf("SC_PAGE_SIZE")
-    return time.monotonic(), ticks / ticks_per_second, rss_pages * page_size / (1024.0 * 1024.0)
+    return ticks / ticks_per_second, rss_pages * page_size / (1024.0 * 1024.0)
+
+
+def read_process_sample(pid):
+    stat = pathlib.Path(f"/proc/{pid}/stat").read_text()
+    cpu_seconds, rss_mib = parse_process_stat(
+        stat, os.sysconf("SC_CLK_TCK"), os.sysconf("SC_PAGE_SIZE"))
+    return time.monotonic(), cpu_seconds, rss_mib
 
 
 def sample_process(pid, output, interval):
