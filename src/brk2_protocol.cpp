@@ -189,6 +189,8 @@ bool decode_brk2_request_body(const std::vector<uint8_t>& body,BrokerRequest* ou
         if(mode<1||mode>3)return fail("unknown BRK2 locality placement mode");
         if(max_bytes==0||max_bytes>req.payload.size())return fail("BRK2 locality placement max_bytes exceeds request payload");
         PlacementIntent intent;intent.mode=static_cast<PlacementMode>(mode);intent.max_bytes=max_bytes;
+        for(const auto& f:nested)if(f.id>=1&&f.id<=5&&(f.flags&2))return fail("known nested placement fields must be singular");
+        if(placement->flags&2)return fail("BRK2 locality placement field must be singular");
         if(const auto* node=find(nested,4)){uint32_t n=0;if(!nested_u32(nested,4,&n,error))return false;intent.numa_node=n;}
         if((mode==1||mode==2)&&!intent.numa_node)return fail("prefer/bind placement requires NUMA node");
         if(mode==3&&intent.numa_node)return fail("interleave placement must not name one NUMA node");
