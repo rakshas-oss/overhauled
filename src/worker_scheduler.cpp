@@ -53,29 +53,53 @@ WorkerAdmissionBudget::WorkerAdmissionBudget(std::size_t max_outstanding_request
 }
 
 bool WorkerAdmissionBudget::try_acquire(std::size_t payload_bytes) noexcept {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (outstanding_requests_ >= max_outstanding_requests_ ||
-        payload_bytes > max_payload_bytes_ - outstanding_payload_bytes_) return false;
-    ++outstanding_requests_;
-    outstanding_payload_bytes_ += payload_bytes;
-    return true;
+    if (payload_bytes > max_payload_bytes_) return false;
+
+    // Reserve the request slot first, then reserve bytes. If the byte budget
+    // cannot be acquired, roll back the slot. CAS loops avoid a single global
+    // admission mutex becoming the throughput bottleneck on large hosts.
+    std::size_t requests = outstanding_requests_.load(std::memory_order_relaxed);
+    for (;;) {
+        if (requests >= max_outstanding_requests_) return false;
+        if (outstanding_requests_.compare_exchange_weak(
+                requests, requests + 1, std::memory_order_acq_rel,
+                std::memory_order_relaxed)) break;
+    }
+
+    std::size_t bytes = outstanding_payload_bytes_.load(std::memory_order_relaxed);
+    for (;;) {
+        if (bytes > max_payload_bytes_ || payload_bytes > max_payload_bytes_ - bytes) {
+            outstanding_requests_.fetch_sub(1, std::memory_order_acq_rel);
+            return false;
+        }
+        if (outstanding_payload_bytes_.compare_exchange_weak(
+                bytes, bytes + payload_bytes, std::memory_order_acq_rel,
+                std::memory_order_relaxed)) return true;
+    }
 }
 
 void WorkerAdmissionBudget::release(std::size_t payload_bytes) noexcept {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (outstanding_requests_ > 0) --outstanding_requests_;
-    outstanding_payload_bytes_ = payload_bytes > outstanding_payload_bytes_
-        ? 0 : outstanding_payload_bytes_ - payload_bytes;
+    std::size_t requests = outstanding_requests_.load(std::memory_order_relaxed);
+    while (requests > 0 &&
+           !outstanding_requests_.compare_exchange_weak(
+               requests, requests - 1, std::memory_order_acq_rel,
+               std::memory_order_relaxed)) {}
+
+    std::size_t bytes = outstanding_payload_bytes_.load(std::memory_order_relaxed);
+    for (;;) {
+        const std::size_t next = payload_bytes > bytes ? 0 : bytes - payload_bytes;
+        if (outstanding_payload_bytes_.compare_exchange_weak(
+                bytes, next, std::memory_order_acq_rel,
+                std::memory_order_relaxed)) break;
+    }
 }
 
 std::size_t WorkerAdmissionBudget::outstanding_requests() const noexcept {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return outstanding_requests_;
+    return outstanding_requests_.load(std::memory_order_acquire);
 }
 
 std::size_t WorkerAdmissionBudget::outstanding_payload_bytes() const noexcept {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return outstanding_payload_bytes_;
+    return outstanding_payload_bytes_.load(std::memory_order_acquire);
 }
 
 namespace {
