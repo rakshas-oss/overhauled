@@ -234,35 +234,33 @@ public:
         };
 
         try {
-            // Distribute workers over leaf CPU groups in proportion to the
-            // process-allowed CPU count, preserving the machine->NUMA->LLC tree.
+            // Compute the complete nested worker layout before any thread can
+            // observe it. This avoids startup races with partially built leaf
+            // eligibility maps.
+            std::array<std::vector<WorkerCpuPlacement>, kWorkerClassCount>
+                dedicated_placements;
+            std::vector<WorkerCpuPlacement> elastic_placements;
             std::size_t worker_ordinal = 0;
             for (std::size_t class_id = 0; class_id < kWorkerClassCount; ++class_id) {
-                threads_[class_id].reserve(config_.workers[class_id]);
+                dedicated_placements[class_id].reserve(config_.workers[class_id]);
                 for (std::size_t worker = 0; worker < config_.workers[class_id]; ++worker) {
                     const auto placement = worker_cpu_placement(topology_, worker_ordinal++);
                     if (!placement)
                         throw std::logic_error("unable to place dedicated worker in CPU topology");
                     const DomainRef home = domain_for_placement(*placement);
                     ++nodes_[home.node_index]->groups[home.group_index]->dedicated_workers[class_id];
-                    threads_[class_id].emplace_back(
-                        [this, class_id, worker, home, placement = *placement] {
-                            worker_loop(class_id, worker, home, placement);
-                        });
+                    dedicated_placements[class_id].push_back(*placement);
                 }
             }
 
-            elastic_threads_.reserve(config_.elastic_workers);
+            elastic_placements.reserve(config_.elastic_workers);
             for (std::size_t worker = 0; worker < config_.elastic_workers; ++worker) {
                 const auto placement = worker_cpu_placement(topology_, worker_ordinal++);
                 if (!placement)
                     throw std::logic_error("unable to place elastic worker in CPU topology");
                 const DomainRef home = domain_for_placement(*placement);
                 ++nodes_[home.node_index]->groups[home.group_index]->elastic_workers;
-                elastic_threads_.emplace_back(
-                    [this, worker, home, placement = *placement] {
-                        elastic_worker_loop(worker, home, placement);
-                    });
+                elastic_placements.push_back(*placement);
             }
 
             // Only a leaf with a worker capable of draining a class receives
@@ -284,6 +282,30 @@ public:
                 }
                 if (class_domain_indices_[class_id].empty())
                     throw std::invalid_argument("worker class has no routable CPU group");
+            }
+
+            // Domain maps and queues are immutable once threads begin.
+            for (std::size_t class_id = 0; class_id < kWorkerClassCount; ++class_id) {
+                threads_[class_id].reserve(dedicated_placements[class_id].size());
+                for (std::size_t worker = 0;
+                     worker < dedicated_placements[class_id].size(); ++worker) {
+                    const WorkerCpuPlacement placement = dedicated_placements[class_id][worker];
+                    const DomainRef home = domain_for_placement(placement);
+                    threads_[class_id].emplace_back(
+                        [this, class_id, worker, home, placement] {
+                            worker_loop(class_id, worker, home, placement);
+                        });
+                }
+            }
+
+            elastic_threads_.reserve(elastic_placements.size());
+            for (std::size_t worker = 0; worker < elastic_placements.size(); ++worker) {
+                const WorkerCpuPlacement placement = elastic_placements[worker];
+                const DomainRef home = domain_for_placement(placement);
+                elastic_threads_.emplace_back(
+                    [this, worker, home, placement] {
+                        elastic_worker_loop(worker, home, placement);
+                    });
             }
         } catch (...) {
             stop();
