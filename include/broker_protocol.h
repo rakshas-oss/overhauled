@@ -50,6 +50,24 @@ struct ProtocolLimits {
     std::size_t max_string_bytes = 1024;
 };
 
+enum class PlacementMode : uint8_t { Prefer = 1, Bind = 2, Interleave = 3 };
+enum class PlacementOutcome : uint8_t { Honored = 1, Rejected = 2, Fallback = 3 };
+enum class PlacementReason : uint16_t {
+    UnsupportedScope = 1, UnsupportedMode = 2, LocalityDomainMismatch = 3,
+    NodeUnavailable = 4, ProcessPolicyDenied = 5, MemoryQuota = 6,
+    AllocatorUnavailable = 7, SizeLimit = 8, PlacementFailed = 9
+};
+struct PlacementIntent {
+    PlacementMode mode = PlacementMode::Prefer;
+    std::optional<uint32_t> numa_node;
+    uint64_t max_bytes = 0;
+};
+struct PlacementResult {
+    PlacementOutcome outcome = PlacementOutcome::Rejected;
+    std::optional<uint32_t> applied_numa_node;
+    std::optional<PlacementReason> reason;
+};
+
 struct BrokerRequest {
     std::string task_id;
     std::string source;
@@ -70,6 +88,8 @@ struct BrokerRequest {
     std::optional<uint32_t> preferred_numa_node;
     // BRK2 field 9 is an absolute Unix timestamp in nanoseconds.
     std::optional<uint64_t> deadline_unix_ns;
+    // BRK2 field 14; intent only, never an authorization or placement guarantee.
+    std::optional<PlacementIntent> locality_placement;
 };
 
 struct BrokerResponse {
@@ -89,6 +109,8 @@ struct BrokerResponse {
     uint32_t worker_id = 0;
     std::optional<uint32_t> worker_numa_node;
     bool worker_telemetry_available = false;
+    // BRK2 response field 13; populated only from allocator-verified outcome.
+    std::optional<PlacementResult> locality_placement_result;
 };
 
 bool validate_request(const BrokerRequest& request, std::string* error, const ProtocolLimits& limits);
