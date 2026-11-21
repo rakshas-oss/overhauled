@@ -69,3 +69,10 @@ separately secured trusted boundary.
 Both language implementations run the shared BRK conformance corpus; YuKKi-OS's live interoperability workflow exercises a real CPU-only C++ broker over TCP. Such tests establish protocol and software behavior, not physical NPU qualification.
 
 The broker protocol is not an authentication or encryption layer. Use a trusted network or independently secured proxy. The protocol does not provide JSON handshake negotiation or remote cancellation; closing a client socket does not guarantee preemption of work already running. Explicit task timeouts are limited to `1..=300000` ms. Configure client frame and payload limits no higher than the broker's `ProtocolLimits`.
+
+
+## YuKKi broker service discovery
+
+YuKKi-OS can advertise an Overhauled endpoint with `YUKKI_BROKER_ENDPOINT=host:port`; optional `YUKKI_BROKER_CAPABILITIES` supplies coarse labels such as `cpu,gpu,npu`. Its authenticated peer mesh relays versioned, lease-based broker service records. The record carries service/node IDs, endpoint, BRK1/BRK2 versions, coarse capabilities, frame limit, lease timestamps and a bounded hop count. See [YUKKI_BROKER_DISCOVERY.md](YUKKI_BROKER_DISCOVERY.md).
+
+The current mechanism is bootstrap-relayed gossip, not Kademlia DHT routing, and does not make the C++ broker a direct DHT participant. Discovery is not authorization. BRK1/BRK2 remain unauthenticated; advertise only a trusted private endpoint or one behind an independently authenticated mTLS proxy. Overhauled retains authority over local CPU-group/NUMA placement and actual device dispatch.

@@ -256,3 +256,8 @@ Placement validates non-empty GPU topology, model registry access is synchronize
 ## License
 
 MIT License — see [LICENSE](LICENSE). Optional CUDA Toolkit and TensorRT components are user-supplied proprietary NVIDIA software, not redistributed under this project's license; see [NOTICE](NOTICE).
+
+
+## YuKKi-OS service discovery
+
+YuKKi-OS can advertise reachable Overhauled broker endpoints through its authenticated peer mesh using bounded lease-based gossip. This does not make the broker a direct DHT participant; BRK1/BRK2 transport remains independently secured. See [YUKKI_BROKER_DISCOVERY.md](docs/YUKKI_BROKER_DISCOVERY.md).
