@@ -11,29 +11,14 @@
 
 ## Version assessment
 
-The v1.5.0 increment follows the published v1.3.0 baseline and adds the
-BRK2 locality-placement intent/result codec shared with YuKKi-OS:
+The v1.5.0 increment follows the v1.4.0 BRK2 locality-codec baseline and adds optional native Wasmtime runtime composition:
 
-- Request field 14 carries a bounded, versioned locality intent with scope,
-  mode, and an optional NUMA-node identifier.
-- Response field 13 carries a structured placement result. An absent result
-  means unknown/not applied; it must never be interpreted as success.
-- `prefer` is non-critical for older peers. `bind` and `interleave` require
-  the critical flag so an older peer cannot silently ignore a required policy.
-- The Rust/C++ codec implementations validate nested fields, extension
-  version, scope, mode, conditional node data, payload limits, duplicates,
-  unknown critical fields, and criticality/mode agreement.
+- Optional `ENABLE_WASM_RUNTIME` embeds the Wasmtime C API to compile core-Wasm binaries and register modules under linker namespaces.
+- Dependent modules resolve typed imports at instantiation; runtime composition does not merge or rewrite module binaries.
+- Retained instances expose an initial `() -> i32` invocation ABI with explicit missing-export, trap and result-type errors.
+- The default build remains unchanged when the option is OFF.
 
-The preceding v1.3.0 baseline already contains the hierarchical worker fabric:
-validated machine-cpuset -> NUMA -> LLC/CPU-group topology, per-class leaf
-queues, bounded elastic capacity, home-group/sibling-group/remote-NUMA work
-stealing, dynamically sized CPU masks, and large-host worker limits. Those
-scheduler capabilities are not newly introduced by v1.5.0.
-
-A minor increment is appropriate because v1.5.0 adds a versioned protocol
-extension with interoperable request and response semantics. It does not
-change existing BRK1/BRK2/WSM1 envelope identities or claim that the broker
-applies physical memory placement.
+This is an additive runtime capability, not a complete multi-tenant sandbox. Modules share one Store/resource domain; fuel metering, epoch interruption, WASI capability grants, artifact signing/cache eviction and task-level teardown remain incomplete. Existing BRK1/BRK2/WSM1 envelope identities are unchanged.
 
 ## Release policy
 
@@ -60,7 +45,11 @@ applies physical memory placement.
 - Mainline Windows/MSVC is unsupported. Browser-WASM and WASI are not
   Overhauled deployment targets.
 
-## Release candidate history\n\n- `v1.4.0` — merged release candidate for the BRK2 locality-placement codec; release tag/publication remains subject to its release gates.\n\n## Published release history
+## Release candidate history
+
+- `v1.4.0` — merged release candidate for the BRK2 locality-placement codec; release tag/publication remains subject to its release gates.
+
+## Published release history
 
 - `v1.3.0` — published 2026-11-21; hierarchical worker topology, per-class
   CPU-group queues, bounded elasticity and large-host scheduling.
