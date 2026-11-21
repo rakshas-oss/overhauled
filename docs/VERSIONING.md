@@ -2,48 +2,34 @@
 
 ## Current release candidate
 
-- **Proposed version:** `1.5.0`
-- **CMake project version:** `1.5.0`
-- **Conan recipe version:** `1.5.0`
-- **vcpkg manifest version:** `1.5.0`
+- **Proposed version:** `1.5.1`
+- **CMake project version:** `1.5.1`
+- **Conan recipe version:** `1.5.1`
+- **vcpkg manifest version:** `1.5.1`
 - **Runtime/package identity:** `OverhauledTensorRuntime` / `nvlink_placement`
-- **Release state:** minor candidate; v1.5.0 tag and release archive are pending
+- **Release state:** patch candidate; v1.5.0 is published; v1.5.1 tag and release archive are pending
 
 ## Version assessment
 
-The v1.5.1 patch follows published v1.5.0 and repairs the opt-in Wasmtime v51 runtime-composition build and test:
+The v1.5.1 patch follows published v1.5.0 and corrects the optional Wasmtime v51 C API integration and its regression test:
 
-- Optional `ENABLE_WASM_RUNTIME` embeds the Wasmtime C API to compile core-Wasm binaries and register modules under linker namespaces.
-- Dependent modules resolve typed imports at instantiation; runtime composition does not merge or rewrite module binaries.
-- Retained instances expose an initial `() -> i32` invocation ABI with explicit missing-export, trap and result-type errors.
-- The default build remains unchanged when the option is OFF.
+- Use the supported `wasm_name_t` lifecycle (`wasm_name_new_empty` / `wasm_name_delete`) for trap messages; remove calls to unavailable `wasm_message_new_empty`, `wasm_message_delete`, and `wasmtime_val_delete` symbols.
+- Validate incompatible consumer imports at module registration, where the Wasmtime linker reports signature mismatches, rather than expecting instantiation to fail.
+- Preserve the optional `ENABLE_WASM_RUNTIME` feature and its existing runtime-composition API.
+- Keep the default build unchanged when `ENABLE_WASM_RUNTIME=OFF`; no BRK1, BRK2 or WSM1 wire-format change is intended.
 
-This is an additive runtime capability, not a complete multi-tenant sandbox. Modules share one Store/resource domain; fuel metering, epoch interruption, WASI capability grants, artifact signing/cache eviction and task-level teardown remain incomplete. Existing BRK1/BRK2/WSM1 envelope identities are unchanged.
+This patch does not expand the sandbox security model. Modules still share one Store/resource domain; fuel metering, epoch interruption, WASI capability grants, artifact signing/cache eviction and task-level teardown remain incomplete.
 
 ## Release policy
 
-- v1.3.0 is the latest published Overhauled release (2026-11-21).
-- Do not create or publish v1.5.0 until its release PR is reviewed and required
-  C++ builds/tests, BRK2 conformance and mutation tests, sanitizers,
-  package-consumer tests, and live cross-repository interoperability checks
-  pass on the exact release candidate commit.
-- Updating this repository does not publish Conan Center, vcpkg, Homebrew,
-  apt or dnf packages. Verify each external registry separately.
-- The root vcpkg manifest is set to candidate 1.5.1; update the vcpkg portfile
-  source reference and SHA512 only from the exact final tagged archive.
-- The checked-in Homebrew formula still points to v1.1.1. Refresh its URL,
-  version and SHA-256 only from the final v1.5.1 release archive.
-- YuKKi-OS owns workload semantics, spatial resolution and directives.
-  Overhauled owns broker queues, admission, local physical CPU/NUMA worker
-  placement, GPU topology, accelerator placement and execution.
-- The locality codec is a wire contract only: no broker-owned payload
-  allocator applies or verifies physical memory placement. Do not claim
-  locality for WASM linear memory, datasets, accelerator staging, GPU VRAM or
-  NPU memory.
-- Deadlines order and reject expired queued work; they do not preempt arbitrary
-  native code or provide a hard real-time guarantee.
-- Mainline Windows/MSVC is unsupported. Browser-WASM and WASI are not
-  Overhauled deployment targets.
+- v1.5.0 is the published baseline. Its Wasmtime-enabled build was affected by the C API mismatch described above.
+- Do not tag or publish v1.5.1 until the exact approved release commit passes default C++ CI, the pinned Wasmtime v51 compile/runtime test, BRK2 conformance and mutation tests, sanitizers, package-consumer tests, and paired YuKKi-OS interoperability.
+- Updating this repository does not publish Conan Center, vcpkg, Homebrew, apt or dnf packages. Verify each external registry separately.
+- Update vcpkg/Homebrew archive URLs and checksums only from the exact final v1.5.1 release archive.
+- YuKKi-OS owns workload semantics, spatial resolution and directives. Overhauled owns broker queues, admission, local physical CPU/NUMA worker placement, GPU topology, accelerator placement and execution.
+- The locality codec is a wire contract only: no broker-owned payload allocator applies or verifies physical memory placement. Do not claim locality for WASM linear memory, datasets, accelerator staging, GPU VRAM or NPU memory.
+- Deadlines order and reject expired queued work; they do not preempt arbitrary native code or provide a hard real-time guarantee.
+- Mainline Windows/MSVC is unsupported. Browser-WASM and WASI are not Overhauled deployment targets.
 
 ## Release candidate history
 

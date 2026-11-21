@@ -125,11 +125,11 @@ These paths are separate contracts. A client must not send an NXR1 or MED1 paylo
 
 ### WASM task and lifecycle boundary
 
-The WASM integration is a broker protocol and version-lifecycle manager, **not a Wasm runtime**. YuKKi-OS owns bytecode validation, Wasmtime compilation, guest instantiation, linear-memory limits and host imports. Overhauled does not receive or compile a guest module during `Prepare`.
+The WSM1 integration is a broker protocol and version-lifecycle manager, **not the YuKKi-OS guest runtime**. YuKKi-OS owns bytecode validation, Wasmtime compilation, guest instantiation, linear-memory limits and host imports for the WSM1 host-mediated path. Overhauled does not receive or compile a guest module during `Prepare`. Separately, Overhauled exposes an opt-in native Wasmtime composition API (`ENABLE_WASM_RUNTIME=ON`) for applications that explicitly compile and compose core-Wasm modules inside the broker process. This native path is independent of WSM1, is not an automatic handoff from YuKKi-OS, and is tested against Wasmtime C API v51.0.0 on Linux x86_64. See [WASM_RUNTIME_COMPOSITION.md](WASM_RUNTIME_COMPOSITION.md).
 
 The C++ `WasmSandboxManager::prepare_module` records the sandbox/module/version identity, state, lease and optional GPU assignment. It does not parse `.wasm` bytes or retain a compiled artifact. `handle_task` checks the registered version and in-flight state, then calls an application-supplied `ComputeFn` when provided; otherwise it uses the broker's reference numeric compute path for packed binary64 payloads or echoes other payloads. The task payload is work input, not executable Wasm code.
 
-The manager tracks active tasks, rejects work for draining/stopped versions, and refuses release while tasks remain in flight. Actual guest compilation, linking, instantiation and any code composition remain on the YuKKi-OS host. WSM1 lifecycle operations do not merge multiple Wasm modules or policy functions into a compiled artifact.
+The manager tracks active tasks, rejects work for draining/stopped versions, and refuses release while tasks remain in flight. For the WSM1 path, guest compilation, linking, instantiation and program composition remain on the YuKKi-OS host. WSM1 lifecycle operations do not merge multiple Wasm modules or policy functions into a compiled artifact. The separate native `WasmCompositionRuntime` API is described in [WASM_RUNTIME_COMPOSITION.md](WASM_RUNTIME_COMPOSITION.md) and is not invoked by these lifecycle operations.
 
 TensorRT is a separate optional `gpu_runtime_server` target; it is not an automatic execution engine behind every WSM1 task. The Ethos-U85 path is also opt-in and accepts its documented Vela bundle contract. See [WASM_INTEROP.md](WASM_INTEROP.md) for the wire boundary and [SYSADMIN_HOWTO.md](SYSADMIN_HOWTO.md) for deployment configuration.
 
@@ -157,6 +157,7 @@ RealtimeSpatial uses isolated worker capacity and cooperative EDF ordering withi
 | `ENABLE_CUDA` | ON | Probes CUDA compiler/toolkit; falls back to CPU-only if unavailable |
 | `ENABLE_TENSORRT` | OFF | Builds `gpu_runtime_server`; requires CUDA and TensorRT |
 | `ENABLE_ETHOSU_DRM` | OFF | Compiles the Linux Ethos-U DRM executor; Linux only |
+| `ENABLE_WASM_RUNTIME` | OFF | Embeds the optional native Wasmtime C API composition runtime; requires `BUILD_BROKER=ON` and a Wasmtime C API installation (CI pins v51.0.0) |
 | `ENABLE_INTEROP_ENCRYPTION` | OFF | Requests an optional source file that must exist in the checkout; verify availability before enabling |
 | `BUILD_EXAMPLES` | ON | Builds example binaries |
 
