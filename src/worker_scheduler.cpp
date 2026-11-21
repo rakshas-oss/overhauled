@@ -626,7 +626,7 @@ private:
     std::atomic<uint64_t> elastic_wake_generation_{0};
     std::condition_variable elastic_wake_cv_;
     std::atomic<bool> stopping_{false};
-}
+};
 
 ClassWorkerPool::ClassWorkerPool(const WorkerPoolConfig& config)
     : impl_(std::make_unique<Impl>(config)) {}
