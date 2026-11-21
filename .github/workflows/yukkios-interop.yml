@@ -1,0 +1,95 @@
+name: YuKKi-OS paired interoperability
+
+on:
+  workflow_dispatch:
+    inputs:
+      yukkios_ref:
+        description: "YuKKi-OS branch, tag, or commit to test against"
+        required: false
+        default: main
+  push:
+    branches: ["main", "master"]
+  pull_request:
+    branches: ["main", "master"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: paired-yukkios-interop-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  yukkios-interop:
+    name: Paired YuKKi-OS BRK1/BRK2 interoperability
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Overhauled
+        uses: actions/checkout@v4
+        with:
+          path: overhauled
+      - name: Checkout paired YuKKi-OS revision
+        uses: actions/checkout@v4
+        with:
+          repository: rakshas-oss/YuKKi-OS
+          ref: ${{ inputs.yukkios_ref || 'main' }}
+          path: yukkios
+      - name: Record paired revisions
+        run: |
+          echo "Overhauled: $(git -C overhauled rev-parse HEAD)"
+          echo "YuKKi-OS: $(git -C yukkios rev-parse HEAD)"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install C++ build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake g++
+      - name: Build Overhauled broker and BRK2 tests
+        run: |
+          cmake -S overhauled -B overhauled/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_CUDA=OFF \
+            -DENABLE_TENSORRT=OFF \
+            -DBUILD_BROKER=ON \
+            -DBUILD_EXAMPLES=OFF
+          cmake --build overhauled/build --target broker_server brk2_protocol_test brk_conformance_test --parallel 2
+      - name: Verify shared BRK conformance corpus
+        run: cmp yukkios/tests/fixtures/protocol/brk-conformance-v1.corpus overhauled/tests/fixtures/protocol/brk-conformance-v1.corpus
+      - name: Run YuKKi-OS Rust BRK conformance corpus
+        working-directory: yukkios
+        run: cargo test --locked --test brk_conformance -- --nocapture
+      - name: Run Overhauled C++ BRK conformance tests
+        run: ctest --test-dir overhauled/build --output-on-failure -R '^(brk2_protocol_test|brk_conformance_test)$'
+      - name: Run live BRK1 and BRK2 Rust-to-C++ round trips
+        working-directory: yukkios
+        env:
+          OVERHAULED_BROKER_ENDPOINT: 127.0.0.1:19090
+        run: |
+          set -euo pipefail
+          ../overhauled/build/broker_server 19090 --cpu-only > /tmp/overhauled-broker.log 2>&1 &
+          broker_pid=$!
+          trap 'kill "$broker_pid" 2>/dev/null || true; wait "$broker_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 40); do
+            if (echo > /dev/tcp/127.0.0.1/19090) >/dev/null 2>&1; then break; fi
+            if ! kill -0 "$broker_pid" 2>/dev/null; then cat /tmp/overhauled-broker.log; exit 1; fi
+            sleep 0.25
+          done
+          OVERHAULED_WIRE_MODE=brk1 cargo test --locked --test test_overhauled_live -- --nocapture
+          OVERHAULED_WIRE_MODE=brk2 cargo test --locked --test test_overhauled_live -- --nocapture
+      - name: Upload broker logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: overhauled-yukkios-live-interop
+          path: /tmp/overhauled-broker.log
+          if-no-files-found: ignore
+
+  paired-release-gate:
+    name: Paired repository release gate
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [yukkios-interop]
+    steps:
+      - name: Require paired interoperability
+        env:
+          RESULT: ${{ needs.yukkios-interop.result }}
+        run: |
+          echo "YuKKi-OS paired interoperability: $RESULT"
+          test "$RESULT" = success
