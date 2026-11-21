@@ -128,14 +128,21 @@ idempotent and explicitly marked fallback-safe. Review
 
 ## Control-plane and WASM boundary
 
-YuKKi-OS remains the control plane and Wasmtime guest host; Overhauled owns
-broker execution, protocol dispatch and accelerator placement. The repositories
-communicate through BRK1/BRK2 and the documented WSM1 lifecycle/task envelope.
-Overhauled does not validate, compile, link, compose or instantiate guest Wasm
-modules. Its Prepare/Drain/Release operations track broker-side version and
-in-flight task state. YuKKi-OS performs guest compilation and multi-module
-program composition. See [WASM interoperability](docs/WASM_INTEROP.md) and
-[YuKKi-OS composition guide](https://github.com/rakshas-oss/YuKKi-OS/blob/main/docs/WASM_PROGRAM_COMPOSITION.md).
+YuKKi-OS remains the control plane and the host for its WSM1 guest-execution
+path; Overhauled owns broker execution, protocol dispatch and accelerator
+placement. WSM1 carries host-prepared task data and module-version lifecycle
+metadata. It does not upload executable Wasm modules, and it does not activate
+the native Wasmtime API.
+
+Separately, Overhauled provides an opt-in native Wasmtime C API composition
+path through `ENABLE_WASM_RUNTIME=ON`. Applications using that API compile and
+compose core-Wasm modules inside the Overhauled process. This is an independent
+execution path, not an automatic YuKKi-OS handoff. Its CI-supported dependency
+is Wasmtime C API v51.0.0 on Linux x86_64. The initial runtime shares one Store
+and resource domain; it is not a complete multi-tenant sandbox. See [native
+Wasmtime runtime composition](docs/WASM_RUNTIME_COMPOSITION.md), [WSM1
+interoperability](docs/WASM_INTEROP.md), and the [YuKKi-OS composition
+guide](https://github.com/rakshas-oss/YuKKi-OS/blob/main/docs/WASM_PROGRAM_COMPOSITION.md).
 
 ## Cross-repository multivariate benchmark bridge
 
