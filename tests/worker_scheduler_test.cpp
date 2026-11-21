@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "worker_scheduler.h"
+#include "worker_topology.h"
 
 #include <atomic>
 #include <chrono>
@@ -284,6 +285,92 @@ int main() {
     try { ClassWorkerPool invalid_pool(invalid_elastic_config); }
     catch (const std::invalid_argument&) { rejected_control_elastic = true; }
     CHECK(rejected_control_elastic);
+
+    // Hierarchical CPU-group queues: occupy both sibling leaves, then
+    // release the remote-home worker and verify it steals from its sibling.
+    // The synthetic hierarchy must preserve the real process cpuset exactly.
+    const WorkerTopologySnapshot actual_topology = discover_worker_topology();
+    if (actual_topology.allowed_cpus.size() >= 3) {
+        WorkerTopologySnapshot synthetic = actual_topology;
+        const std::vector<uint32_t> group_zero{
+            actual_topology.allowed_cpus[0], actual_topology.allowed_cpus[1]};
+        std::vector<uint32_t> group_one(
+            actual_topology.allowed_cpus.begin() + 2,
+            actual_topology.allowed_cpus.end());
+        synthetic.numa_nodes = {
+            NumaNodeTopology{5000, actual_topology.allowed_cpus, {
+                CpuGroupTopology{17, group_zero},
+                CpuGroupTopology{19, group_one},
+            }},
+        };
+        std::string topology_error;
+        CHECK(validate_worker_topology(synthetic, &topology_error));
+
+        WorkerPoolConfig nested_config;
+        nested_config.workers = {{1, 2, 1, 1, 1}};
+        nested_config.topology_for_testing =
+            std::make_shared<const WorkerTopologySnapshot>(synthetic);
+        ClassWorkerPool nested_pool(nested_config);
+
+        constexpr uint32_t kRealtimeWorkerBase =
+            static_cast<uint32_t>(WorkerClass::RealtimeSpatial) *
+            static_cast<uint32_t>(kMaximumWorkerThreadsPerClass);
+        std::promise<void> worker_zero_started;
+        auto worker_zero_started_future = worker_zero_started.get_future();
+        std::promise<void> worker_one_started;
+        auto worker_one_started_future = worker_one_started.get_future();
+        std::promise<void> release_worker_zero;
+        auto release_worker_zero_future = release_worker_zero.get_future().share();
+        std::promise<void> release_worker_one;
+        auto release_worker_one_future = release_worker_one.get_future().share();
+        std::promise<WorkerExecutionContext> stolen_task_done;
+        auto stolen_task_future = stolen_task_done.get_future();
+
+        auto block_assigned_worker =
+            [&worker_zero_started, &worker_one_started,
+             release_worker_zero_future, release_worker_one_future,
+             kRealtimeWorkerBase](const WorkerExecutionContext& context) mutable {
+                if (context.worker_id == kRealtimeWorkerBase) {
+                    worker_zero_started.set_value();
+                    release_worker_zero_future.wait();
+                } else if (context.worker_id == kRealtimeWorkerBase + 1) {
+                    worker_one_started.set_value();
+                    release_worker_one_future.wait();
+                } else {
+                    std::abort();
+                }
+            };
+
+        // Affinity key 0 selects CPU group 17; key 1 selects sibling group 19.
+        CHECK(nested_pool.enqueue(WorkerClass::RealtimeSpatial, 0, std::nullopt,
+                                  block_assigned_worker));
+        CHECK(worker_zero_started_future.wait_for(std::chrono::seconds(2)) ==
+              std::future_status::ready);
+        CHECK(nested_pool.enqueue(WorkerClass::RealtimeSpatial, 1, std::nullopt,
+                                  block_assigned_worker));
+        CHECK(worker_one_started_future.wait_for(std::chrono::seconds(2)) ==
+              std::future_status::ready);
+
+        // Both dedicated RealtimeSpatial workers are now occupied. This work
+        // is queued to group 17; releasing the group-19 worker must steal it
+        // within the shared NUMA parent, while the group-17 worker stays busy.
+        CHECK(nested_pool.enqueue(WorkerClass::RealtimeSpatial, 0, std::nullopt,
+            [&stolen_task_done](const WorkerExecutionContext& context) {
+                stolen_task_done.set_value(context);
+            }));
+        CHECK(nested_pool.queued_on_node(WorkerClass::RealtimeSpatial, 5000) == 1);
+        release_worker_one.set_value();
+        CHECK(stolen_task_future.wait_for(std::chrono::seconds(2)) ==
+              std::future_status::ready);
+        const auto stolen_context = stolen_task_future.get();
+        CHECK(stolen_context.worker_id == kRealtimeWorkerBase + 1);
+        if (stolen_context.cpu_group_id)
+            CHECK(*stolen_context.cpu_group_id == 19);
+
+        release_worker_zero.set_value();
+        nested_pool.stop();
+        nested_pool.join();
+    }
 
     std::cout << "worker_scheduler_test passed\n";
     return 0;
