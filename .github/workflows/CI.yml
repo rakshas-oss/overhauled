@@ -39,3 +39,44 @@ jobs:
         run: |
           python3 -m py_compile benchmarks/dataset_broker_bench.py tests/test_dataset_broker_bench.py
           python3 tests/test_dataset_broker_bench.py
+
+  wasm-runtime-composition:
+    name: Wasmtime compile and runtime composition
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libssl-dev curl xz-utils
+
+      - name: Install pinned Wasmtime C API
+        run: |
+          curl --fail --location --retry 3 \
+            https://github.com/bytecodealliance/wasmtime/releases/download/v51.0.0/wasmtime-v51.0.0-x86_64-linux-c-api.tar.xz \
+            --output wasmtime-c-api.tar.xz
+          mkdir -p "$RUNNER_TEMP/wasmtime"
+          tar -xJf wasmtime-c-api.tar.xz --strip-components=1 -C "$RUNNER_TEMP/wasmtime"
+          test -f "$RUNNER_TEMP/wasmtime/include/wasmtime.h"
+          test -f "$RUNNER_TEMP/wasmtime/lib/libwasmtime.so" || test -f "$RUNNER_TEMP/wasmtime/lib/libwasmtime.a"
+
+      - name: Configure native Wasm runtime
+        run: |
+          cmake -S . -B build-wasm \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_CUDA=OFF \
+            -DENABLE_TENSORRT=OFF \
+            -DBUILD_BROKER=ON \
+            -DBUILD_TESTING=ON \
+            -DENABLE_WASM_RUNTIME=ON \
+            -DWASMTIME_ROOT="$RUNNER_TEMP/wasmtime"
+
+      - name: Build Wasmtime integration
+        run: cmake --build build-wasm --parallel
+
+      - name: Run Wasmtime composition smoke test
+        env:
+          LD_LIBRARY_PATH: ${{ runner.temp }}/wasmtime/lib:${{ env.LD_LIBRARY_PATH }}
+        run: ctest --test-dir build-wasm --output-on-failure -R wasm_composition_test
