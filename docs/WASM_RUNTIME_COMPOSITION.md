@@ -67,6 +67,21 @@ CPU build does not exercise this optional code path. Conversely, a successful
 Wasmtime compile alone is not enough: the provider/consumer runtime test must
 also pass.
 
+### Recorded CI verification (2026-11-21)
+
+The Overhauled main merge commit
+`bacb67ec5918697ffabd0e533b1c403f85105a1a` completed all 8 reported GitHub
+Actions checks successfully. The passing set included the Wasmtime v51 compile
+and runtime-composition lane, BRK2 C++ codec/mutation tests, paired YuKKi-OS
+BRK1/BRK2 interoperability, ASan/UBSan validation, and installed CMake package
+consumer tests on Ubuntu and Windows.
+
+The Windows package-consumer check validates package installation/consumption;
+it does not establish native Windows/MSVC broker support. The Wasmtime
+configuration documented above remains the tested Linux x86_64 target. Treat
+this CI record as evidence for that commit, not as a blanket guarantee for
+other Wasmtime versions, platforms, or untested security properties.
+
 ## Composition model and API boundary
 
 `WasmCompositionRuntime::compile_and_register(name, bytes, ...)` validates
