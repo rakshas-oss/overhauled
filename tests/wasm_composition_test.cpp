@@ -14,7 +14,7 @@ int main() {
         // provider.run: () -> i32, returning 42.
         const std::vector<std::uint8_t> provider = {
             0x00,0x61,0x73,0x6d,0x01,0x00,0x00,0x00,
-            0x01,0x06,0x01,0x60,0x00,0x01,0x7f,
+            0x01,0x05,0x01,0x60,0x00,0x01,0x7f,
             0x03,0x02,0x01,0x00,
             0x07,0x07,0x01,0x03,0x72,0x75,0x6e,0x00,0x00,
             0x0a,0x06,0x01,0x04,0x00,0x41,0x2a,0x0b
@@ -22,7 +22,7 @@ int main() {
         // consumer.run imports provider.run and returns its result.
         const std::vector<std::uint8_t> consumer = {
             0x00,0x61,0x73,0x6d,0x01,0x00,0x00,0x00,
-            0x01,0x06,0x01,0x60,0x00,0x01,0x7f,
+            0x01,0x05,0x01,0x60,0x00,0x01,0x7f,
             0x02,0x10,0x01,0x08,0x70,0x72,0x6f,0x76,0x69,0x64,0x65,0x72,
             0x03,0x72,0x75,0x6e,0x00,0x00,
             0x03,0x02,0x01,0x00,
@@ -65,6 +65,33 @@ int main() {
             std::cerr << "invocation on unknown module unexpectedly succeeded\n";
             return EXIT_FAILURE;
         }
+        // A consumer with the wrong import result type must fail at link time.
+        auto wrong_signature = consumer;
+        for (auto& byte : wrong_signature) {
+            if (byte == 0x7f) {
+                byte = 0x7e;
+                break;
+            }
+        }
+        nvlink::wasm::WasmCompositionRuntime mismatch_runtime;
+        if (!mismatch_runtime.compile_and_register("provider", provider, &error) ||
+            !mismatch_runtime.compile_and_register("consumer", wrong_signature, &error)) {
+            std::cerr << "signature mismatch fixture registration failed: " << error << '\n';
+            return EXIT_FAILURE;
+        }
+        if (mismatch_runtime.instantiate("consumer", &error)) {
+            std::cerr << "signature-mismatched import unexpectedly linked\n";
+            return EXIT_FAILURE;
+        }
+
+        nvlink::wasm::WasmCompositionRuntime::Limits tiny_limits;
+        tiny_limits.max_module_bytes = 4;
+        nvlink::wasm::WasmCompositionRuntime limited_runtime(tiny_limits);
+        if (limited_runtime.compile_and_register("provider", provider, &error)) {
+            std::cerr << "oversized module unexpectedly accepted\n";
+            return EXIT_FAILURE;
+        }
+
         std::cout << "Wasm cross-module composition test passed (result=42)\n";
         return EXIT_SUCCESS;
     } catch (const std::exception& ex) {
