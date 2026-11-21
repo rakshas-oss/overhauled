@@ -164,6 +164,11 @@ void collapse_to_one_numa_node(WorkerTopologySnapshot* topology) {
     node.cpu_groups.push_back(CpuGroupTopology{0, node.cpus});
     topology->numa_nodes.clear();
     topology->numa_nodes.push_back(std::move(node));
+    // Do not report a physical NUMA location after the parent topology failed
+    // validation. The single fallback domain remains logically local, but
+    // worker pinning/NUMA telemetry is disabled rather than fabricated.
+    topology->affinity_supported = false;
+    topology->affinity_mask_bits = 0;
 }
 
 } // namespace
