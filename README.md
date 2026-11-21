@@ -1,6 +1,6 @@
 # Overhauled v1.4.0 (release candidate)
 
-> **Release candidate v1.4.0:** extends the published v1.3.0 worker fabric with validated hierarchical CPU-group/NUMA placement, class-local leaf queues, hierarchical work stealing, dynamic CPU masks and bounded large-host worker capacity.
+> **Release candidate v1.4.0:** adds BRK2 locality-placement intent/result codec support on top of the published v1.3.0 hierarchical worker fabric.
 
 > **Route workloads by topology, not guesswork.**
 >
@@ -70,38 +70,26 @@ hard real-time guarantees. See
 
 ## What's new in v1.4.0
 
-The v1.4.0 candidate adds a hierarchical worker fabric for large CPU hosts.
-It builds on the worker-class and deadline features in v1.2.0:
+The v1.4.0 candidate adds the BRK2 locality-placement codec shared with
+YuKKi-OS:
 
-- **Nested topology:** validates the process-allowed machine CPU set, NUMA
-  parents and LLC/CPU-group leaf domains. Child sets must remain inside their
-  parent, sibling groups must be disjoint, and nested groups must cover the
-  allowed set without widening the process cpuset.
-- **Large CPU masks:** dynamic Linux affinity masks support CPU IDs beyond the
-  legacy `CPU_SETSIZE` boundary. Invalid, duplicate, malformed or excessive
-  CPU-list/topology input is rejected.
-- **Hierarchical queue placement:** each worker class has ordered per-CPU-group
-  leaf queues. Workers prefer their home group, then steal within sibling
-  groups in the same NUMA node, and cross NUMA domains only as a fallback.
-  Work stealing preserves worker class and does not change task semantics.
-- **Bounded large-host capacity:** explicit sizing supports up to 16,384 total
-  workers, including at most 4,096 elastic workers. Automatic sizing targets
-  discovered physical cores and is capped at 4,096; operators should still
-  measure stack memory and workload behavior before increasing limits.
-- **Lower scheduling contention:** per-class/per-group queues isolate locks
-  and wakeups; admission accounting uses atomic reservations instead of one
-  global admission mutex.
-- **Benchmark coverage:** adds repeated A/B throughput runs, pipelined
-  mixed-class saturation, measurement-quality checks and fixed worker-budget
-  sweeps. These provide reproducible measurements, not a universal scaling
-  or throughput guarantee.
+- **Request field 14:** bounded nested-TLV decoding for locality intent with
+  extension version, scope, mode, optional NUMA-node, payload-size, duplicate
+  field and unknown-critical-field validation.
+- **Response field 13:** encodes the placement outcome returned by an allocator.
+  An absent result means unknown/not applied; it must never be interpreted as
+  successful placement.
+- **Old-peer behavior:** `prefer` is non-critical; `bind` and `interleave`
+  require the critical bit and cannot be silently ignored by older peers.
 
-The existing BRK1/BRK2/WSM1 contracts are preserved. BRK2 worker intent and
-telemetry fields introduced in v1.2.0 remain unchanged; the CPU-group ID is
-internal scheduling detail, not a new wire field. NUMA affinity and work
-stealing remain bounded by the process-visible CPU set and actual OS support.
-See [YuKKi-aware worker fabric](docs/YUKKI_WORKER_FABRIC.md) and
-[architecture](docs/ARCHITECTURE.md).
+This is protocol codec support only. The broker does not yet allocate,
+apply or verify payload memory placement. It does not establish physical
+NUMA locality for request buffers, WASM linear memory, datasets, accelerator
+staging, GPU VRAM or NPU memory. The existing BRK1/BRK2/WSM1 envelope
+identities remain unchanged.
+
+See [architecture](docs/ARCHITECTURE.md) and the
+[YuKKi-aware worker fabric](docs/YUKKI_WORKER_FABRIC.md).
 
 ## Throughput and energy-efficiency model
 
