@@ -21,7 +21,13 @@ BrokerServer (default TCP port 9090)
         |      +-- media.stream.v1 (MED1 validation / echo)
         |      +-- WASM task and lifecycle operations
         |
-        +-- hierarchical worker scheduler (machine → NUMA → LLC/CPU group)\n        |      +-- per-class ordered leaf queues and dedicated worker pools\n        |      +-- home group → sibling group → remote NUMA work stealing\n        |      +-- bounded elastic workers (RealtimeSpatial / Throughput / Inference)\n        |      +-- validated process cpuset → NUMA → CPU-group nesting\n        |\n        +-- backend dispatcher (CPU / GPU / NPU)
+        +-- hierarchical worker scheduler (machine → NUMA → LLC/CPU group)
+        |      +-- per-class ordered leaf queues and dedicated worker pools
+        |      +-- home group → sibling group → remote NUMA work stealing
+        |      +-- bounded elastic workers (RealtimeSpatial / Throughput / Inference)
+        |      +-- validated process cpuset → NUMA → CPU-group nesting
+        |
+        +-- backend dispatcher (CPU / GPU / NPU)
                +-- CPU reference compute path
                +-- GPU compute path -> GpuTopology -> Placer
                +-- optional NPU executor
