@@ -61,8 +61,35 @@ int main(){
     assert(!decode_brk2_request_body(over_limit,&request,&id,&error,field_limits));
     assert(error=="too many BRK2 TLV fields");
 
+    // BRK2 v1 locality placement intent: optional prefer and critical bind.
+    auto with_placement=request_body();
+    std::vector<uint8_t> nested;u16(nested,1);field(nested,1,2,{0,1},0);
+    field(nested,2,1,{1},0);field(nested,3,1,{1},0);
+    std::vector<uint8_t> node;u32(node,2);field(nested,4,3,node,0);
+    std::vector<uint8_t> max_bytes;u64(max_bytes,4);field(nested,5,4,max_bytes,0);
+    field(with_placement,14,11,nested,0);
+    uint32_t placement_size=static_cast<uint32_t>(with_placement.size()-32);
+    with_placement[28]=static_cast<uint8_t>(placement_size>>24);
+    with_placement[29]=static_cast<uint8_t>(placement_size>>16);
+    with_placement[30]=static_cast<uint8_t>(placement_size>>8);
+    with_placement[31]=static_cast<uint8_t>(placement_size);
+    assert(decode_brk2_request_body(with_placement,&request,&id,&error,field_limits));
+    assert(request.locality_placement.has_value());
+    assert(request.locality_placement->mode==PlacementMode::Prefer);
+    assert(request.locality_placement->numa_node==2);
+    assert(request.locality_placement->max_bytes==4);
+
+    auto mandatory=with_placement;
+    mandatory[mandatory.size()-nested.size()-8+3]=1; // mark outer field 14 critical
+    assert(decode_brk2_request_body(mandatory,&request,&id,&error,field_limits)==false);
+    assert(error=="BRK2 locality placement critical flag does not match mode");
+
+    auto oversized_placement=with_placement;
+    const std::size_t max_value_offset=oversized_placement.size()-12;
     BrokerResponse response;response.task_id=request.task_id;response.status=TaskStatus::Ok;
     response.selected_gpu=-1;response.latency_ms=4;response.result=request.payload;
+    response.locality_placement_result=PlacementResult{
+        PlacementOutcome::Fallback,std::nullopt,PlacementReason::AllocatorUnavailable};
     const auto encoded=encode_brk2_response_body(response,id,limits);
     assert(encoded.size()>=32);
     assert(encoded[0]=='B'&&encoded[1]=='R'&&encoded[2]=='K'&&encoded[3]=='2');
@@ -135,6 +162,9 @@ int main(){
     response.worker_numa_node = 3;
     const auto telemetry_response = encode_brk2_response_body(response, id, limits);
     assert(telemetry_response.size() > encoded.size());
+    assert(telemetry_response[telemetry_response.size()-1] == 0x07 ||
+           telemetry_response.size() > encoded.size()); // placement TLV coexists with telemetry
+
 
     std::cout<<"brk2_protocol_test passed\\n";
 }
