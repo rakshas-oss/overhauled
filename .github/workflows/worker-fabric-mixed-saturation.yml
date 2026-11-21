@@ -391,6 +391,20 @@ jobs:
               waits = [summary["arms"][f"elastic-{budget}"]["32x32"]["per_class"][name]["p95_queue_wait_us_median"]
                        for budget in budgets]
               rows.append(f"| {name} | {dedicated_wait:,.1f} | {waits[0]:,.1f} | {waits[1]:,.1f} | {waits[2]:,.1f} |")
+          rows += ["", "## Per-class p95 client-observed latency at 32 clients / depth 32", "",
+                   "| Class | Dedicated (ms) | Elastic 1 (ms) | Elastic 2 (ms) | Elastic 4 (ms) |",
+                   "|---|---:|---:|---:|---:|"]
+          for name in classes:
+              dedicated_latency = summary["arms"]["merged-dedicated"]["32x32"]["per_class"][name]["p95_latency_ms_median"]
+              latencies = [summary["arms"][f"elastic-{budget}"]["32x32"]["per_class"][name]["p95_latency_ms_median"]
+                           for budget in budgets]
+              rows.append(f"| {name} | {dedicated_latency:,.3f} | {latencies[0]:,.3f} | {latencies[1]:,.3f} | {latencies[2]:,.3f} |")
+          rows += ["", "## Throughput dispersion at 32 clients / depth 32 (MAD %)", "",
+                   "| Arm | Throughput MAD |",
+                   "|---|---:|"]
+          for arm in arms:
+              mad = summary["arms"][arm]["32x32"]["requests_per_second_mad_pct"]
+              rows.append(f"| {arm} | {mad:.2f}% |")
           rows += ["", "## Process resource medians across repetitions", "",
                    "| Arm | Mean CPU (% of one logical CPU) | Peak RSS (MiB) |",
                    "|---|---:|---:|"]
