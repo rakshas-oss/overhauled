@@ -126,7 +126,8 @@ public:
         }
         if (config_.elastic_workers > kMaximumElasticWorkers ||
             config_.elastic_workers > kMaximumWorkers - dedicated_total)
-            throw std::invalid_argument("elastic worker count must fit within the 64 elastic / 256 total worker limits");
+            throw std::invalid_argument(
+                "elastic worker count must fit within the 4096 elastic / 16384 total worker limits");
         for (std::size_t index = 0; index < kWorkerClassCount; ++index) {
             if (config_.elastic_max_per_class[index] > kMaximumElasticWorkers)
                 throw std::invalid_argument("per-class elastic worker limit must not exceed 64");
