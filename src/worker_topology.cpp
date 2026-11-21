@@ -181,8 +181,8 @@ bool parse_cpu_list(const std::string& text,
         return false;
     }
     cpus->clear();
-    if (text.empty() || text.size() > 8 * 1024 * 1024) {
-        set_error(error, "CPU list is empty or exceeds the parser size bound");
+    if (text.empty() || text.size() > 8 * 1024 * 1024 || text.back() == ',') {
+        set_error(error, "CPU list is empty, has a trailing separator, or exceeds the parser size bound");
         return false;
     }
 
@@ -366,6 +366,7 @@ static WorkerTopologySnapshot discover_worker_topology_uncached() {
 #if defined(__linux__)
     {
         std::set<std::pair<long, long>> physical_cores;
+        std::size_t cores_with_metadata = 0;
         for (uint32_t cpu : topology.allowed_cpus) {
             const auto cpu_root = std::filesystem::path("/sys/devices/system/cpu") /
                                   ("cpu" + std::to_string(cpu)) / "topology";
@@ -373,11 +374,14 @@ static WorkerTopologySnapshot discover_worker_topology_uncached() {
             std::ifstream core_file(cpu_root / "core_id");
             long package_id = -1;
             long core_id = -1;
-            if (package_file >> package_id && core_file >> core_id)
+            if (package_file >> package_id && core_file >> core_id) {
                 physical_cores.emplace(package_id, core_id);
+                ++cores_with_metadata;
+            }
         }
-        topology.physical_core_count = physical_cores.empty()
-            ? topology.allowed_cpus.size() : physical_cores.size();
+        topology.physical_core_count =
+            cores_with_metadata == topology.allowed_cpus.size() && !physical_cores.empty()
+                ? physical_cores.size() : topology.allowed_cpus.size();
     }
 #else
     topology.physical_core_count = topology.allowed_cpus.size();
