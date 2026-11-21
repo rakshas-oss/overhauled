@@ -36,13 +36,13 @@ The broker is not an authentication, encryption, HTTP, or general-purpose model-
 ![Overhauled broker and execution architecture diagram](diagrams/overhauled-architecture.svg)
 
 A terminal-renderable ANSI-colour version is available with
-`bash docs/diagrams/print-ansi.sh`. The map shows five worker classes, their
-eligible NUMA-local queue shards, dedicated workers, optional bounded elastic
-capacity, request/memory admission budget, deadline ordering and broker-local
-Linux worker affinity. Preferred-node routing falls back to the logical
-affinity key and then round-robin. Elastic capacity is limited to
-RealtimeSpatial, Throughput and Inference; Control and ExactCpu remain
-dedicated. BRK2 fields 11–13 carry optional class and locality intent;
+`bash docs/diagrams/print-ansi.sh`. The map shows five worker classes, nested CPU-group/NUMA queue shards,
+dedicated workers, optional bounded elastic capacity, request/memory admission
+budget, deadline ordering and broker-local Linux worker affinity. Preferred
+NUMA routing narrows the eligible leaf set; logical affinity and round-robin
+select within that set. Workers steal from their home group, sibling CPU groups,
+then remote NUMA domains. Elastic capacity is limited to RealtimeSpatial,
+Throughput and Inference; Control and ExactCpu remain dedicated. BRK2 fields 11–13 carry optional class and locality intent;
 response fields 8–12 report worker and successfully applied NUMA telemetry.
 BRK1 retains its legacy Throughput behavior and has no backend-identity field.
 The NPU simulator is CPU emulation, not acceleration.
