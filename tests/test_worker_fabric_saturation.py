@@ -66,12 +66,9 @@ class WorkerFabricSaturationTests(unittest.TestCase):
         fields[12] = "75"
         fields[21] = "256"
         record = "123 (worker (test) process) " + " ".join(fields)
-        # Exercise the parser's field extraction independently of /proc IO.
-        closing = record.rfind(")")
-        parsed = record[closing + 1:].split()
-        self.assertEqual(int(parsed[11]) + int(parsed[12]), 200)
-        self.assertEqual(int(parsed[21]), 256)
-        self.assertTrue(callable(MONITOR.read_process_sample))
+        cpu_seconds, rss_mib = MONITOR.parse_process_stat(record, 100, 4096)
+        self.assertAlmostEqual(cpu_seconds, 2.0)
+        self.assertAlmostEqual(rss_mib, 1.0)
 
 
 if __name__ == "__main__":
