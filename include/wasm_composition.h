@@ -64,6 +64,7 @@ private:
     EnginePtr engine_;
     StorePtr store_;
     LinkerPtr linker_;
+    std::size_t max_module_bytes_ = 0;
     std::unordered_map<std::string, ModulePtr> modules_;
 };
 
