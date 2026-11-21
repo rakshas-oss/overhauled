@@ -17,6 +17,8 @@
 
 namespace nvlink::broker {
 
+struct WorkerTopologySnapshot;
+
 constexpr std::size_t kWorkerClassCount = 5;
 // Bounded large-host limits. This supports multi-thousand-core machines without
 // allowing an unbounded command-line value to create arbitrary OS threads.
@@ -47,6 +49,11 @@ struct WorkerPoolConfig {
     // strictly dedicated. The per-class limits cap concurrent elastic service.
     std::size_t elastic_workers = 0;
     std::array<std::size_t, kWorkerClassCount> elastic_max_per_class{{0, 1, 4, 0, 2}};
+
+    // Test/simulation seam. The supplied topology must preserve the exact
+    // process-discovered root cpuset and affinity capabilities; only its
+    // nested NUMA/CPU-group partition may differ.
+    std::shared_ptr<const WorkerTopologySnapshot> topology_for_testing;
 };
 
 
