@@ -16,6 +16,8 @@ constexpr uint16_t FLAG_RESPONSE = 1;
 constexpr uint16_t FLAG_END_STREAM = 4;
 constexpr uint8_t WT_U8 = 1, WT_U32 = 3, WT_U64 = 4, WT_I64 = 5, WT_UTF8 = 8, WT_BYTES = 9, WT_UUID = 12;
 constexpr uint8_t FIELD_CRITICAL = 1;
+constexpr uint16_t PLACEMENT_REQUEST_FIELD = 14;
+constexpr uint16_t PLACEMENT_RESPONSE_FIELD = 13;
 // Keep the C++ decoder aligned with YuKKi-OS::brk2::MAX_FIELDS.
 constexpr std::size_t kMaxBrk2Fields = 4096;
 struct FieldView { uint16_t id; uint8_t type; uint8_t flags; const uint8_t* data; std::size_t size; };
@@ -62,6 +64,33 @@ bool parse_fields(const std::vector<uint8_t>& body,std::vector<FieldView>* field
     }
     return true;
 }
+bool parse_nested_fields(const uint8_t* data,std::size_t size,std::vector<FieldView>* fields,std::string* error){
+    std::array<uint64_t,1024> seen{};std::size_t pos=0;
+    while(pos<size){if(fields->size()>=16){if(error)*error="too many nested placement fields";return false;}
+        if(size-pos<8){if(error)*error="truncated nested placement TLV header";return false;}
+        FieldView f{read16(data+pos),data[pos+2],data[pos+3],nullptr,read32(data+pos+4)};pos+=8;
+        if(f.flags&~uint8_t(3)){if(error)*error="invalid nested placement flags";return false;}
+        if(f.type<1||f.type>12){if(error)*error="unknown nested placement wire type";return false;}
+        if(f.size>size-pos){if(error)*error="truncated nested placement value";return false;}
+        f.data=data+pos;pos+=f.size;const std::size_t word=static_cast<std::size_t>(f.id)/64;
+        const uint64_t mask=uint64_t{1}<<(f.id%64);if(seen[word]&mask){if(error)*error="duplicate nested placement field";return false;}
+        seen[word]|=mask;fields->push_back(f);
+    }return true;
+}
+bool nested_u8(const std::vector<FieldView>& fs,uint16_t id,uint8_t* out,std::string* error){
+    const auto*f=find(fs,id);if(!f||f->type!=WT_U8||f->size!=1){if(error)*error="missing or invalid nested placement u8";return false;}*out=f->data[0];return true;
+}
+bool nested_u16(const std::vector<FieldView>& fs,uint16_t id,uint16_t* out,std::string* error){
+    const auto*f=find(fs,id);if(!f||f->type!=2||f->size!=2){if(error)*error="missing or invalid nested placement u16";return false;}*out=read16(f->data);return true;
+}
+bool nested_u32(const std::vector<FieldView>& fs,uint16_t id,uint32_t* out,std::string* error){
+    const auto*f=find(fs,id);if(!f||f->type!=WT_U32||f->size!=4){if(error)*error="missing or invalid nested placement u32";return false;}*out=read32(f->data);return true;
+}
+bool nested_u64(const std::vector<FieldView>& fs,uint16_t id,uint64_t* out,std::string* error){
+    const auto*f=find(fs,id);if(!f||f->type!=WT_U64||f->size!=8){if(error)*error="missing or invalid nested placement u64";return false;}*out=read64(f->data);return true;
+}
+void field_u16(std::vector<uint8_t>& p,uint16_t id,uint16_t v){std::vector<uint8_t>b;put16(b,v);put_field(p,id,2,b.data(),b.size());}
+void field_nested(std::vector<uint8_t>& p,uint16_t id,const std::vector<uint8_t>& v){put_field(p,id,11,v.data(),v.size());}
 bool valid_utf8(const uint8_t* p,std::size_t n){
     std::size_t i=0;
     while(i<n){
@@ -112,7 +141,7 @@ bool decode_brk2_request_body(const std::vector<uint8_t>& body,BrokerRequest* ou
     if(read32(body.data()+20)!=BRK2_SCHEMA_REQUEST||read16(body.data()+24)!=1)return fail("unsupported BRK2 request schema");
     *request_id=read64(body.data()+12);
     std::vector<FieldView> fs;if(!parse_fields(body,&fs,error))return false;
-    for (const auto& f : fs) if (!(f.id >= 1 && f.id <= 13) && (f.flags & FIELD_CRITICAL)) return fail("unknown critical BRK2 field");
+    for (const auto& f : fs) if (!(f.id >= 1 && f.id <= 14) && (f.flags & FIELD_CRITICAL)) return fail("unknown critical BRK2 field");
     BrokerRequest req;
     if(!get_string(fs,1,&req.task_id,error)||!get_string(fs,2,&req.source,error)||!get_string(fs,3,&req.destination,error)||!get_string(fs,4,&req.kind,error))return false;
     for (const auto* value : {&req.task_id, &req.source, &req.destination, &req.kind}) if (value->size() > limits.max_string_bytes) return fail("BRK2 string exceeds configured limit");
@@ -150,6 +179,22 @@ bool decode_brk2_request_body(const std::vector<uint8_t>& body,BrokerRequest* ou
         if(numa->type!=WT_U32||numa->size!=4)return fail("invalid BRK2 preferred_numa_node");
         req.preferred_numa_node=read32(numa->data);
     }
+    if(const auto* placement=find(fs,PLACEMENT_REQUEST_FIELD)){
+        if(placement->type!=11)return fail("invalid BRK2 locality placement wire type");
+        std::vector<FieldView> nested;if(!parse_nested_fields(placement->data,placement->size,&nested,error))return false;
+        for(const auto& f:nested)if(!(f.id>=1&&f.id<=5)&&(f.flags&FIELD_CRITICAL))return fail("unknown critical nested placement field");
+        uint16_t version=0;uint8_t scope=0,mode=0;uint64_t max_bytes=0;
+        if(!nested_u16(nested,1,&version,error)||!nested_u8(nested,2,&scope,error)||!nested_u8(nested,3,&mode,error)||!nested_u64(nested,5,&max_bytes,error))return false;
+        if(version!=1||scope!=1)return fail("unsupported BRK2 locality placement version or scope");
+        if(mode<1||mode>3)return fail("unknown BRK2 locality placement mode");
+        if(max_bytes==0||max_bytes>req.payload.size())return fail("BRK2 locality placement max_bytes exceeds request payload");
+        PlacementIntent intent;intent.mode=static_cast<PlacementMode>(mode);intent.max_bytes=max_bytes;
+        if(const auto* node=find(nested,4)){uint32_t n=0;if(!nested_u32(nested,4,&n,error))return false;intent.numa_node=n;}
+        if((mode==1||mode==2)&&!intent.numa_node)return fail("prefer/bind placement requires NUMA node");
+        if(mode==3&&intent.numa_node)return fail("interleave placement must not name one NUMA node");
+        if(((placement->flags&FIELD_CRITICAL)!=0)!=(mode!=1))return fail("BRK2 locality placement critical flag does not match mode");
+        req.locality_placement=intent;
+    }
     if(req.worker_class_explicit && req.worker_class==WorkerClass::RealtimeSpatial &&
        !req.spatial_affinity_key)return fail("realtime-spatial BRK2 directive requires spatial_affinity_key");
     if(req.timeout_ms==0||req.timeout_ms>BROKER_MAX_TIMEOUT_MS)return fail("BRK2 timeout_ms outside 1..300000");
@@ -166,6 +211,17 @@ std::vector<uint8_t> encode_brk2_response_body(const BrokerResponse& r,uint64_t 
     field_i64(p,3,static_cast<int64_t>(r.selected_gpu));field_u64(p,4,r.latency_ms);
     field_bytes(p,5,r.result);field_str(p,6,bounded_error);
     field_str(p,7,backend_name(r.backend));
+    if(r.locality_placement_result) {
+        const auto& result=*r.locality_placement_result;
+        if((result.outcome==PlacementOutcome::Honored&&result.reason)||
+           (result.outcome!=PlacementOutcome::Honored&&!result.reason))
+            throw std::runtime_error("invalid BRK2 locality placement result/reason combination");
+        std::vector<uint8_t> nested;field_u16(nested,1,1);field_u8(nested,2,1);
+        field_u8(nested,3,static_cast<uint8_t>(result.outcome));
+        if(result.applied_numa_node)field_u32(nested,4,*result.applied_numa_node);
+        if(result.reason)field_u16(nested,5,static_cast<uint16_t>(*result.reason));
+        field_nested(p,PLACEMENT_RESPONSE_FIELD,nested);
+    }
     if(r.worker_telemetry_available) {
         field_str(p,8,worker_class_name(r.worker_class));
         field_u64(p,9,r.queue_wait_us);
