@@ -60,10 +60,10 @@ cd overhauled
 git fetch --tags origin
 ```
 
-For the currently published baseline, check out the v1.4.0 tag:
+For the currently published baseline, check out the v1.3.0 tag:
 
 ```bash
-git checkout v1.2.0
+git checkout v1.3.0
 ```
 
 Use `git checkout v1.4.0` only after the v1.4.0 candidate has passed review, merged, and its release tag has actually been created.
