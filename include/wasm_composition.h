@@ -44,8 +44,14 @@ public:
                               std::string* error);
 
     /// Instantiate a registered root module after resolving its imports through
-    /// the linker. Dependencies must already have been registered.
+    /// the linker. Dependencies must already have been registered. Repeated
+    /// instantiation under the same module name is rejected.
     bool instantiate(const std::string& module_name, std::string* error);
+
+    /// Invoke an exported function with signature () -> i32 on an instantiated
+    /// module. This deliberately narrow ABI avoids implicit host-value coercion.
+    bool invoke_i32(const std::string& module_name, const std::string& export_name,
+                    std::int32_t* result, std::string* error);
 
     bool contains(const std::string& module_name) const;
 
@@ -66,6 +72,7 @@ private:
     LinkerPtr linker_;
     std::size_t max_module_bytes_ = 0;
     std::unordered_map<std::string, ModulePtr> modules_;
+    std::unordered_map<std::string, wasmtime_instance_t> instances_;
 };
 
 } // namespace nvlink::wasm
