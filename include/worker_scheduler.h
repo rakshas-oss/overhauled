@@ -42,8 +42,8 @@ struct WorkerExecutionContext {
 };
 
 struct WorkerPoolConfig {
-    // Dedicated workers are reserved by class and distributed across the
-    // process-allowed NUMA nodes.
+    // Dedicated workers are reserved by class and distributed across validated
+    // CPU groups nested beneath process-allowed NUMA nodes.
     std::array<std::size_t, kWorkerClassCount> workers{{1, 1, 4, 1, 1}};
 
     // Optional shared worker slots. Elastic workers can serve only
@@ -110,8 +110,8 @@ public:
     void join() noexcept;
     std::size_t queued(WorkerClass worker_class) const noexcept;
     std::size_t queued_on_node(WorkerClass worker_class, uint32_t numa_node) const noexcept;
-    // Nodes on which this class has at least one eligible dedicated or
-    // elastic worker. Use these IDs when testing or inspecting routing.
+    // NUMA parents containing at least one eligible dedicated or elastic CPU
+    // group. This preserves the existing NUMA-level inspection API.
     std::vector<uint32_t> queue_nodes(WorkerClass worker_class) const;
     std::size_t active_elastic(WorkerClass worker_class) const noexcept;
 
