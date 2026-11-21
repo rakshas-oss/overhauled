@@ -4,10 +4,18 @@ import pathlib
 import struct
 import unittest
 
-MODULE_PATH = pathlib.Path(__file__).parents[1] / "benchmarks" / "worker_fabric_saturation.py"
-SPEC = importlib.util.spec_from_file_location("worker_fabric_saturation", MODULE_PATH)
-BENCH = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(BENCH)
+ROOT = pathlib.Path(__file__).parents[1]
+
+
+def load_module(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+BENCH = load_module("worker_fabric_saturation", ROOT / "benchmarks" / "worker_fabric_saturation.py")
+MONITOR = load_module("process_resource_monitor", ROOT / "benchmarks" / "process_resource_monitor.py")
 
 
 class WorkerFabricSaturationTests(unittest.TestCase):
@@ -33,6 +41,34 @@ class WorkerFabricSaturationTests(unittest.TestCase):
         request_id = ((128 + 1) << 48) | 100000
         self.assertLess(request_id, 2**64)
         self.assertEqual(struct.unpack("!Q", struct.pack("!Q", request_id))[0], request_id)
+
+    def test_percentile_uses_nearest_rank(self):
+        values = [1, 2, 3, 4, 5]
+        self.assertEqual(BENCH.percentile(values, 0.50), 3)
+        self.assertEqual(BENCH.percentile(values, 0.95), 5)
+        self.assertEqual(BENCH.percentile([], 0.95), None)
+
+    def test_latency_is_correlated_per_request(self):
+        self.assertAlmostEqual(BENCH.latency_ms(1_000_000, 3_500_000), 2.5)
+        with self.assertRaises(ValueError):
+            BENCH.latency_ms(10, 9)
+
+    def test_request_payload_scales_to_1024_features(self):
+        frame = BENCH.request_frame(9, 3, 1024, "throughput", 0)
+        self.assertGreater(len(frame), 8192)
+        self.assertLess(len(frame), 16384)
+
+    def test_proc_stat_parser_handles_parenthesized_command(self):
+        # Fields after ')' begin with state (field 3); utime/stime are
+        # offsets 11/12 and RSS pages is offset 21.
+        fields = ["S"] + ["0"] * 21
+        fields[11] = "125"
+        fields[12] = "75"
+        fields[21] = "256"
+        record = "123 (worker (test) process) " + " ".join(fields)
+        cpu_seconds, rss_mib = MONITOR.parse_process_stat(record, 100, 4096)
+        self.assertAlmostEqual(cpu_seconds, 2.0)
+        self.assertAlmostEqual(rss_mib, 1.0)
 
 
 if __name__ == "__main__":

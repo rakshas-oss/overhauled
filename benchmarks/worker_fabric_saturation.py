@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-"""Pipelined mixed-class BRK2 saturation benchmark."""
+"""Pipelined mixed-class BRK2 saturation benchmark with per-request timing."""
 import argparse
 import concurrent.futures
 import json
@@ -126,7 +126,14 @@ def percentile(values, p):
     if not values:
         return None
     ordered = sorted(values)
-    return ordered[min(len(ordered) - 1, math.ceil((len(ordered) - 1) * p))]
+    # Nearest-rank definition: rank=ceil(p*n), with zero-based indexing.
+    return ordered[max(0, min(len(ordered) - 1, math.ceil(p * len(ordered)) - 1))]
+
+
+def latency_ms(sent_ns, completed_ns):
+    if completed_ns < sent_ns:
+        raise ValueError("completion timestamp precedes send timestamp")
+    return (completed_ns - sent_ns) / 1_000_000.0
 
 
 def empty_stats():
@@ -142,27 +149,32 @@ def run_client(host, port, client_id, requests, depth, features, timeout):
         for batch_start in range(0, requests, depth):
             count = min(depth, requests - batch_start)
             expected = {}
-            frames = []
+            # Write each frame separately but do not read responses until the
+            # whole batch is in flight. This preserves pipelining while giving
+            # every request its own send timestamp and correlation record.
             for index in range(count):
                 local_seq = batch_start + index
                 sequence = client_id * requests + local_seq
                 worker_class = class_for(sequence)
                 request_id = ((client_id + 1) << 48) | (local_seq + 1)
-                frames.append(request_frame(request_id, sequence, features, worker_class, affinity))
-                expected[request_id] = worker_class
-            sent_at = time.perf_counter_ns()
-            sock.sendall(b"".join(frames))
+                frame = request_frame(request_id, sequence, features, worker_class, affinity)
+                sent_ns = time.perf_counter_ns()
+                sock.sendall(frame)
+                expected[request_id] = (worker_class, sent_ns)
+
             for _ in range(count):
                 response = recv_response(sock)
                 response_id = struct.unpack_from("!Q", response, 12)[0]
-                worker_class = expected.pop(response_id, None)
-                if worker_class is None:
+                request = expected.pop(response_id, None)
+                if request is None:
                     raise ValueError("unexpected or duplicate response ID")
+                worker_class, sent_ns = request
+                completed_ns = time.perf_counter_ns()
                 actual, queue, service, worker_id, node = decode_response(
                     response, response_id, worker_class, 8 * (2 + features))
                 item = stats[actual]
                 item["requests"] += 1
-                item["latency"].append((time.perf_counter_ns() - sent_at) / 1_000_000.0)
+                item["latency"].append(latency_ms(sent_ns, completed_ns))
                 item["queue"].append(queue)
                 item["service"].append(service)
                 item["worker_ids"].add(worker_id)
@@ -200,6 +212,7 @@ def run_candidate(host, port, clients, requests, depth, features, timeout):
         per_class[name] = {
             "requests": item["requests"],
             "requests_per_second": item["requests"] / elapsed,
+            "p50_latency_ms": percentile(item["latency"], 0.50),
             "p95_latency_ms": percentile(item["latency"], 0.95),
             "p99_latency_ms": percentile(item["latency"], 0.99),
             "p95_queue_wait_us": percentile(item["queue"], 0.95),
@@ -225,18 +238,37 @@ def run_candidate(host, port, clients, requests, depth, features, timeout):
 
 def topology():
     root = pathlib.Path("/sys/devices/system/node")
-    nodes = sorted(x.name for x in root.glob("node[0-9]*")) if root.exists() else []
-    return {"cpu_count": os.cpu_count(), "numa_nodes": nodes, "numa_node_count": len(nodes)}
+    allowed = set(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else set()
+    nodes = []
+    if root.exists():
+        for path in sorted(root.glob("node[0-9]*")):
+            try:
+                cpus = set()
+                for part in (path / "cpulist").read_text().strip().split(","):
+                    ends = [int(x) for x in part.split("-")]
+                    cpus.update(range(ends[0], ends[-1] + 1))
+                visible = sorted(cpus & allowed) if allowed else sorted(cpus)
+                if visible:
+                    nodes.append({"id": int(path.name[4:]), "visible_cpus": visible})
+            except (OSError, ValueError):
+                continue
+    return {
+        "allowed_cpu_count": len(allowed) if allowed else os.cpu_count(),
+        "numa_node_ids": [node["id"] for node in nodes],
+        "numa_node_count": len(nodes),
+        "nodes": nodes,
+    }
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=9090)
-    parser.add_argument("--client-counts", nargs="+", type=int, default=[8, 16, 32])
-    parser.add_argument("--pipeline-depths", nargs="+", type=int, default=[1, 8, 32])
+    parser.add_argument("--client-counts", nargs="+", type=int, default=[8, 32])
+    parser.add_argument("--pipeline-depths", nargs="+", type=int, default=[1, 32])
     parser.add_argument("--requests-per-client", type=int, default=256)
-    parser.add_argument("--features", type=int, default=64)
+    parser.add_argument("--warmup-requests-per-client", type=int, default=64)
+    parser.add_argument("--features", type=int, default=1024)
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--output", type=pathlib.Path)
@@ -247,21 +279,35 @@ def main():
         parser.error("client counts must be in 1..128")
     if not args.pipeline_depths or any(x < 1 or x > 32 for x in args.pipeline_depths):
         parser.error("pipeline depths must be in 1..32")
-    if not 1 <= args.requests_per_client <= 100000 or not 1 <= args.features <= 64:
-        parser.error("requests-per-client must be 1..100000 and features 1..64")
+    if not 1 <= args.requests_per_client <= 100000:
+        parser.error("requests-per-client must be in 1..100000")
+    if not 0 <= args.warmup_requests_per_client <= 100000:
+        parser.error("warmup-requests-per-client must be in 0..100000")
+    if not 1 <= args.features <= 60000:
+        parser.error("features must be in 1..60000")
+
     candidates = [(c, d) for c in args.client_counts for d in args.pipeline_depths]
     random.Random(args.seed).shuffle(candidates)
-    results = [run_candidate(args.host, args.port, c, args.requests_per_client,
-                              d, args.features, args.timeout) for c, d in candidates]
+    results = []
+    for clients, depth in candidates:
+        if args.warmup_requests_per_client:
+            run_candidate(args.host, args.port, clients, args.warmup_requests_per_client,
+                          depth, args.features, args.timeout)
+        results.append(run_candidate(args.host, args.port, clients, args.requests_per_client,
+                                     depth, args.features, args.timeout))
     report = {
         "measured": True,
         "broker": {"host": args.host, "port": args.port, "protocol": "BRK2"},
         "workload": {
             "class_mix_per_20": {"control": 1, "realtime-spatial": 4, "throughput": 10,
                                  "exact-cpu": 1, "inference": 4},
-            "requests_per_client": args.requests_per_client, "feature_count": args.features,
-            "client_counts": args.client_counts, "pipeline_depths": args.pipeline_depths,
+            "requests_per_client": args.requests_per_client,
+            "warmup_requests_per_client": args.warmup_requests_per_client,
+            "feature_count": args.features,
+            "client_counts": args.client_counts,
+            "pipeline_depths": args.pipeline_depths,
             "seed": args.seed,
+            "latency_method": "per-request send timestamp to correlated response receipt",
         },
         "topology": topology(),
         "results": results,
