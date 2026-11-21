@@ -216,6 +216,8 @@ std::vector<uint8_t> encode_brk2_response_body(const BrokerResponse& r,uint64_t 
         if((result.outcome==PlacementOutcome::Honored&&result.reason)||
            (result.outcome!=PlacementOutcome::Honored&&!result.reason))
             throw std::runtime_error("invalid BRK2 locality placement result/reason combination");
+        if(result.outcome==PlacementOutcome::Rejected && (r.status!=TaskStatus::Rejected || result.applied_numa_node))
+            throw std::runtime_error("rejected BRK2 locality placement must reject the task and omit applied node");
         std::vector<uint8_t> nested;field_u16(nested,1,1);field_u8(nested,2,1);
         field_u8(nested,3,static_cast<uint8_t>(result.outcome));
         if(result.applied_numa_node)field_u32(nested,4,*result.applied_numa_node);
