@@ -190,7 +190,10 @@ public:
             request_limit, config_.max_inflight_memory_bytes);
 
         const std::size_t hw = std::max<std::size_t>(1, std::thread::hardware_concurrency());
-        const std::size_t automatic_total = std::min<std::size_t>(256, std::max<std::size_t>(5, hw * 2));
+        // Default to at most one broker worker per visible logical CPU. Large
+        // hosts may configure a different budget explicitly after profiling.
+        const std::size_t automatic_total = std::min<std::size_t>(
+            kMaximumWorkerThreads, std::max<std::size_t>(5, hw));
         const std::array<std::size_t, 4> reserved_counts{{
             config_.control_worker_threads,
             config_.realtime_spatial_worker_threads,
@@ -199,17 +202,17 @@ public:
         }};
         std::size_t reserved = 0;
         for (const std::size_t count : reserved_counts) {
-            if (count == 0 || count > 255 - reserved) {
+            if (count == 0 || count > kMaximumWorkerThreads - reserved) {
                 throw std::invalid_argument(
-                    "control, realtime, exact CPU and inference pools each need at least one worker; total must be below 256");
+                    "control, realtime, exact CPU and inference pools each need at least one worker; total must fit the large-host worker budget");
             }
             reserved += count;
         }
-        constexpr std::size_t kMaximumElasticWorkers = 64;
         const std::size_t elastic_workers = config_.elastic_worker_threads;
-        if (elastic_workers > kMaximumElasticWorkers ||
-            elastic_workers > 256 - reserved) {
-            throw std::invalid_argument("elastic worker count must be in 0..64 and fit the 256 worker process cap");
+        if (elastic_workers > kMaximumElasticWorkerThreads ||
+            elastic_workers > kMaximumWorkerThreads - reserved) {
+            throw std::invalid_argument(
+                "elastic worker count must be in 0..4096 and fit the 16384 worker process cap");
         }
 
         std::size_t throughput_workers = config_.throughput_worker_threads;
@@ -225,8 +228,9 @@ public:
             throughput_workers = total_budget > required ? total_budget - required : 1;
         }
         if (throughput_workers == 0 ||
-            throughput_workers > 256 - reserved - elastic_workers) {
-            throw std::invalid_argument("dedicated plus elastic worker total must be in 1..256");
+            throughput_workers > kMaximumWorkerThreads - reserved - elastic_workers) {
+            throw std::invalid_argument(
+                "dedicated plus elastic worker total must fit the 16384 worker process cap");
         }
         WorkerPoolConfig pool_config;
         pool_config.workers = {{
