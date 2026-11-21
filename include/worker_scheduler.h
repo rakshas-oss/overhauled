@@ -6,6 +6,7 @@
 #include "broker_protocol.h"
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <chrono>
@@ -17,20 +18,32 @@
 
 namespace nvlink::broker {
 
+struct WorkerTopologySnapshot;
+
 constexpr std::size_t kWorkerClassCount = 5;
+// Bounded large-host limits. This supports multi-thousand-core machines without
+// allowing an unbounded command-line value to create arbitrary OS threads.
+constexpr std::size_t kMaximumWorkerThreads = 16'384;
+constexpr std::size_t kMaximumElasticWorkerThreads = 4'096;
+constexpr std::size_t kAutomaticWorkerThreadCap = 4'096;
+constexpr std::size_t kMaximumWorkerThreadsPerLogicalCpu = 8;
+constexpr std::size_t kMaximumWorkerThreadsPerClass = kMaximumWorkerThreads;
 // Worker IDs at or above this value identify opt-in elastic worker threads.
-constexpr std::size_t kFirstElasticWorkerId = kWorkerClassCount * 256;
+constexpr std::size_t kFirstElasticWorkerId =
+    kWorkerClassCount * kMaximumWorkerThreadsPerClass;
 
 struct WorkerExecutionContext {
     WorkerClass worker_class = WorkerClass::Throughput;
     uint32_t worker_id = 0;
     uint64_t queue_wait_us = 0;
     std::optional<uint32_t> numa_node;
+    // Internal topology detail; not part of the BRK2 wire contract.
+    std::optional<uint32_t> cpu_group_id;
 };
 
 struct WorkerPoolConfig {
-    // Dedicated workers are reserved by class and distributed across the
-    // process-allowed NUMA nodes.
+    // Dedicated workers are reserved by class and distributed across validated
+    // CPU groups nested beneath process-allowed NUMA nodes.
     std::array<std::size_t, kWorkerClassCount> workers{{1, 1, 4, 1, 1}};
 
     // Optional shared worker slots. Elastic workers can serve only
@@ -38,6 +51,7 @@ struct WorkerPoolConfig {
     // strictly dedicated. The per-class limits cap concurrent elastic service.
     std::size_t elastic_workers = 0;
     std::array<std::size_t, kWorkerClassCount> elastic_max_per_class{{0, 1, 4, 0, 2}};
+
 };
 
 
@@ -57,9 +71,8 @@ public:
 private:
     const std::size_t max_outstanding_requests_;
     const std::size_t max_payload_bytes_;
-    mutable std::mutex mutex_;
-    std::size_t outstanding_requests_ = 0;
-    std::size_t outstanding_payload_bytes_ = 0;
+    std::atomic<std::size_t> outstanding_requests_{0};
+    std::atomic<std::size_t> outstanding_payload_bytes_{0};
 };
 
 class ClassWorkerPool {
@@ -93,12 +106,16 @@ public:
     void join() noexcept;
     std::size_t queued(WorkerClass worker_class) const noexcept;
     std::size_t queued_on_node(WorkerClass worker_class, uint32_t numa_node) const noexcept;
-    // Nodes on which this class has at least one eligible dedicated or
-    // elastic worker. Use these IDs when testing or inspecting routing.
+    // NUMA parents containing at least one eligible dedicated or elastic CPU
+    // group. This preserves the existing NUMA-level inspection API.
     std::vector<uint32_t> queue_nodes(WorkerClass worker_class) const;
     std::size_t active_elastic(WorkerClass worker_class) const noexcept;
 
 private:
+    friend class WorkerSchedulerTestAccess;
+    ClassWorkerPool(const WorkerPoolConfig& config,
+                    const WorkerTopologySnapshot& synthetic_topology);
+
     class Impl;
     std::unique_ptr<Impl> impl_;
 };

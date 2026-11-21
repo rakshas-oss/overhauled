@@ -219,7 +219,7 @@ def run_candidate(host, port, clients, requests, depth, features, timeout):
             "mean_queue_wait_us": statistics.fmean(item["queue"]) if item["queue"] else None,
             "mean_service_time_us": statistics.fmean(item["service"]) if item["service"] else None,
             "worker_ids": sorted(item["worker_ids"]),
-            "elastic_worker_ids": sorted(x for x in item["worker_ids"] if x >= 1280),
+            "elastic_worker_ids": sorted(x for x in item["worker_ids"] if x >= 81920),
             "numa_nodes": sorted(item["numa_nodes"]),
         }
     return {
