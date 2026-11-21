@@ -205,7 +205,7 @@ sudo dnf install nvlink-placement-devel
 
 ## Published v1.5.0 and v1.5.1 patch candidate
 
-Overhauled v1.5.0 is published. Its optional native Wasmtime composition feature was released with a Wasmtime v51 C API integration defect. The fix is being prepared as v1.5.1; do not describe v1.5.1 as released until its release PR is merged, the exact approved commit is tagged, and the GitHub release assets are verified.
+Overhauled v1.5.0 is published. Its optional native Wasmtime composition feature was released with a Wasmtime v51 C API integration defect. The fix is merged on main and the v1.5.1 patch candidate metadata is in place. The corrected main merge commit passed all 8 reported CI checks on 2026-11-21, including the Wasmtime v51 runtime lane, BRK2 mutation tests, paired YuKKi-OS interoperability, sanitizers and Ubuntu/Windows installed-package consumer checks. v1.5.1 is still not a published release: verify the exact release/tag commit and GitHub release assets before describing it as released.
 
 For the v1.5.1 candidate:
 
