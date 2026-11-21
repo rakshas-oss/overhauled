@@ -10,8 +10,9 @@ Date: 2026-11-21
 ### Validation
 
 - The published v1.5.0 tag was created before the correction and its Wasmtime-enabled build failed with the unavailable C API symbols.
-- The correction is merged on main; the Wasmtime compile/runtime-composition lane, default CI, sanitizer, BRK2, package-consumer and paired YuKKi interoperability checks pass on the corrected main commit.
-- v1.5.1 remains a candidate until its own exact release commit passes the full gate. Do not tag or publish this candidate before those checks pass.
+- The correction and release-metadata update are merged on main. On merge commit `bacb67ec5918697ffabd0e533b1c403f85105a1a`, all 8 reported GitHub Actions checks passed: paired repository release gate, Wasmtime v51 compile/runtime composition, BRK2 codec/mutation, paired YuKKi-OS interoperability, ASan/UBSan validation, and Ubuntu/Windows installed CMake package consumers.
+- The Windows check is package-consumer validation, not native Windows/MSVC runtime support. The Wasmtime lane validates the documented Linux x86_64 v51.0.0 target.
+- v1.5.1 remains a candidate until the exact intended release/tag commit and release assets are verified. Do not describe it as published before that verification.
 
 ---
 
