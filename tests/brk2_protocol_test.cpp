@@ -63,7 +63,7 @@ int main(){
 
     // BRK2 v1 locality placement intent: optional prefer and critical bind.
     auto with_placement=request_body();
-    std::vector<uint8_t> nested;u16(nested,1);field(nested,1,2,{0,1},0);
+    std::vector<uint8_t> nested;field(nested,1,2,{0,1},0);
     field(nested,2,1,{1},0);field(nested,3,1,{1},0);
     std::vector<uint8_t> node;u32(node,2);field(nested,4,3,node,0);
     std::vector<uint8_t> max_bytes;u64(max_bytes,4);field(nested,5,4,max_bytes,0);
@@ -162,8 +162,6 @@ int main(){
     response.worker_numa_node = 3;
     const auto telemetry_response = encode_brk2_response_body(response, id, limits);
     assert(telemetry_response.size() > encoded.size());
-    assert(telemetry_response[telemetry_response.size()-1] == 0x07 ||
-           telemetry_response.size() > encoded.size()); // placement TLV coexists with telemetry
 
 
     std::cout<<"brk2_protocol_test passed\\n";
