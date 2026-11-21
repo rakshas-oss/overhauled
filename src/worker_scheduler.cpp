@@ -139,10 +139,10 @@ bool elastic_eligible(WorkerClass value) noexcept {
 
 class ClassWorkerPool::Impl {
 public:
-    explicit Impl(const WorkerPoolConfig& config)
+    explicit Impl(const WorkerPoolConfig& config,
+                  const WorkerTopologySnapshot* synthetic_topology)
         : config_(config),
-          topology_(config.topology_for_testing
-              ? *config.topology_for_testing : discover_worker_topology()) {
+          topology_(synthetic_topology ? *synthetic_topology : discover_worker_topology()) {
         std::size_t dedicated_total = 0;
         for (const std::size_t count : config_.workers) {
             if (count == 0)
@@ -177,7 +177,7 @@ public:
         std::string topology_error;
         if (!validate_worker_topology(topology_, &topology_error))
             throw std::invalid_argument("invalid nested CPU topology: " + topology_error);
-        if (config_.topology_for_testing) {
+        if (synthetic_topology) {
             const auto& process_topology = discover_worker_topology();
             if (topology_.allowed_cpus != process_topology.allowed_cpus ||
                 topology_.maximum_cpu_id != process_topology.maximum_cpu_id ||
@@ -702,7 +702,10 @@ private:
 };
 
 ClassWorkerPool::ClassWorkerPool(const WorkerPoolConfig& config)
-    : impl_(std::make_unique<Impl>(config)) {}
+    : impl_(std::make_unique<Impl>(config, nullptr)) {}
+ClassWorkerPool::ClassWorkerPool(const WorkerPoolConfig& config,
+                                 const WorkerTopologySnapshot& synthetic_topology)
+    : impl_(std::make_unique<Impl>(config, &synthetic_topology)) {}
 ClassWorkerPool::~ClassWorkerPool() = default;
 
 bool ClassWorkerPool::enqueue(WorkerClass worker_class,
