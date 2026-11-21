@@ -116,7 +116,9 @@ bool elastic_eligible(WorkerClass value) noexcept {
 class ClassWorkerPool::Impl {
 public:
     explicit Impl(const WorkerPoolConfig& config)
-        : config_(config), topology_(discover_worker_topology()) {
+        : config_(config),
+          topology_(config.topology_for_testing
+              ? *config.topology_for_testing : discover_worker_topology()) {
         std::size_t dedicated_total = 0;
         for (const std::size_t count : config_.workers) {
             if (count == 0)
@@ -151,6 +153,16 @@ public:
         std::string topology_error;
         if (!validate_worker_topology(topology_, &topology_error))
             throw std::invalid_argument("invalid nested CPU topology: " + topology_error);
+        if (config_.topology_for_testing) {
+            const auto& process_topology = discover_worker_topology();
+            if (topology_.allowed_cpus != process_topology.allowed_cpus ||
+                topology_.maximum_cpu_id != process_topology.maximum_cpu_id ||
+                topology_.affinity_mask_bits != process_topology.affinity_mask_bits ||
+                topology_.affinity_supported != process_topology.affinity_supported) {
+                throw std::invalid_argument(
+                    "synthetic topology must preserve the process-discovered root CPU set and affinity mask");
+            }
+        }
 
         nodes_.reserve(topology_.numa_nodes.size());
         for (const auto& numa : topology_.numa_nodes) {
