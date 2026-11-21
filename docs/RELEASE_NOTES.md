@@ -1,4 +1,25 @@
-## v1.3.0 (release candidate; tag pending)
+## v1.4.0 (release candidate; tag pending)
+Date: 2026-11-21
+
+### Highlights
+
+- **BRK2 locality-placement codec:** add bounded nested-TLV decoding for request field 14 and response field 13, including extension-version, scope, mode, conditional NUMA-node, payload-size, duplicate-field, unknown-critical-field, and criticality/mode validation.
+- **Compatibility semantics:** `prefer` remains non-critical for older peers; `bind` and `interleave` are critical and cannot be silently ignored.
+- **Placement outcome semantics:** an absent response result means unknown/not applied, not success.
+
+### Explicit implementation boundary
+
+This release adds protocol codec support only. It does not add a broker-owned payload allocator, apply or verify physical memory placement, or claim NUMA-local allocation. The field-14/field-13 contract is limited to the broker-owned request-payload copy; WASM linear memory, datasets, accelerator staging, GPU VRAM and NPU memory remain out of scope.
+
+### Compatibility and release gate
+
+- Existing BRK1/BRK2/WSM1 envelope identities remain unchanged; the new BRK2 fields are additive and versioned.
+- Require full broker CI, BRK2 C++ protocol tests, sanitizer checks, package-consumer smoke tests and live YuKKi-OS interoperability before release approval.
+- Do not tag or publish v1.4.0 until the release PR is reviewed, all required checks pass, and the exact source archive checksums are generated.
+
+---
+
+## v1.3.0 (published 2026-11-21)
 Date: 2026-11-20
 
 ### Highlights
@@ -31,7 +52,7 @@ Date: 2026-11-20
 - CPU-group placement and worker stealing are internal broker scheduling
   details. Preferred NUMA and affinity hints cannot widen the broker's
   process-allowed CPU set.
-- The 1.3.0 version is a candidate. Do not tag or publish it until topology,
+- The v1.3.0 release was published after topology,
   scheduler, BRK2, sanitizer, package-consumer and cross-repository CI gates
   pass and the release commit is approved.
 - The vcpkg archive SHA512 and Homebrew archive URL/SHA256 must be generated
