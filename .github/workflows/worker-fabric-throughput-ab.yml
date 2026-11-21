@@ -1,12 +1,6 @@
 name: Worker Fabric A-B Throughput
 
 on:
-  push:
-    branches:
-      - perf/measure-worker-fabric-throughput
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
