@@ -33,7 +33,7 @@ new CPU-group placement detail is internal to broker scheduling.
 
 ## Release policy
 
-- v1.3.0 is the latest published Overhauled release (2026-11-20).
+- v1.3.0 is the latest published Overhauled release (2026-11-21).
 - Do not create or publish v1.4.0 until its release PR is reviewed and required
   C++ builds/tests, worker-topology tests, BRK2 conformance, sanitizers,
   package-consumer tests and cross-repository interoperability checks pass.
