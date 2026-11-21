@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "wasm_composition.h"
 
+#include <stdexcept>
 #include <utility>
 
 namespace nvlink::wasm {
