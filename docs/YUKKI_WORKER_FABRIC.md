@@ -225,7 +225,9 @@ Defaults reserve one worker each for Control, RealtimeSpatial, ExactCpu, and
 Inference. Remaining workers go to Throughput. Automatic sizing discovers the
 process-allowed topology, targets one worker per physical core, and caps the
 default at 4,096 workers. Explicit configuration can request up to 16,384
-combined dedicated and elastic threads, subject to the process-wide limit.
+combined dedicated and elastic threads, subject to the process-wide limit and
+an additional topology-relative ceiling of max(9, 8 × process-allowed logical
+CPUs).
 
 Example:
 
