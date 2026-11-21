@@ -84,8 +84,6 @@ int main(){
     assert(decode_brk2_request_body(mandatory,&request,&id,&error,field_limits)==false);
     assert(error=="BRK2 locality placement critical flag does not match mode");
 
-    auto oversized_placement=with_placement;
-    const std::size_t max_value_offset=oversized_placement.size()-12;
     BrokerResponse response;response.task_id=request.task_id;response.status=TaskStatus::Ok;
     response.selected_gpu=-1;response.latency_ms=4;response.result=request.payload;
     response.locality_placement_result=PlacementResult{
@@ -95,6 +93,15 @@ int main(){
     assert(encoded[0]=='B'&&encoded[1]=='R'&&encoded[2]=='K'&&encoded[3]=='2');
     assert(encoded[8]==0&&encoded[9]==4);
     assert(encoded[12]==1&&encoded[19]==8); // response preserves request correlation id
+    bool has_placement_result=false;
+    for(std::size_t pos=32;pos+8<=encoded.size();){
+        const uint16_t field_id=static_cast<uint16_t>((uint16_t(encoded[pos])<<8)|encoded[pos+1]);
+        const uint32_t field_size=(uint32_t(encoded[pos+4])<<24)|(uint32_t(encoded[pos+5])<<16)|
+                                  (uint32_t(encoded[pos+6])<<8)|encoded[pos+7];
+        if(field_id==13){has_placement_result=true;assert(encoded[pos+2]==11);}
+        pos+=8+field_size;
+    }
+    assert(has_placement_result);
 
     auto malformed=body;malformed[26]=1;
     assert(!decode_brk2_request_body(malformed,&request,&id,&error,limits));
