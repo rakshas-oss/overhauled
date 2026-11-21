@@ -512,13 +512,21 @@ private:
 
     void signal_class(WorkerClass worker_class, bool all) noexcept {
         const std::size_t index = class_index(worker_class);
-        class_wake_generation_[index].fetch_add(1, std::memory_order_release);
+        {
+            // The predicate is checked under this mutex. Updating it while
+            // holding the same mutex prevents a notify-before-wait lost wake.
+            std::lock_guard<std::mutex> lock(class_wake_mutex_[index]);
+            class_wake_generation_[index].fetch_add(1, std::memory_order_release);
+        }
         if (all) class_wake_cv_[index].notify_all();
         else class_wake_cv_[index].notify_one();
     }
 
     void signal_elastic(bool all) noexcept {
-        elastic_wake_generation_.fetch_add(1, std::memory_order_release);
+        {
+            std::lock_guard<std::mutex> lock(elastic_wake_mutex_);
+            elastic_wake_generation_.fetch_add(1, std::memory_order_release);
+        }
         if (all) elastic_wake_cv_.notify_all();
         else elastic_wake_cv_.notify_one();
     }
