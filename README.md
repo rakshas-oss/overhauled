@@ -1,6 +1,6 @@
 # Overhauled v1.5.0 (release candidate)
 
- > **Release candidate v1.5.0:** adds optional native Wasmtime runtime composition on top of the v1.4.0 BRK2 locality codec baseline.
+> **Release candidate v1.5.0:** adds optional native Wasmtime runtime composition on top of the v1.4.0 BRK2 locality codec baseline.
 
 > **Route workloads by topology, not guesswork.**
 >
