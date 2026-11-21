@@ -41,6 +41,7 @@ int main() {
     CHECK((parsed == std::vector<uint32_t>{0, 1, 2, 3, 8, 12, 13, 14, 15}));
     CHECK(!parse_cpu_list("0-3,3-4", &parsed, &error));
     CHECK(!parse_cpu_list("0,,2", &parsed, &error));
+    CHECK(!parse_cpu_list("0,2,", &parsed, &error));
     CHECK(!parse_cpu_list("4-2", &parsed, &error));
     CHECK(!parse_cpu_list("-1,2", &parsed, &error));
     CHECK(!parse_cpu_list("0-1048576", &parsed, &error));
@@ -68,6 +69,12 @@ int main() {
         CHECK(group != node->cpu_groups.end());
         CHECK(std::binary_search(group->cpus.begin(), group->cpus.end(), placement->cpu_id));
     }
+
+    auto short_mask = valid_topology();
+    short_mask.affinity_supported = true;
+    short_mask.affinity_mask_bits = 7;
+    short_mask.maximum_cpu_id = 7;
+    CHECK(!validate_worker_topology(short_mask, &error));
 
     // A nested child cannot claim a CPU outside its NUMA parent.
     auto escaped_group = valid_topology();
