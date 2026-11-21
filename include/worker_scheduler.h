@@ -52,10 +52,6 @@ struct WorkerPoolConfig {
     std::size_t elastic_workers = 0;
     std::array<std::size_t, kWorkerClassCount> elastic_max_per_class{{0, 1, 4, 0, 2}};
 
-    // Test/simulation seam. The supplied topology must preserve the exact
-    // process-discovered root cpuset and affinity capabilities; only its
-    // nested NUMA/CPU-group partition may differ.
-    std::shared_ptr<const WorkerTopologySnapshot> topology_for_testing;
 };
 
 
@@ -116,6 +112,10 @@ public:
     std::size_t active_elastic(WorkerClass worker_class) const noexcept;
 
 private:
+    friend class WorkerSchedulerTestAccess;
+    ClassWorkerPool(const WorkerPoolConfig& config,
+                    const WorkerTopologySnapshot& synthetic_topology);
+
     class Impl;
     std::unique_ptr<Impl> impl_;
 };
