@@ -1,6 +1,6 @@
 # Overhauled v1.5.0 (release candidate)
 
-> **Release candidate v1.4.0:** adds BRK2 locality-placement intent/result codec support on top of the published v1.3.0 hierarchical worker fabric.
+ > **Release candidate v1.5.0:** adds optional native Wasmtime runtime composition on top of the v1.4.0 BRK2 locality codec baseline.
 
 > **Route workloads by topology, not guesswork.**
 >
@@ -15,7 +15,13 @@ Overhauled is a C++17 placement and execution library with an interoperable brok
 [![Release](https://img.shields.io/badge/Release-v1.5.0-blueviolet)](#)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2FBRK2-orange)](#)
 
-## What's new in v1.5.0\n\n- **Optional native Wasmtime runtime composition:** compile core-Wasm modules and register them in a native linker for runtime import resolution. The feature is opt-in through `ENABLE_WASM_RUNTIME`; the default build remains unchanged.\n- **Retained instances and typed invocation:** the initial host API retains instantiated roots and supports exported `() -> i32` calls with explicit errors for missing exports, traps and incompatible results.\n- **Composition conformance coverage:** provider/consumer fixtures exercise cross-module imports and result propagation. Wasmtime-enabled CI is a release gate; this candidate does not claim production tenant isolation.\n\n## Capabilities
+## What's new in v1.5.0
+
+- **Optional native Wasmtime runtime composition:** compile core-Wasm modules and register them in a native linker for runtime import resolution. The feature is opt-in through `ENABLE_WASM_RUNTIME`; the default build remains unchanged.
+- **Retained instances and typed invocation:** the initial host API retains instantiated roots and supports exported `() -> i32` calls with explicit errors for missing exports, traps and incompatible results.
+- **Composition conformance coverage:** provider/consumer fixtures exercise cross-module imports and result propagation. Wasmtime-enabled CI is a release gate; this candidate does not claim production tenant isolation.
+
+## Capabilities
 
 - NVLink-aware topology detection, sticky home-GPU affinity, and queue-aware placement.
 - Heuristic backend dispatch: forced/safety-sensitive work remains CPU-first; eligible NPU inference requires an available executor, and data-parallel GPU work must meet the configured offload threshold.
