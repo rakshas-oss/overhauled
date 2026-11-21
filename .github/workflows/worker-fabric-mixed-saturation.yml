@@ -122,17 +122,7 @@ jobs:
           mkdir -p benchmark-results
           cpu_count="$(python3 -c 'import os; print(len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1))')"
           throughput_workers=$((cpu_count > 4 ? cpu_count - 4 : 1))
-          elastic_workers=$((cpu_count / 2))
-          if [ "$elastic_workers" -lt 4 ]; then elastic_workers=4; fi
-          if [ "$elastic_workers" -gt 16 ]; then elastic_workers=16; fi
-          elastic_realtime=$(((elastic_workers + 3) / 4))
-          elastic_inference=$(((elastic_workers + 3) / 4))
-          elastic_throughput=$((elastic_workers - elastic_realtime - elastic_inference))
-          if [ "$elastic_throughput" -lt 1 ]; then
-            elastic_throughput=1
-            elastic_workers=$((elastic_realtime + elastic_inference + elastic_throughput))
-          fi
-          echo "CPU capacity=$cpu_count; dedicated workers=4+$throughput_workers; elastic=$elastic_workers"
+          echo "CPU capacity=$cpu_count; dedicated workers=4+$throughput_workers; elastic budget sweep=1,2,4"
           port_index=0
           server_pid=""
           monitor_pid=""
@@ -154,7 +144,7 @@ jobs:
             arm="$1"
             repetition="$2"
             variant="$3"
-            elastic="$4"
+            elastic_budget="$4"
             port=$((19300 + port_index))
             port_index=$((port_index + 1))
             binary="/tmp/worker-fabric-build/$variant/broker_server"
@@ -166,12 +156,12 @@ jobs:
               --workers-exact-cpu 1
               --workers-inference 1
             )
-            if [ "$elastic" = "yes" ]; then
+            if [ "$elastic_budget" -gt 0 ]; then
               "$binary" "$port" "${common_args[@]}" \
-                --workers-elastic "$elastic_workers" \
-                --elastic-realtime-max "$elastic_realtime" \
-                --elastic-throughput-max "$elastic_throughput" \
-                --elastic-inference-max "$elastic_inference" \
+                --workers-elastic "$elastic_budget" \
+                --elastic-realtime-max "$elastic_budget" \
+                --elastic-throughput-max "$elastic_budget" \
+                --elastic-inference-max "$elastic_budget" \
                 > "benchmark-results/$arm-r$repetition-server.log" 2>&1 &
             else
               "$binary" "$port" "${common_args[@]}" \
@@ -217,23 +207,24 @@ jobs:
           }
 
           for repetition in $(seq 1 10); do
-            case "$((repetition % 3))" in
-              1)
-                run_arm baseline "$repetition" baseline no
-                run_arm merged-dedicated "$repetition" merged no
-                run_arm merged-elastic "$repetition" merged yes
-                ;;
-              2)
-                run_arm merged-elastic "$repetition" merged yes
-                run_arm baseline "$repetition" baseline no
-                run_arm merged-dedicated "$repetition" merged no
-                ;;
-              0)
-                run_arm merged-dedicated "$repetition" merged no
-                run_arm merged-elastic "$repetition" merged yes
-                run_arm baseline "$repetition" baseline no
-                ;;
+            # Rotate all five configurations so no worker budget always runs
+            # first or last. Baseline and dedicated-only remain controls.
+            case "$(((repetition - 1) % 5))" in
+              0) order=(baseline merged-dedicated elastic-1 elastic-2 elastic-4) ;;
+              1) order=(merged-dedicated elastic-1 elastic-2 elastic-4 baseline) ;;
+              2) order=(elastic-1 elastic-2 elastic-4 baseline merged-dedicated) ;;
+              3) order=(elastic-2 elastic-4 baseline merged-dedicated elastic-1) ;;
+              4) order=(elastic-4 baseline merged-dedicated elastic-1 elastic-2) ;;
             esac
+            for arm in "${order[@]}"; do
+              case "$arm" in
+                baseline) run_arm baseline "$repetition" baseline 0 ;;
+                merged-dedicated) run_arm merged-dedicated "$repetition" merged 0 ;;
+                elastic-1) run_arm elastic-1 "$repetition" merged 1 ;;
+                elastic-2) run_arm elastic-2 "$repetition" merged 2 ;;
+                elastic-4) run_arm elastic-4 "$repetition" merged 4 ;;
+              esac
+            done
           done
 
       - name: Summarize trials and verify NUMA placement
@@ -245,11 +236,13 @@ jobs:
           from pathlib import Path
 
           root = Path("benchmark-results")
-          arms = ["baseline", "merged-dedicated", "merged-elastic"]
+          budgets = [1, 2, 4]
+          arms = ["baseline", "merged-dedicated"] + [f"elastic-{budget}" for budget in budgets]
           classes = ["control", "realtime-spatial", "throughput", "exact-cpu", "inference"]
           repetitions = 10
           grouped = {arm: {} for arm in arms}
-          summary = {"arms": {}, "comparisons": {}, "classes": classes, "repetitions": repetitions}
+          summary = {"arms": {}, "comparisons": {}, "classes": classes,
+                     "elastic_budgets": budgets, "repetitions": repetitions}
 
           for arm in arms:
               files = sorted(glob.glob(str(root / f"{arm}-r*.json")))
@@ -303,13 +296,19 @@ jobs:
           for key in sorted(grouped["baseline"]):
               base = median("baseline", key, "requests_per_second")
               dedicated = median("merged-dedicated", key, "requests_per_second")
-              elastic = median("merged-elastic", key, "requests_per_second")
               label = f"{key[0]}x{key[1]}"
-              summary["comparisons"][label] = {
+              comparison = {
                   "dedicated_vs_baseline_pct": (dedicated / base - 1) * 100,
-                  "elastic_vs_dedicated_pct": (elastic / dedicated - 1) * 100,
-                  "elastic_vs_baseline_pct": (elastic / base - 1) * 100,
               }
+              for budget in budgets:
+                  elastic = median(f"elastic-{budget}", key, "requests_per_second")
+                  comparison[f"elastic_{budget}_vs_dedicated_pct"] = (
+                      (elastic / dedicated - 1) * 100
+                  )
+                  comparison[f"elastic_{budget}_vs_baseline_pct"] = (
+                      (elastic / base - 1) * 100
+                  )
+              summary["comparisons"][label] = comparison
 
           def resource_summary(path):
               samples = []
@@ -340,37 +339,73 @@ jobs:
           topology = json.loads(Path("benchmark-topology.json").read_text())
           summary["topology"] = topology
           eligible = ["realtime-spatial", "throughput", "inference"]
+          # The smallest shared pools cannot meaningfully prove cross-node
+          # distribution. Validate NUMA locality with dedicated plus max budget.
+          numa_arms = ["merged-dedicated", "elastic-4"]
           numa_nodes = {
               arm: {
                   name: sorted({node for item in grouped[arm][(32, 32)]
                                 for node in item["per_class"][name]["numa_nodes"]})
                   for name in eligible
-              } for arm in ["merged-dedicated", "merged-elastic"]
+              } for arm in numa_arms
           }
           numa_verified = topology["numa_node_count"] >= 2 and all(
               len(numa_nodes[arm][name]) >= 2 for arm in numa_nodes for name in eligible
           )
           summary["numa_validation"] = {
               "runner_node_count": topology["numa_node_count"],
+              "validated_arms": numa_arms,
               "eligible_class_nodes_at_32_clients_depth_32": numa_nodes,
               "multi_node_worker_execution_verified": numa_verified,
           }
 
           rows = [
-              "# Mixed-class pipelined worker-fabric saturation",
+              "# Mixed-class pipelined worker-fabric budget sweep",
               "",
-              "Release broker; 1,024 binary64 features per request; five worker classes; 64 warm-up requests/client/configuration; 256 measured requests/client; ten alternating repetitions.",
+              "Release broker; 1,024 binary64 features per request; five worker classes; 64 warm-up requests/client/configuration; 256 measured requests/client; ten order-rotated repetitions.",
+              "Elastic budgets are total shared-pool thread caps of 1, 2, and 4; each eligible class ceiling equals the selected cap.",
               "",
-              "| Clients | Pipeline | Baseline req/s | Dedicated req/s | Elastic req/s | Dedicated vs baseline | Elastic vs dedicated |",
-              "|---:|---:|---:|---:|---:|---:|---:|",
+              "| Clients | Pipeline | Baseline req/s | Dedicated req/s | Elastic 1 | Elastic 2 | Elastic 4 | Dedicated vs baseline | E1 vs dedicated | E2 vs dedicated | E4 vs dedicated |",
+              "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
           ]
           for key in sorted(grouped["baseline"]):
               label = f"{key[0]}x{key[1]}"
               base = median("baseline", key, "requests_per_second")
               dedicated = median("merged-dedicated", key, "requests_per_second")
-              elastic = median("merged-elastic", key, "requests_per_second")
+              elastic_rates = [median(f"elastic-{budget}", key, "requests_per_second")
+                               for budget in budgets]
               compare = summary["comparisons"][label]
-              rows.append(f"| {key[0]} | {key[1]} | {base:,.0f} | {dedicated:,.0f} | {elastic:,.0f} | {compare['dedicated_vs_baseline_pct']:+.1f}% | {compare['elastic_vs_dedicated_pct']:+.1f}% |")
+              rows.append(
+                  f"| {key[0]} | {key[1]} | {base:,.0f} | {dedicated:,.0f} | "
+                  f"{elastic_rates[0]:,.0f} | {elastic_rates[1]:,.0f} | {elastic_rates[2]:,.0f} | "
+                  f"{compare['dedicated_vs_baseline_pct']:+.1f}% | "
+                  f"{compare['elastic_1_vs_dedicated_pct']:+.1f}% | "
+                  f"{compare['elastic_2_vs_dedicated_pct']:+.1f}% | "
+                  f"{compare['elastic_4_vs_dedicated_pct']:+.1f}% |"
+              )
+          rows += ["", "## Per-class p95 queue wait at 32 clients / depth 32", "",
+                   "| Class | Dedicated (µs) | Elastic 1 (µs) | Elastic 2 (µs) | Elastic 4 (µs) |",
+                   "|---|---:|---:|---:|---:|"]
+          for name in classes:
+              dedicated_wait = summary["arms"]["merged-dedicated"]["32x32"]["per_class"][name]["p95_queue_wait_us_median"]
+              waits = [summary["arms"][f"elastic-{budget}"]["32x32"]["per_class"][name]["p95_queue_wait_us_median"]
+                       for budget in budgets]
+              rows.append(f"| {name} | {dedicated_wait:,.1f} | {waits[0]:,.1f} | {waits[1]:,.1f} | {waits[2]:,.1f} |")
+          rows += ["", "## Process resource medians across repetitions", "",
+                   "| Arm | Mean CPU (% of one logical CPU) | Peak RSS (MiB) |",
+                   "|---|---:|---:|"]
+          for arm in arms:
+              samples = list(summary["resources"][arm].values())
+              cpu = [x["mean_cpu_percent_one_core"] for x in samples
+                     if x["mean_cpu_percent_one_core"] is not None]
+              rss = [x["peak_rss_mib"] for x in samples if x["peak_rss_mib"] is not None]
+              cpu_median = statistics.median(cpu) if cpu else float("nan")
+              rss_median = statistics.median(rss) if rss else float("nan")
+              summary.setdefault("resource_medians", {})[arm] = {
+                  "mean_cpu_percent_one_core_median": cpu_median if math.isfinite(cpu_median) else None,
+                  "peak_rss_mib_median": rss_median if math.isfinite(rss_median) else None,
+              }
+              rows.append(f"| {arm} | {cpu_median:.2f} | {rss_median:.2f} |")
 
           rows += ["", "## NUMA validation", "",
                    f"Runner NUMA nodes: {topology['numa_node_count']}",
@@ -384,7 +419,7 @@ jobs:
           (root / "summary.md").write_text("\n".join(rows) + "\n")
           print((root / "summary.md").read_text())
           if topology["runner_profile"] == "numa2" and not numa_verified:
-              raise SystemExit("NUMA profile requested, but workers were not observed on at least two NUMA nodes for every eligible class")
+              raise SystemExit("NUMA profile requested, but dedicated and elastic-4 workers were not observed on at least two NUMA nodes for every eligible class")
           PY
           cat benchmark-results/summary.md >> "$GITHUB_STEP_SUMMARY"
           cat benchmark-topology.txt >> "$GITHUB_STEP_SUMMARY"
