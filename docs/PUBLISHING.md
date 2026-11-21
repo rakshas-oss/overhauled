@@ -229,8 +229,7 @@ Before each release:
 - [ ] Update version in `vcpkg.json`
 - [ ] Regenerate the Homebrew formula URL and SHA-256 from the final v1.4.0 release archive, then update `nvlink-placement.rb`
 - [ ] Update `README.md` with latest features
-- [ ] Create a release tag for the version in `CMakeLists.txt` (the v1.4.0 candidate tag has not yet been created; create `v1.4.0` only from the approved release commit)
-- [ ] After merge, create and push the `v1.4.0` tag from the intended release commit
+- [ ] After the release PR is approved and merged, create and push `v1.4.0` from the exact approved merge commit; verify the tag resolves to that commit and the GitHub release archive is generated from it.
 - [ ] Verify the release workflow and GitHub release assets; do not assume publication is automatic
 - [ ] Submit PRs to Conan Center Index
 - [ ] Submit PRs to vcpkg
