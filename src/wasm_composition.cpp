@@ -19,11 +19,13 @@ std::string error_message(wasmtime_error_t* error) {
 
 std::string trap_message(wasm_trap_t* trap) {
     if (!trap) return {};
-    wasm_message_t message;
-    wasm_message_new_empty(&message);
+    // The Wasmtime v51 C API uses wasm_name_t for trap messages. The
+    // wasm_message_new_empty/delete helpers are not part of this API.
+    wasm_name_t message;
+    wasm_name_new_empty(&message);
     wasm_trap_message(trap, &message);
     std::string result(message.data, message.size);
-    wasm_message_delete(&message);
+    wasm_name_delete(&message);
     wasm_trap_delete(trap);
     return result;
 }
@@ -126,7 +128,9 @@ bool WasmCompositionRuntime::invoke_i32(
         return fail("export is not a function: " + export_name);
     }
 
-    wasmtime_val_t value;
+    // This ABI returns only an i32, which is an immediate scalar in
+    // wasmtime_val_t and requires no value-root cleanup function.
+    wasmtime_val_t value{};
     wasm_trap_t* trap = nullptr;
     auto* call_error = wasmtime_func_call(context, &item.of.func,
                                           nullptr, 0, &value, 1, &trap);
@@ -134,11 +138,9 @@ bool WasmCompositionRuntime::invoke_i32(
     if (call_error) return fail(error_message(call_error));
     if (trap) return fail(trap_message(trap));
     if (value.kind != WASMTIME_I32) {
-        wasmtime_val_delete(&value);
         return fail("export result is not i32: " + export_name);
     }
     *result = value.of.i32;
-    wasmtime_val_delete(&value);
     if (error) error->clear();
     return true;
 }
