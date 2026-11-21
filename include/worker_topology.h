@@ -34,6 +34,8 @@ struct WorkerTopologySnapshot {
     std::vector<NumaNodeTopology> numa_nodes;
     bool affinity_supported = false;
     uint32_t maximum_cpu_id = 0;
+    std::size_t affinity_mask_bits = 0;
+    std::size_t physical_core_count = 0;
 };
 
 struct WorkerCpuPlacement {
@@ -63,6 +65,7 @@ std::optional<WorkerCpuPlacement> worker_cpu_placement(
 
 // Apply a single-CPU dynamic affinity mask. Supports CPU IDs beyond CPU_SETSIZE.
 bool pin_current_thread_to_cpu(uint32_t cpu_id,
-                               uint32_t maximum_cpu_id) noexcept;
+                               uint32_t maximum_cpu_id,
+                               std::size_t affinity_mask_bits) noexcept;
 
 } // namespace nvlink::broker
