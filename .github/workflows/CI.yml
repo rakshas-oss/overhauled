@@ -80,3 +80,33 @@ jobs:
         env:
           LD_LIBRARY_PATH: ${{ runner.temp }}/wasmtime/lib:${{ env.LD_LIBRARY_PATH }}
         run: ctest --test-dir build-wasm --output-on-failure -R wasm_composition_test
+
+  wasm-handoff-receiver:
+    name: OpenSSL-enabled authenticated WASM handoff
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build build-essential libssl-dev
+
+      - name: Configure authenticated WASM handoff feature
+        run: |
+          cmake -S . -B build-handoff -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_CUDA=OFF \
+            -DENABLE_TENSORRT=OFF \
+            -DBUILD_BROKER=ON \
+            -DBUILD_TESTING=ON \
+            -DBUILD_EXAMPLES=OFF \
+            -DENABLE_WASM_RUNTIME=OFF \
+            -DENABLE_WASM_HANDOFF=ON
+
+      - name: Build handoff-enabled broker
+        run: cmake --build build-handoff --parallel 2
+
+      - name: Run handoff receiver and broker tests
+        run: ctest --test-dir build-handoff --output-on-failure
