@@ -172,8 +172,8 @@ std::string json_string(const std::string& value) {
     std::string out = "\"" ;
     for (unsigned char ch : value) {
         switch (ch) {
-            case '"': out += "\\\""; break;
-            case '\\': out += "\\\\"; break;
+            case '"': out += "\\""; break;
+            case '\\': out += "\\\"; break;
             case '\b': out += "\\b"; break;
             case '\f': out += "\\f"; break;
             case '\n': out += "\\n"; break;
@@ -407,16 +407,16 @@ Ed25519PublicKey Ed25519Signer::public_key() const {
 
 std::string canonical_manifest(const std::vector<ModuleDescriptor>& modules) {
     const auto sorted = sorted_modules(modules);
-    std::string out = "{\\"modules\\":[";
+    std::string out = "{\"modules\":[";
     bool first = true;
     for (const auto& module : sorted) {
         if (!first) out.push_back(',');
         first = false;
-        out += "{\\"digest\\":" + json_string(module.digest) +
-               ",\\"format\\":" + json_string(module.format) +
-               ",\\"module_id\\":" + json_string(module.module_id) +
-               ",\\"size_bytes\\":" + std::to_string(module.size_bytes) +
-               ",\\"version\\":" + json_string(module.version) + "}";
+        out += "{\"digest\":" + json_string(module.digest) +
+               ",\"format\":" + json_string(module.format) +
+               ",\"module_id\":" + json_string(module.module_id) +
+               ",\"size_bytes\":" + std::to_string(module.size_bytes) +
+               ",\"version\":" + json_string(module.version) + "}";
     }
     out += "]}";
     return out;
@@ -424,14 +424,14 @@ std::string canonical_manifest(const std::vector<ModuleDescriptor>& modules) {
 
 std::string canonical_publisher_attestation(const PrepareRequest& request) {
     const auto& p = request.publisher;
-    return "{\\"artifact_set_digest\\":" + json_string(request.artifact_set_digest) +
-           ",\\"audience\\":" + json_string(p.audience) +
-           ",\\"expires_at\\":" + std::to_string(p.expires_at) +
-           ",\\"issued_at\\":" + std::to_string(p.issued_at) +
-           ",\\"issuer\\":" + json_string(p.issuer) +
-           ",\\"key_id\\":" + json_string(p.key_id) +
-           ",\\"manifest_digest\\":" + json_string(request.manifest_digest) +
-           ",\\"subject\\":" + json_string(p.subject) + "}";
+    return "{\"artifact_set_digest\":" + json_string(request.artifact_set_digest) +
+           ",\"audience\":" + json_string(p.audience) +
+           ",\"expires_at\":" + std::to_string(p.expires_at) +
+           ",\"issued_at\":" + std::to_string(p.issued_at) +
+           ",\"issuer\":" + json_string(p.issuer) +
+           ",\"key_id\":" + json_string(p.key_id) +
+           ",\"manifest_digest\":" + json_string(request.manifest_digest) +
+           ",\"subject\":" + json_string(p.subject) + "}";
 }
 
 std::string canonical_prepare_message(const PrepareRequest& request) {
@@ -441,11 +441,11 @@ std::string canonical_prepare_message(const PrepareRequest& request) {
     for (const auto& module : sorted) {
         if (!first) modules.push_back(',');
         first = false;
-        modules += "{\\"digest\\":" + json_string(module.digest) +
-                   ",\\"format\\":" + json_string(module.format) +
-                   ",\\"module_id\\":" + json_string(module.module_id) +
-                   ",\\"size_bytes\\":" + std::to_string(module.size_bytes) +
-                   ",\\"version\\":" + json_string(module.version) + "}";
+        modules += "{\"digest\":" + json_string(module.digest) +
+                   ",\"format\":" + json_string(module.format) +
+                   ",\"module_id\":" + json_string(module.module_id) +
+                   ",\"size_bytes\":" + std::to_string(module.size_bytes) +
+                   ",\"version\":" + json_string(module.version) + "}";
     }
     modules.push_back(']');
     std::vector<std::string> capabilities = request.required_capabilities;
@@ -459,59 +459,59 @@ std::string canonical_prepare_message(const PrepareRequest& request) {
     }
     caps.push_back(']');
     const std::string payload =
-        "{\\"artifact_set_digest\\":" + json_string(request.artifact_set_digest) +
-        ",\\"deployment_id\\":" + json_string(request.deployment_id) +
-        ",\\"kind\\":\\"prepare_request\\""
-        ",\\"limits\\":{\\"fuel\\":" + std::to_string(request.requested_fuel) +
-        ",\\"max_instances\\":" + std::to_string(request.requested_max_instances) +
-        ",\\"memory_bytes\\":" + std::to_string(request.requested_memory_bytes) +
-        ",\\"wall_time_ms\\":" + std::to_string(request.requested_wall_time_ms) + "}"
-        ",\\"manifest_digest\\":" + json_string(request.manifest_digest) +
-        ",\\"modules\\":" + modules +
-        ",\\"publisher_provenance\\":" + publisher_object(request.publisher) +
-        ",\\"release_id\\":" + json_string(request.release_id) +
-        ",\\"request_id\\":" + json_string(request.request_id) +
-        ",\\"required_capabilities\\":" + caps +
-        ",\\"runtime_policy\\":" + json_string(request.runtime_policy) + "}";
+        "{\"artifact_set_digest\":" + json_string(request.artifact_set_digest) +
+        ",\"deployment_id\":" + json_string(request.deployment_id) +
+        ",\"kind\":\"prepare_request\""
+        ",\"limits\":{\"fuel\":" + std::to_string(request.requested_fuel) +
+        ",\"max_instances\":" + std::to_string(request.requested_max_instances) +
+        ",\"memory_bytes\":" + std::to_string(request.requested_memory_bytes) +
+        ",\"wall_time_ms\":" + std::to_string(request.requested_wall_time_ms) + "}"
+        ",\"manifest_digest\":" + json_string(request.manifest_digest) +
+        ",\"modules\":" + modules +
+        ",\"publisher_provenance\":" + publisher_object(request.publisher) +
+        ",\"release_id\":" + json_string(request.release_id) +
+        ",\"request_id\":" + json_string(request.request_id) +
+        ",\"required_capabilities\":" + caps +
+        ",\"runtime_policy\":" + json_string(request.runtime_policy) + "}";
     return envelope_prefix(request.envelope, payload);
 }
 
 std::string canonical_chunk_message(const ArtifactChunkMessage& message) {
     const std::string payload =
-        "{\\"artifact_digest\\":" + json_string(message.artifact_digest) +
-        ",\\"chunk_digest\\":" + json_string(message.chunk_digest) +
-        ",\\"data\\":" + json_string(base64_encode(message.data.data(), message.data.size())) +
-        ",\\"final\\":" + std::string(message.final ? "true" : "false") +
-        ",\\"kind\\":\\"artifact_chunk\\""
-        ",\\"offset\\":" + std::to_string(message.offset) +
-        ",\\"total_length\\":" + std::to_string(message.total_length) +
-        ",\\"transfer_id\\":" + json_string(message.transfer_id) + "}";
+        "{\"artifact_digest\":" + json_string(message.artifact_digest) +
+        ",\"chunk_digest\":" + json_string(message.chunk_digest) +
+        ",\"data\":" + json_string(base64_encode(message.data.data(), message.data.size())) +
+        ",\"final\":" + std::string(message.final ? "true" : "false") +
+        ",\"kind\":\"artifact_chunk\""
+        ",\"offset\":" + std::to_string(message.offset) +
+        ",\"total_length\":" + std::to_string(message.total_length) +
+        ",\"transfer_id\":" + json_string(message.transfer_id) + "}";
     return envelope_prefix(message.envelope, payload);
 }
 
 std::string canonical_activation_message(const ActivationRequest& request) {
     const std::string payload =
-        "{\\"kind\\":\\"activate_request\\","
-        "\\"request_id\\":" + json_string(request.request_id) +
-        ",\\"transfer_id\\":" + json_string(request.transfer_id) + "}";
+        "{\"kind\":\"activate_request\","
+        "\"request_id\":" + json_string(request.request_id) +
+        ",\"transfer_id\":" + json_string(request.transfer_id) + "}";
     return envelope_prefix(request.envelope, payload);
 }
 
 std::string canonical_receipt(const HandoffReceipt& receipt) {
-    return "{\\"contract\\":\\"wasm-handoff/1\\","
-           "\\"payload\\":{"
-           "\\"abi_profile\\":" + json_string(receipt.abi_profile) +
-           ",\\"artifact_set_digest\\":" + json_string(receipt.artifact_set_digest) +
-           ",\\"backend_id\\":" + json_string(receipt.backend_id) +
-           ",\\"deployment_id\\":" + json_string(receipt.deployment_id) +
-           ",\\"engine\\":" + json_string(receipt.engine) +
-           ",\\"engine_version\\":" + json_string(receipt.engine_version) +
-           ",\\"issued_at\\":" + std::to_string(receipt.issued_at) +
-           ",\\"kind\\":\\"execution_receipt\\","
-           "\\"release_id\\":" + json_string(receipt.release_id) +
-           ",\\"request_id\\":" + json_string(receipt.request_id) +
-           ",\\"state\\":" + json_string(receipt.state) + "},"
-           "\\"signer_key_id\\":" + json_string(receipt.signer_key_id) + "}";
+    return "{\"contract\":\"wasm-handoff/1\","
+           "\"payload\":{"
+           "\"abi_profile\":" + json_string(receipt.abi_profile) +
+           ",\"artifact_set_digest\":" + json_string(receipt.artifact_set_digest) +
+           ",\"backend_id\":" + json_string(receipt.backend_id) +
+           ",\"deployment_id\":" + json_string(receipt.deployment_id) +
+           ",\"engine\":" + json_string(receipt.engine) +
+           ",\"engine_version\":" + json_string(receipt.engine_version) +
+           ",\"issued_at\":" + std::to_string(receipt.issued_at) +
+           ",\"kind\":\"execution_receipt\","
+           "\"release_id\":" + json_string(receipt.release_id) +
+           ",\"request_id\":" + json_string(receipt.request_id) +
+           ",\"state\":" + json_string(receipt.state) + "},"
+           "\"signer_key_id\":" + json_string(receipt.signer_key_id) + "}";
 }
 
 class HandoffReceiver::Impl {
