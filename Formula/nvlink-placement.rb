@@ -15,6 +15,7 @@ class NvlinkPlacement < Formula
            "-DBUILD_EXAMPLES=OFF",
            "-DBUILD_TESTING=OFF",
            "-DENABLE_CUDA=OFF",
+           "-DENABLE_NVLINK_HARDWARE_TESTS=OFF",
            "-DENABLE_TENSORRT=OFF",
            "-DENABLE_WASM_RUNTIME=OFF",
            "-DENABLE_WASM_HANDOFF=OFF"
