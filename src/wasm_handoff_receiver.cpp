@@ -274,6 +274,41 @@ bool safe_identifier(const std::string& value, std::size_t max_size) {
         value.find_first_of("\r\n|") == std::string::npos;
 }
 
+std::string rate_limit_identity(const SignedMetadata& envelope) {
+    return envelope.issuer + "\n" + envelope.subject + "\n" + envelope.key_id;
+}
+
+bool prepare_metadata_cost(const PrepareRequest& request,
+                           std::size_t maximum_modules,
+                           std::size_t* cost) {
+    if (!cost || request.modules.empty() || request.modules.size() > maximum_modules ||
+        request.required_capabilities.size() > 256) return false;
+    std::size_t total = 1024;
+    auto add = [&](std::size_t size) {
+        if (size > 1024U * 1024U - total) return false;
+        total += size;
+        return true;
+    };
+    if (!add(request.envelope.issuer.size()) ||
+        !add(request.envelope.subject.size()) ||
+        !add(request.envelope.key_id.size()) ||
+        !add(request.envelope.audience.size()) ||
+        !add(request.deployment_id.size()) ||
+        !add(request.release_id.size()) ||
+        !add(request.runtime_policy.size()) ||
+        !add(request.artifact_set_digest.size()) ||
+        !add(request.manifest_digest.size())) return false;
+    for (const auto& module : request.modules) {
+        if (!add(module.module_id.size()) || !add(module.version.size()) ||
+            !add(module.digest.size()) || !add(module.format.size())) return false;
+    }
+    for (const auto& capability : request.required_capabilities) {
+        if (!add(capability.size())) return false;
+    }
+    *cost = total;
+    return true;
+}
+
 bool time_valid(const SignedMetadata& message,
                 std::chrono::system_clock::time_point now,
                 const HandoffPolicy& policy) {
@@ -684,8 +719,11 @@ public:
     // Sender buckets are populated only after a valid Ed25519 signature has
     // bound the subject to an operator-provisioned key. Unauthenticated callers
     // therefore cannot exhaust the bounded sender table by inventing names.
-    bool admit_sender_message(const std::string& subject, std::size_t byte_cost = 0) {
-        if (subject.empty()) return false;
+    bool admit_sender_message(const SignedMetadata& envelope,
+                              std::size_t byte_cost = 0) {
+        if (envelope.issuer.empty() || envelope.subject.empty() || envelope.key_id.empty())
+            return false;
+        const std::string bucket_key = rate_limit_identity(envelope);
         const auto now = std::chrono::steady_clock::now();
         std::lock_guard<std::mutex> lock(rate_mutex);
         for (auto it = sender_buckets.begin(); it != sender_buckets.end();) {
@@ -694,7 +732,7 @@ public:
             else
                 ++it;
         }
-        auto found = sender_buckets.find(subject);
+        auto found = sender_buckets.find(bucket_key);
         if (found == sender_buckets.end()) {
             if (sender_buckets.size() >= policy.maximum_rate_limit_subjects)
                 return false;
@@ -704,7 +742,7 @@ public:
             bucket.last_seen = now;
             bucket.byte_tokens = static_cast<double>(policy.per_sender_ingress_byte_burst);
             bucket.byte_updated = now;
-            found = sender_buckets.emplace(subject, bucket).first;
+            found = sender_buckets.emplace(bucket_key, bucket).first;
         }
         SenderBucket& bucket = found->second;
         const double message_elapsed =
@@ -742,7 +780,8 @@ public:
     mutable std::mutex mutex;
     std::map<std::string, Session> sessions;
     std::map<std::string, HandoffReceipt> active;
-    std::size_t staged_bytes = 0;
+    std::size_t staged_bytes = 0; // includes reserved memory before allocation
+    std::size_t reserved_sessions = 0;
 };
 
 HandoffReceiver::HandoffReceiver(const TrustStore& sender_trust,
@@ -759,18 +798,18 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
                                          std::chrono::system_clock::time_point now) {
     PrepareDecision decision;
     decision.request_id = request.request_id;
-    const bool global_rate_admitted = pimpl_->admit_global_message();
+    std::size_t metadata_cost = 0;
+    if (!prepare_metadata_cost(request, pimpl_->policy.maximum_modules, &metadata_cost))
+        return decision;
+    const bool global_rate_admitted = pimpl_->admit_global_message(metadata_cost);
     auto reject = [&](const char* code) {
         decision.accepted = false;
         decision.decision = "rejected";
         decision.rejection_code = code;
-        // When the source is already over budget, do not spend more CPU
-        // signing a rejection; the transport should return a rate-limit status.
-        if (global_rate_admitted) sign_prepare_decision(&decision, pimpl_->policy,
-                                                  pimpl_->receipt_signer, now);
+        if (global_rate_admitted)
+            sign_prepare_decision(&decision, pimpl_->policy, pimpl_->receipt_signer, now);
         return decision;
     };
-
     if (!global_rate_admitted) return reject("policy_limit_exceeded");
 
     if (!valid_uuid(request.request_id) ||
@@ -785,7 +824,7 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
         return reject(error == "replayed or exhausted nonce" ? "replay_detected" :
                       error == "expired or invalid message lifetime" ? "expired_request" :
                       "signature_invalid");
-    if (!pimpl_->admit_sender_message(request.envelope.subject))
+    if (!pimpl_->admit_sender_message(request.envelope))
         return reject("policy_limit_exceeded");
 
     const auto& publisher = request.publisher;
@@ -795,9 +834,9 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
         !safe_identifier(publisher.key_id, 128) ||
         publisher.issued_at == 0 || publisher.expires_at <= publisher.issued_at ||
         publisher.expires_at - publisher.issued_at >
-            pimpl_->policy.maximum_message_lifetime_seconds) {
+            pimpl_->policy.maximum_message_lifetime_seconds)
         return reject("signature_invalid");
-    }
+
     const auto now_seconds = static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
     if ((publisher.issued_at > now_seconds &&
@@ -811,9 +850,6 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
             reinterpret_cast<const std::uint8_t*>(provenance.data()), provenance.size(),
             publisher.signature))
         return reject("signature_invalid");
-
-    if (request.modules.empty() || request.modules.size() > pimpl_->policy.maximum_modules)
-        return reject("unsupported_format");
 
     std::set<std::string> module_ids;
     std::set<std::string> module_digests;
@@ -833,7 +869,6 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
             return reject("policy_limit_exceeded");
         total_bytes += static_cast<std::size_t>(module.size_bytes);
     }
-
     if (total_bytes > pimpl_->policy.maximum_total_bytes)
         return reject("policy_limit_exceeded");
 
@@ -871,31 +906,6 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
         pimpl_->policy.engine != "wasmtime" || pimpl_->policy.engine_version.empty())
         return reject("backend_unavailable");
 
-    {
-        std::lock_guard<std::mutex> lock(pimpl_->mutex);
-        const auto now_seconds = static_cast<std::uint64_t>(
-            std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
-        for (auto it = pimpl_->sessions.begin(); it != pimpl_->sessions.end();) {
-            const auto expiry = it->second.request.envelope.expires_at +
-                                pimpl_->policy.clock_skew_seconds;
-            if (!it->second.activated && !it->second.validating && expiry < now_seconds) {
-                pimpl_->staged_bytes -= it->second.staged_bytes;
-                it = pimpl_->sessions.erase(it);
-            } else {
-                ++it;
-            }
-        }
-        if (pimpl_->sessions.find(request.request_id) != pimpl_->sessions.end())
-            return reject("replay_detected");
-        if (pimpl_->active.find(request.deployment_id) == pimpl_->active.end() &&
-            pimpl_->active.size() >= pimpl_->policy.maximum_active_deployments)
-            return reject("policy_limit_exceeded");
-        if (pimpl_->sessions.size() >= pimpl_->policy.maximum_concurrent_sessions ||
-            pimpl_->staged_bytes > pimpl_->policy.maximum_staged_bytes ||
-            total_bytes > pimpl_->policy.maximum_staged_bytes - pimpl_->staged_bytes)
-            return reject("policy_limit_exceeded");
-    }
-
     PrepareDecision accepted;
     accepted.accepted = true;
     accepted.request_id = request.request_id;
@@ -908,6 +918,37 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
     accepted.engine_version = pimpl_->policy.engine_version;
     accepted.abi_profile = pimpl_->policy.abi_profile;
     accepted.accepted_capabilities = request.required_capabilities;
+    sign_prepare_decision(&accepted, pimpl_->policy, pimpl_->receipt_signer, now);
+
+    // Reserve memory and a session slot before constructing any chunk receiver
+    // (whose constructor reserves the full declared artifact size).
+    {
+        std::lock_guard<std::mutex> lock(pimpl_->mutex);
+        const auto now_sec = static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
+        for (auto it = pimpl_->sessions.begin(); it != pimpl_->sessions.end();) {
+            const auto expires = it->second.request.envelope.expires_at +
+                                 pimpl_->policy.clock_skew_seconds;
+            if (!it->second.activated && !it->second.validating && expires < now_sec) {
+                pimpl_->staged_bytes -= it->second.staged_bytes;
+                it = pimpl_->sessions.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        if (pimpl_->sessions.find(request.request_id) != pimpl_->sessions.end())
+            return reject("replay_detected");
+        if (pimpl_->active.find(request.deployment_id) == pimpl_->active.end() &&
+            pimpl_->active.size() >= pimpl_->policy.maximum_active_deployments)
+            return reject("policy_limit_exceeded");
+        if (pimpl_->sessions.size() + pimpl_->reserved_sessions >=
+                pimpl_->policy.maximum_concurrent_sessions ||
+            pimpl_->staged_bytes > pimpl_->policy.maximum_staged_bytes ||
+            total_bytes > pimpl_->policy.maximum_staged_bytes - pimpl_->staged_bytes)
+            return reject("policy_limit_exceeded");
+        pimpl_->staged_bytes += total_bytes;
+        ++pimpl_->reserved_sessions;
+    }
 
     Impl::Session session;
     session.request = request;
@@ -923,19 +964,20 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
             session.modules.push_back(std::move(state));
         }
     } catch (...) {
+        std::lock_guard<std::mutex> lock(pimpl_->mutex);
+        --pimpl_->reserved_sessions;
+        pimpl_->staged_bytes -= total_bytes;
         return reject("policy_limit_exceeded");
     }
 
     {
         std::lock_guard<std::mutex> lock(pimpl_->mutex);
-        if (pimpl_->sessions.size() >= pimpl_->policy.maximum_concurrent_sessions ||
-            pimpl_->staged_bytes > pimpl_->policy.maximum_staged_bytes ||
-            total_bytes > pimpl_->policy.maximum_staged_bytes - pimpl_->staged_bytes ||
-            !pimpl_->sessions.emplace(request.request_id, std::move(session)).second)
+        --pimpl_->reserved_sessions;
+        if (!pimpl_->sessions.emplace(request.request_id, std::move(session)).second) {
+            pimpl_->staged_bytes -= total_bytes;
             return reject("replay_detected");
-        pimpl_->staged_bytes += total_bytes;
+        }
     }
-    sign_prepare_decision(&accepted, pimpl_->policy, pimpl_->receipt_signer, now);
     return accepted;
 }
 
@@ -949,7 +991,7 @@ bool HandoffReceiver::append_chunk(const ArtifactChunkMessage& chunk,
     if (!verify_message(pimpl_->sender_trust, pimpl_->replay_guard,
                         chunk.envelope, canonical, now, pimpl_->policy, error))
         return false;
-    if (!pimpl_->admit_sender_message(chunk.envelope.subject, chunk.data.size()))
+    if (!pimpl_->admit_sender_message(chunk.envelope, chunk.data.size()))
         return fail("per-sender handoff message or byte-rate limit exceeded");
     if (!valid_uuid(chunk.transfer_id) || chunk.data.empty() ||
         chunk.data.size() > pimpl_->policy.maximum_chunk_bytes ||
@@ -992,7 +1034,7 @@ bool HandoffReceiver::activate(const ActivationRequest& request,
     if (!verify_message(pimpl_->sender_trust, pimpl_->replay_guard,
                         request.envelope, canonical, now, pimpl_->policy, error))
         return false;
-    if (!pimpl_->admit_sender_message(request.envelope.subject))
+    if (!pimpl_->admit_sender_message(request.envelope))
         return fail("per-sender handoff message rate limit exceeded");
 
     std::vector<VerifiedModuleView> modules;
