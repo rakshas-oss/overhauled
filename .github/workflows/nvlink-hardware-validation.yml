@@ -1,0 +1,63 @@
+name: NVLink Hardware Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_hardware_validation:
+        description: Set to "run" to execute on a self-hosted CUDA/NVLink runner
+        required: true
+        type: choice
+        options:
+          - no
+          - run
+        default: no
+
+permissions:
+  contents: read
+
+jobs:
+  nvlink-hardware-smoke:
+    if: ${{ inputs.confirm_hardware_validation == 'run' }}
+    name: Physical CUDA/NVLink topology smoke test
+    runs-on: [self-hosted, linux, x64, nvlink]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Overhauled
+        uses: actions/checkout@v4
+
+      - name: Verify runner has CUDA GPUs and physical NVLink
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v nvidia-smi
+          command -v nvcc
+          nvidia-smi
+          gpu_count="$(nvidia-smi --query-gpu=index --format=csv,noheader | wc -l | tr -d ' ')"
+          if [[ "$gpu_count" -lt 2 ]]; then
+            echo "Expected at least two visible CUDA GPUs; found $gpu_count." >&2
+            exit 1
+          fi
+          topology="$(nvidia-smi topo -m)"
+          printf '%s\n' "$topology"
+          if ! grep -Eq 'NV[0-9]+' <<< "$topology"; then
+            echo "The runner has no NVLink-connected GPU pair in nvidia-smi topology." >&2
+            exit 1
+          fi
+          nvcc --version
+
+      - name: Configure opt-in NVLink hardware test
+        run: |
+          cmake -S . -B build-nvlink \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_CUDA=ON \
+            -DENABLE_TENSORRT=OFF \
+            -DENABLE_NVLINK_HARDWARE_TESTS=ON \
+            -DBUILD_BROKER=OFF \
+            -DBUILD_EXAMPLES=OFF \
+            -DBUILD_TESTING=ON
+
+      - name: Build hardware smoke test
+        run: cmake --build build-nvlink --target nvlink_hardware_smoke_test --parallel 2
+
+      - name: Run physical NVLink topology and peer-access test
+        run: ctest --test-dir build-nvlink --output-on-failure -L nvlink
