@@ -41,6 +41,7 @@ int main() {
     descriptor.version = "1.0.0";
     descriptor.size_bytes = provider.size();
     descriptor.format = "wasm-core-1";
+    descriptor.digest = sha256_hex(provider.data(), provider.size());
     std::string error;
     CHECK(policy.module_validator(descriptor, provider, &error));
 
