@@ -168,6 +168,7 @@ struct ActivationRequest {
 
 struct HandoffPolicy {
     std::string audience = "overhauled";
+    std::string receipt_audience = "yukkios";
     std::size_t maximum_modules = 256;
     std::size_t maximum_module_bytes = 64U * 1024U * 1024U;
     std::size_t maximum_total_bytes = 256U * 1024U * 1024U;
