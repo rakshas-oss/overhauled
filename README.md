@@ -1,4 +1,4 @@
-# Overhauled v1.6.0 (release candidate)
+# Overhauled v1.6.0
 
 > **Published v1.5.0:** adds optional native Wasmtime runtime composition on top of the v1.4.0 BRK2 locality codec baseline. v1.5.1 corrects the Wasmtime v51 C API integration and its composition test.
 
@@ -6,16 +6,16 @@
 >
 > Turn GPU interconnect awareness into higher throughput, better tail latency, and more effective use of accelerator infrastructure.
 
-> **Release status:** v1.5.0 is the published baseline. v1.6.0 is a release candidate combining the Wasmtime v51 C API correction with opt-in authenticated-WASM handoff receiver primitives. It is not published until the exact release commit passes all required gates and is tagged.
+> **Release status:** v1.6.0 was published on 2026-11-22 from tag `1.6.0`. Its release includes the Wasmtime v51 C API correction and opt-in authenticated-WASM receiver primitives. The receiver remains a set of security/staging primitives, not a network-facing authenticated BRK2 service.
 
 Overhauled is a C++17 placement and execution library with an interoperable broker service. It provides topology-aware GPU scheduling and broker dispatch for CPU, GPU, and optional NPU execution.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
-[![Release](https://img.shields.io/badge/Release-v1.5.1--rc-blueviolet)](#)
+[![Release](https://img.shields.io/badge/Release-v1.6.0-blueviolet)](#)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2FBRK2-orange)](#)
 
-## What's new in v1.6.0
+## What's new in v1.6.0 (published 2026-11-22)
 
 - **Wasmtime v51 C API correction:** retain the supported `wasm_name_t` lifecycle and linker-time import-signature validation from the 1.5.1 patch candidate.
 - **Opt-in authenticated-WASM receiver primitives:** add OpenSSL-backed Ed25519 verification over caller-supplied RFC 8785 canonical bytes, issuer/subject/audience trust binding, SHA-256 integrity checks, bounded process-local replay protection, and strict sequential artifact chunk staging.
