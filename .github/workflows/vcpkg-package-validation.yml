@@ -119,9 +119,9 @@ jobs:
       - name: Install formula from pinned release source
         run: |
           pwd
-          ls -l "$GITHUB_WORKSPACE/nvlink-placement.rb"
-          test -f "$GITHUB_WORKSPACE/nvlink-placement.rb"
-          brew install --build-from-source --formula ./nvlink-placement.rb
+          ls -l "$GITHUB_WORKSPACE/Formula/nvlink-placement.rb"
+          test -f "$GITHUB_WORKSPACE/Formula/nvlink-placement.rb"
+          brew install --build-from-source ./Formula/nvlink-placement.rb
 
       - name: Run installed formula test
         run: brew test nvlink-placement
