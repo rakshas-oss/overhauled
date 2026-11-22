@@ -30,8 +30,12 @@ maximum chunk size. Defaults are 100 messages/s globally (burst 200), 20
 messages/s per sender (burst 40), 32 MiB/s global ingress (16 MiB burst),
 8 MiB/s per sender (8 MiB burst), 16 concurrent preparations, 512 MiB
 staged-byte ceiling, 64 MiB per module, 256 MiB per artifact set and 4 MiB
-per chunk. Operators may reduce these values; hard upper bounds remain in
-the implementation.
+per chunk. Policy configuration is itself capped: global message rate
+at 10,000/s, per-sender message rate at 1,000/s, global ingress rate at
+1 GiB/s, per-sender ingress at 256 MiB/s, global byte burst at 64 MiB,
+per-sender byte burst at 16 MiB, global message burst at 10,000, per-sender
+message burst at 1,000, and tracked sender identities at 1,024. Operators may
+reduce these values but cannot configure larger values.
 
 ## Trust, transport and replay
 
