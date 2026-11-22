@@ -1,0 +1,83 @@
+name: Publish Debian and RPM Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing immutable Overhauled release tag
+        required: true
+        type: string
+        default: "1.6.0"
+      publish_confirmation:
+        description: Type publish to attach packages to the GitHub Release
+        required: true
+        type: string
+        default: "no"
+
+permissions:
+  contents: read
+
+jobs:
+  build-system-packages:
+    if: ${{ inputs.publish_confirmation == 'publish' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+          fetch-depth: 0
+
+      - name: Verify release tag and version
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          git describe --tags --exact-match HEAD
+          grep -F "project(OverhauledTensorRuntime VERSION $RELEASE_TAG" CMakeLists.txt
+
+      - name: Install package generators
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake dpkg-dev rpm
+
+      - name: Configure CPU-only release build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DBUILD_BROKER=ON \
+            -DBUILD_EXAMPLES=OFF \
+            -DBUILD_TESTING=ON \
+            -DENABLE_CUDA=OFF \
+            -DENABLE_TENSORRT=OFF \
+            -DENABLE_WASM_RUNTIME=OFF \
+            -DENABLE_WASM_HANDOFF=OFF
+
+      - name: Build and test
+        run: |
+          cmake --build build --parallel 2
+          ctest --test-dir build --output-on-failure
+
+      - name: Generate Debian and RPM packages
+        run: |
+          mkdir -p packages
+          cpack --config build/CPackConfig.cmake -G DEB -B packages \
+            -DCPACK_DEBIAN_PACKAGE_SHLIBDEPS=ON
+          cpack --config build/CPackConfig.cmake -G RPM -B packages \
+            -DCPACK_RPM_PACKAGE_AUTOREQPROV=ON
+          find packages -maxdepth 1 -type f \( -name '*.deb' -o -name '*.rpm' \) -print
+          test -n "$(find packages -maxdepth 1 -type f -name '*.deb' -print -quit)"
+          test -n "$(find packages -maxdepth 1 -type f -name '*.rpm' -print -quit)"
+
+      - name: Attach packages to the existing GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          files: |
+            packages/*.deb
+            packages/*.rpm
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
