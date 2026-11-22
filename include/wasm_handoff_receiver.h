@@ -141,6 +141,7 @@ struct PrepareRequest {
     std::string manifest_digest;
     std::vector<ModuleDescriptor> modules;
     std::string runtime_policy = "auto";
+    std::string preferred_backend;
     std::vector<std::string> required_capabilities;
     std::uint64_t requested_memory_bytes = 0;
     std::uint64_t requested_fuel = 0;
