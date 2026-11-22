@@ -69,10 +69,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install formula from pinned release source
-        run: brew install --build-from-source ./nvlink-placement.rb
+        run: brew install --build-from-source "$GITHUB_WORKSPACE/nvlink-placement.rb"
 
       - name: Run installed formula test
-        run: brew test nvlink-placement
+        run: brew test "$GITHUB_WORKSPACE/nvlink-placement.rb"
 
   conan-package:
     name: Build Conan 2 package
