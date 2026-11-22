@@ -60,3 +60,34 @@ jobs:
         run: |
           cmake --build build/vcpkg-consumer --parallel 2
           ctest --test-dir build/vcpkg-consumer --output-on-failure
+
+  homebrew-formula:
+    name: Build and test Homebrew formula
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Overhauled
+        uses: actions/checkout@v4
+
+      - name: Install formula from pinned release source
+        run: brew install --build-from-source ./nvlink-placement.rb
+
+      - name: Run installed formula test
+        run: brew test nvlink-placement
+
+  conan-package:
+    name: Build Conan 2 package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Overhauled
+        uses: actions/checkout@v4
+
+      - name: Install Conan
+        run: |
+          python3 -m pip install --user "conan>=2,<3"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Detect Conan profile
+        run: conan profile detect --force
+
+      - name: Build and package nvlink_placement
+        run: conan create . --build=missing
