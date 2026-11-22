@@ -203,11 +203,13 @@ sudo dnf install nvlink-placement-devel
 
 ---
 
-## Published v1.5.0 and v1.6.0 minor release candidate
+## Published v1.5.0 and v1.6.0 releases
 
-Overhauled v1.5.0 is published. Its optional native Wasmtime composition feature was released with a Wasmtime v51 C API integration defect. The Wasmtime v51 correction is carried into the v1.6.0 minor release candidate together with opt-in authenticated-WASM receiver primitives. The receiver feature is enabled separately with `ENABLE_WASM_HANDOFF=ON` and requires OpenSSL Crypto 1.1.1 or newer. This candidate is not published: verify all required checks on the exact release commit, then verify its tag and GitHub release assets before describing it as released.
+Overhauled v1.5.0 and v1.6.0 are published GitHub releases. The v1.6.0 tag was published on 2026-11-22 and includes the Wasmtime v51 correction plus opt-in authenticated-WASM receiver primitives. The GitHub release currently has no separately uploaded binary assets; GitHub's generated source archives remain available. The receiver feature is enabled separately with `ENABLE_WASM_HANDOFF=ON` and requires OpenSSL Crypto 1.1.1 or newer.
 
-For the v1.6.0 candidate:
+The seven reported PR #79 workflow runs completed successfully on the candidate commit, including the default broker build, BRK2 tests, sanitizers, package consumers, Wasmtime v51 compile/runtime, Ethos-U85 and paired YuKKi-OS interoperability. However, the original workflows did not run the optional `ENABLE_WASM_HANDOFF=ON` feature test. A dedicated OpenSSL-enabled lane is being added to primary CI as post-release verification. Do not claim that the receiver feature-specific test passed until that lane is green.
+
+For the published v1.6.0 release:
 
 - CMake, Conan and the root vcpkg manifest are aligned to 1.6.0 on the candidate branch.
 - The Conan and vcpkg default recipes do not enable `ENABLE_WASM_HANDOFF`; the optional receiver build requires OpenSSL Crypto and must be tested with that CMake option explicitly enabled.
