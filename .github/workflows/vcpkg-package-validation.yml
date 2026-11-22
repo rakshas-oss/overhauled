@@ -43,7 +43,8 @@ jobs:
         env:
           VCPKG_ROOT: ${{ runner.temp }}/vcpkg
         run: |
-          git fetch origin main --depth=1
+          registry_ref="${GITHUB_HEAD_REF:-main}"
+          git fetch origin "$registry_ref" --depth=1
           registry_baseline=$(git rev-parse FETCH_HEAD)
           builtin_baseline=$(git -C "$VCPKG_ROOT" rev-parse HEAD)
           consumer="$RUNNER_TEMP/git-registry-consumer"
@@ -65,7 +66,7 @@ jobs:
               {
                 "kind": "git",
                 "repository": "https://github.com/rakshas-oss/overhauled",
-                "reference": "main",
+                "reference": "$registry_ref",
                 "baseline": "$registry_baseline",
                 "packages": ["nvlink-placement"]
               }
@@ -73,7 +74,7 @@ jobs:
           }
           EOF
           "$VCPKG_ROOT/vcpkg" install --triplet x64-linux --x-manifest-root="$consumer"
-          config="$VCPKG_ROOT/installed/x64-linux/lib/cmake/OverhauledTensorRuntime/OverhauledTensorRuntimeConfig.cmake"
+          config="$VCPKG_ROOT/installed/x64-linux/share/nvlink-placement/OverhauledTensorRuntimeConfig.cmake"
           test -f "$config"
           echo "Installed nvlink-placement from the repository-hosted Git registry at $registry_baseline"
 
@@ -89,7 +90,7 @@ jobs:
         env:
           VCPKG_ROOT: ${{ runner.temp }}/vcpkg
         run: |
-          config="$VCPKG_ROOT/installed/x64-linux/lib/cmake/OverhauledTensorRuntime/OverhauledTensorRuntimeConfig.cmake"
+          config="$VCPKG_ROOT/installed/x64-linux/share/nvlink-placement/OverhauledTensorRuntimeConfig.cmake"
           test -f "$config"
           echo "Found installed package config: $config"
 
@@ -100,7 +101,7 @@ jobs:
           cmake -S tests/package-consumer -B build/vcpkg-consumer \
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_MANIFEST_MODE=OFF \
-            -DOverhauledTensorRuntime_DIR="$VCPKG_ROOT/installed/x64-linux/lib/cmake/OverhauledTensorRuntime" \
+            -DOverhauledTensorRuntime_DIR="$VCPKG_ROOT/installed/x64-linux/share/nvlink-placement" \
             -DCMAKE_BUILD_TYPE=Release
 
       - name: Build and run installed-package consumer
@@ -116,10 +117,16 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install formula from pinned release source
-        run: brew install --build-from-source ./nvlink-placement.rb
+        run: |
+          test -f "$GITHUB_WORKSPACE/Formula/nvlink-placement.rb"
+          brew tap-new --no-git rakshas-oss/overhauled-ci
+          tap_dir="$(brew --repository rakshas-oss/overhauled-ci)"
+          mkdir -p "$tap_dir/Formula"
+          cp "$GITHUB_WORKSPACE/Formula/nvlink-placement.rb" "$tap_dir/Formula/nvlink-placement.rb"
+          brew install --build-from-source rakshas-oss/overhauled-ci/nvlink-placement
 
       - name: Run installed formula test
-        run: brew test nvlink-placement
+        run: brew test rakshas-oss/overhauled-ci/nvlink-placement
 
   conan-package:
     name: Build Conan 2 package
