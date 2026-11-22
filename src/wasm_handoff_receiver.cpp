@@ -650,25 +650,42 @@ public:
             throw std::invalid_argument("invalid handoff flood-control policy");
     }
 
-    bool admit_message(const std::string& subject, std::size_t byte_cost = 0) {
+    bool admit_global_message(std::size_t byte_cost = 0) {
         const auto now = std::chrono::steady_clock::now();
         std::lock_guard<std::mutex> lock(rate_mutex);
-        const double global_elapsed =
+        const double message_elapsed =
             std::chrono::duration<double>(now - global_updated).count();
         global_tokens = std::min<double>(
             static_cast<double>(policy.message_burst),
-            global_tokens + global_elapsed * policy.message_rate_per_second);
+            global_tokens + message_elapsed * policy.message_rate_per_second);
         global_updated = now;
-        if (global_tokens < 1.0) return false;
+        const double byte_elapsed =
+            std::chrono::duration<double>(now - global_byte_updated).count();
+        global_byte_tokens = std::min<double>(
+            static_cast<double>(policy.ingress_byte_burst),
+            global_byte_tokens + byte_elapsed * policy.ingress_bytes_per_second);
+        global_byte_updated = now;
+        if (global_tokens < 1.0 || static_cast<double>(byte_cost) > global_byte_tokens)
+            return false;
+        global_tokens -= 1.0;
+        global_byte_tokens -= static_cast<double>(byte_cost);
+        return true;
+    }
 
-        const std::string key = subject.empty() ? std::string("<missing>") : subject;
+    // Sender buckets are populated only after a valid Ed25519 signature has
+    // bound the subject to an operator-provisioned key. Unauthenticated callers
+    // therefore cannot exhaust the bounded sender table by inventing names.
+    bool admit_sender_message(const std::string& subject, std::size_t byte_cost = 0) {
+        if (subject.empty()) return false;
+        const auto now = std::chrono::steady_clock::now();
+        std::lock_guard<std::mutex> lock(rate_mutex);
         for (auto it = sender_buckets.begin(); it != sender_buckets.end();) {
             if (now - it->second.last_seen > std::chrono::minutes(5))
                 it = sender_buckets.erase(it);
             else
                 ++it;
         }
-        auto found = sender_buckets.find(key);
+        auto found = sender_buckets.find(subject);
         if (found == sender_buckets.end()) {
             if (sender_buckets.size() >= policy.maximum_rate_limit_subjects)
                 return false;
@@ -678,36 +695,25 @@ public:
             bucket.last_seen = now;
             bucket.byte_tokens = static_cast<double>(policy.per_sender_ingress_byte_burst);
             bucket.byte_updated = now;
-            found = sender_buckets.emplace(key, bucket).first;
+            found = sender_buckets.emplace(subject, bucket).first;
         }
         SenderBucket& bucket = found->second;
-        const double elapsed = std::chrono::duration<double>(now - bucket.updated).count();
+        const double message_elapsed =
+            std::chrono::duration<double>(now - bucket.updated).count();
         bucket.tokens = std::min<double>(
             static_cast<double>(policy.per_sender_message_burst),
-            bucket.tokens + elapsed * policy.per_sender_message_rate_per_second);
+            bucket.tokens + message_elapsed * policy.per_sender_message_rate_per_second);
         bucket.updated = now;
         bucket.last_seen = now;
-        if (bucket.tokens < 1.0) return false;
-
-        const double global_byte_elapsed =
-            std::chrono::duration<double>(now - global_byte_updated).count();
-        global_byte_tokens = std::min<double>(
-            static_cast<double>(policy.ingress_byte_burst),
-            global_byte_tokens + global_byte_elapsed * policy.ingress_bytes_per_second);
-        global_byte_updated = now;
-        const double sender_byte_elapsed =
+        const double byte_elapsed =
             std::chrono::duration<double>(now - bucket.byte_updated).count();
         bucket.byte_tokens = std::min<double>(
             static_cast<double>(policy.per_sender_ingress_byte_burst),
-            bucket.byte_tokens + sender_byte_elapsed * policy.per_sender_ingress_bytes_per_second);
+            bucket.byte_tokens + byte_elapsed * policy.per_sender_ingress_bytes_per_second);
         bucket.byte_updated = now;
-        if (static_cast<double>(byte_cost) > global_byte_tokens ||
-            static_cast<double>(byte_cost) > bucket.byte_tokens)
+        if (bucket.tokens < 1.0 || static_cast<double>(byte_cost) > bucket.byte_tokens)
             return false;
-
         bucket.tokens -= 1.0;
-        global_tokens -= 1.0;
-        global_byte_tokens -= static_cast<double>(byte_cost);
         bucket.byte_tokens -= static_cast<double>(byte_cost);
         return true;
     }
@@ -744,19 +750,19 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
                                          std::chrono::system_clock::time_point now) {
     PrepareDecision decision;
     decision.request_id = request.request_id;
-    bool rate_admitted = pimpl_->admit_message(request.envelope.subject);
+    const bool global_rate_admitted = pimpl_->admit_global_message();
     auto reject = [&](const char* code) {
         decision.accepted = false;
         decision.decision = "rejected";
         decision.rejection_code = code;
         // When the source is already over budget, do not spend more CPU
         // signing a rejection; the transport should return a rate-limit status.
-        if (rate_admitted) sign_prepare_decision(&decision, pimpl_->policy,
+        if (global_rate_admitted) sign_prepare_decision(&decision, pimpl_->policy,
                                                   pimpl_->receipt_signer, now);
         return decision;
     };
 
-    if (!rate_admitted) return reject("policy_limit_exceeded");
+    if (!global_rate_admitted) return reject("policy_limit_exceeded");
 
     if (!valid_uuid(request.request_id) ||
         !safe_identifier(request.deployment_id, 128) ||
@@ -770,6 +776,8 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
         return reject(error == "replayed or exhausted nonce" ? "replay_detected" :
                       error == "expired or invalid message lifetime" ? "expired_request" :
                       "signature_invalid");
+    if (!pimpl_->admit_sender_message(request.envelope.subject))
+        return reject("policy_limit_exceeded");
 
     const auto& publisher = request.publisher;
     if (publisher.audience != "wasm-artifact-publisher" ||
@@ -926,12 +934,14 @@ bool HandoffReceiver::append_chunk(const ArtifactChunkMessage& chunk,
                                    std::string* error,
                                    std::chrono::system_clock::time_point now) {
     auto fail = [&](const char* why) { if (error) *error = why; return false; };
-    if (!pimpl_->admit_message(chunk.envelope.subject, chunk.data.size()))
-        return fail("handoff message or byte-rate limit exceeded");
+    if (!pimpl_->admit_global_message(chunk.data.size()))
+        return fail("global handoff message or byte-rate limit exceeded");
     const std::string canonical = canonical_chunk_message(chunk);
     if (!verify_message(pimpl_->sender_trust, pimpl_->replay_guard,
                         chunk.envelope, canonical, now, pimpl_->policy, error))
         return false;
+    if (!pimpl_->admit_sender_message(chunk.envelope.subject, chunk.data.size()))
+        return fail("per-sender handoff message or byte-rate limit exceeded");
     if (!valid_uuid(chunk.transfer_id) || chunk.data.empty() ||
         chunk.data.size() > pimpl_->policy.maximum_chunk_bytes ||
         chunk.total_length == 0 || chunk.total_length > pimpl_->policy.maximum_module_bytes)
@@ -964,8 +974,8 @@ bool HandoffReceiver::activate(const ActivationRequest& request,
                                HandoffReceipt* receipt, std::string* error,
                                std::chrono::system_clock::time_point now) {
     auto fail = [&](const char* why) { if (error) *error = why; return false; };
-    if (!pimpl_->admit_message(request.envelope.subject))
-        return fail("handoff message rate limit exceeded");
+    if (!pimpl_->admit_global_message())
+        return fail("global handoff message rate limit exceeded");
     std::unique_lock<std::mutex> activation_lock(pimpl_->activation_mutex);
     if (!receipt || !valid_uuid(request.request_id) || !valid_uuid(request.transfer_id))
         return fail("invalid activation request");
@@ -973,6 +983,8 @@ bool HandoffReceiver::activate(const ActivationRequest& request,
     if (!verify_message(pimpl_->sender_trust, pimpl_->replay_guard,
                         request.envelope, canonical, now, pimpl_->policy, error))
         return false;
+    if (!pimpl_->admit_sender_message(request.envelope.subject))
+        return fail("per-sender handoff message rate limit exceeded");
 
     std::vector<VerifiedModuleView> modules;
     std::string deployment_id;
