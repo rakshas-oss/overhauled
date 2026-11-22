@@ -25,6 +25,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
             -DENABLE_CUDA=OFF \
+            -DENABLE_NVLINK_HARDWARE_TESTS=OFF \
             -DENABLE_TENSORRT=OFF \
             -DBUILD_BROKER=ON \
             -DBUILD_TESTING=ON
@@ -67,6 +68,7 @@ jobs:
           cmake -S . -B build-wasm \
             -DCMAKE_BUILD_TYPE=Release \
             -DENABLE_CUDA=OFF \
+            -DENABLE_NVLINK_HARDWARE_TESTS=OFF \
             -DENABLE_TENSORRT=OFF \
             -DBUILD_BROKER=ON \
             -DBUILD_TESTING=ON \
@@ -98,6 +100,7 @@ jobs:
           cmake -S . -B build-handoff -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DENABLE_CUDA=OFF \
+            -DENABLE_NVLINK_HARDWARE_TESTS=OFF \
             -DENABLE_TENSORRT=OFF \
             -DBUILD_BROKER=ON \
             -DBUILD_TESTING=ON \
