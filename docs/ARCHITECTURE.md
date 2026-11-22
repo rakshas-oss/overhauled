@@ -53,6 +53,29 @@ response fields 8–12 report worker and successfully applied CPU-affinity telem
 The NPU simulator is CPU emulation, not acceleration.
 
 
+## Authenticated WASM deployment boundary
+
+The optional `ENABLE_WASM_HANDOFF` component provides the Overhauled-side
+prepare/transfer/activation API. It verifies signed deployment messages,
+publisher provenance, replay state, bounded artifact chunks and module
+digests; signs prepare decisions and activation receipts; and delegates
+compile-only validation and atomic runtime promotion to configured callbacks.
+It is not wired into the ordinary BRK1/BRK2 listener yet. Network integrations
+must authenticate the peer (mTLS 1.3 or equivalent) and bind its identity to
+the signed sender before calling the API. The process-local replay guard and
+staging map are not restart- or multi-process durable.
+
+Handoff admission is bounded by concurrent sessions, total staged bytes,
+module and chunk sizes, global/per-sender message rate, global/per-sender
+byte rate and a bounded sender bucket table. The callback must copy/own
+verified module bytes before returning and must not change active state when
+activation fails. See [WASM_HANDOFF_RECEIVER_IMPLEMENTATION.md](WASM_HANDOFF_RECEIVER_IMPLEMENTATION.md).
+
+The executable-artifact trust policy does not apply to streaming. NXR1,
+MED1 and existing stream-relay paths remain usable with untrusted sources
+under their independent framing, byte, connection, rate and backpressure
+limits. No WASM publisher key is required to ingest or consume a stream.
+
 ## 2. Transport and protocol boundary
 
 Every TCP message is framed by a four-byte unsigned big-endian body length. The body magic selects BRK1/v1 or BRK2/v2; the same listener accepts both. The client chooses the format by sending its magic. There is no JSON HELLO negotiation.
