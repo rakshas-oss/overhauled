@@ -8,9 +8,9 @@ binary.
 
 | Channel | Intended use | Current state |
 |---|---|---|
-| vcpkg Git registry | C++ library and broker, CPU-only baseline | Registry recipe and 1.6.0 baseline remain in `main`. Automated vcpkg validation has been removed after repeated failures: the port still places CMake exports under `lib/cmake` instead of vcpkg's canonical `share/<port>` layout. The registry recipe is not currently CI-validated. |
-| Homebrew formula | macOS/Linux developer installation | The 1.6.0 formula and immutable source checksum remain under `Formula/nvlink-placement.rb`. Automated Homebrew installation validation has been removed after repeatable macOS compilation failure in `src/broker_server.cpp` (`std::chrono` time-point/duration mismatch); the formula is not currently CI-validated. |
-| Conan | Existing Conan consumers | Conan 2 recipe is in `main` and `conan create . --build=missing` passed; no remote upload is claimed. |
+| vcpkg Git registry | C++ library and broker, CPU-only baseline | The published registry baseline and port recipe remain pinned to 1.6.0. A 1.7.0 entry must wait for the immutable release archive and its exact SHA512; automated vcpkg validation remains paused because the port's CMake export layout is not CI-validated. |
+| Homebrew formula | macOS/Linux developer installation | The formula remains pinned to the published 1.6.0 source archive and checksum. Update it to 1.7.0 only after the immutable tag archive's SHA256 is calculated; automated Homebrew validation remains paused because of the known macOS `std::chrono` mismatch. |
+| Conan | Existing Conan consumers | The Conan 2 recipe version is advanced to 1.7.0 in this release candidate. Run `conan create . --build=missing` against the candidate; no remote upload is claimed. |
 | Conan Center Index | Public curated Conan package | Not submitted; CCI reviews project maturity, usage and maintenance. An upstream PR is a separate contribution |
 | Debian/RPM | System package installation | CPack emits native packages when built on Linux; no hosted apt/dnf repository is currently published |
 
@@ -92,8 +92,8 @@ CMake files are not yet relocated to vcpkg's canonical share directory.
 
 ## Homebrew
 
-The formula targets the immutable 1.6.0 source tag with CUDA and TensorRT
-disabled by default. Its automated macOS installation check is currently
+The checked-in formula still targets the immutable 1.6.0 source tag with CUDA and TensorRT
+disabled by default. It will remain on that release until the 1.7.0 tag and its exact source checksum are available. Its automated macOS installation check is currently
 paused because the broker server does not compile on the current macOS SDK;
 the failure is a C++ chrono type mismatch, not missing NVLink hardware.
 Do not treat the formula as a verified macOS installation until that build
@@ -133,6 +133,8 @@ The manual DEB/RPM workflow can attach locally built packages to the GitHub Rele
 ## Release checksum policy
 
 The vcpkg and Homebrew recipes must use checksums calculated from the exact
-immutable `1.6.0` source archive. Never reuse the old v1.1.1 formula hash or
-the older moving `v1` tag hash. The CI workflow computes the two digests and
-publishes them in the run summary before the recipes are updated.
+immutable release source archive they advertise. The currently published
+recipes remain pinned to 1.6.0. For 1.7.0, wait until the immutable tag exists,
+calculate the exact SHA256/SHA512 values, and update the Homebrew formula and
+vcpkg port/version database together. Never use placeholders, reuse a previous
+release checksum, or point an old checksum at a new tag.

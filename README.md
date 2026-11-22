@@ -1,4 +1,4 @@
-# Overhauled v1.6.0
+# Overhauled v1.7.0 (release candidate)
 
 > **Published v1.5.0:** adds optional native Wasmtime runtime composition on top of the v1.4.0 BRK2 locality codec baseline. v1.5.1 corrects the Wasmtime v51 C API integration and its composition test.
 
@@ -6,21 +6,25 @@
 >
 > Turn GPU interconnect awareness into higher throughput, better tail latency, and more effective use of accelerator infrastructure.
 
-> **Release status:** v1.6.0 was published on 2026-11-22 from tag `1.6.0`. Its release includes the Wasmtime v51 C API correction and opt-in authenticated-WASM receiver primitives. The receiver remains a set of security/staging primitives, not a network-facing authenticated BRK2 service.
+> **Release status:** v1.7.0 is the next minor release candidate after published v1.6.0 (2026-11-22). It adds the bounded authenticated-WASM handoff receiver/runtime bridge and independent stream flood controls. No 1.7.0 tag or GitHub Release has been created yet.
 
 Overhauled is a C++17 placement and execution library with an interoperable broker service. It provides topology-aware GPU scheduling and broker dispatch for CPU, GPU, and optional NPU execution.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
-[![Release](https://img.shields.io/badge/Release-v1.6.0-blueviolet)](#)
+[![Release](https://img.shields.io/badge/Release-v1.7.0--rc-blueviolet)](#)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2FBRK2-orange)](#)
 
-## What's new in v1.6.0 (published 2026-11-22)
+## What's new in v1.7.0 (release candidate)
 
-- **Wasmtime v51 C API correction:** retain the supported `wasm_name_t` lifecycle and linker-time import-signature validation from the 1.5.1 patch candidate.
-- **Opt-in authenticated-WASM receiver primitives:** add OpenSSL-backed Ed25519 verification over caller-supplied RFC 8785 canonical bytes, issuer/subject/audience trust binding, SHA-256 integrity checks, bounded process-local replay protection, and strict sequential artifact chunk staging.
-- **Independent feature gates:** `ENABLE_WASM_HANDOFF=ON` enables the receiver primitives and OpenSSL Crypto dependency; `ENABLE_WASM_RUNTIME=ON` remains a separate optional Wasmtime embedding. The default build remains unchanged.
-- **Explicit security boundary:** this is not yet a network-facing BRK2 handoff handler. Transport peer authentication, full schema decoding/canonicalization, publisher provenance, durable replay storage, signed prepare decisions/receipts, backend selection, and activation remain future integration work. Do not advertise a deployable authenticated handoff endpoint yet.
+- **Authenticated receiver state machine:** verify deployment-sender signatures and artifact-publisher provenance using separate trust stores; bind issuer, subject, audience and key ID; enforce expiry, nonce/replay checks and digest validation.
+- **Prepare, transfer and activation:** accept bounded sequential chunks, produce signed prepare decisions and activation receipts, and preserve the previous active release when validation or activation fails.
+- **Runtime bridge:** when both ENABLE_WASM_RUNTIME and ENABLE_WASM_HANDOFF are enabled, the optional Wasmtime bridge compiles the staged module set and promotes the resulting release atomically through the configured runtime callbacks.
+- **Admission and flood controls:** enforce concurrent-session, staged-byte, module/chunk, global/per-sender message-rate and ingress-byte limits with bounded sender accounting.
+- **Untrusted streams remain available:** NXR1, MED1 and media/stream-relay data paths do not require a WASM publisher key. They remain subject to their own frame, size, connection, rate and backpressure limits.
+- **Independent feature gates:** ENABLE_WASM_HANDOFF=ON enables the receiver API and requires OpenSSL Crypto; ENABLE_WASM_RUNTIME=ON remains a separate optional Wasmtime feature. Neither changes the default build.
+
+**Deployment boundary:** the receiver is not yet wired into the ordinary BRK1/BRK2 TCP listener. A caller must provide an authenticated protected transport (mTLS 1.3 or equivalent), bind transport identity to the signed sender, and provide durable replay/staging where restart-safe guarantees are required. The current shared-Store Wasmtime embedding is not a multi-tenant sandbox, and this release candidate does not claim complete remote deployment through the broker listener.
 
 ## Package managers
 

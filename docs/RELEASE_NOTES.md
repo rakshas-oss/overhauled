@@ -1,3 +1,26 @@
+## v1.7.0 (release candidate; not published)
+Date: 2026-11-22
+
+### Highlights
+
+- Complete the opt-in authenticated-WASM receiver state machine: separate deployment sender and artifact publisher trust, expiry/nonce/replay checks, signed prepare decisions and activation receipts.
+- Bound concurrent preparations, total staged bytes, module/chunk sizes, global/per-sender message rates and global/per-sender ingress-byte rates.
+- Add a Wasmtime runtime bridge that compiles the verified staged module set and publishes it only through the configured atomic activation callback. Failed preparation or activation preserves the previous active release.
+- Keep untrusted NXR1, MED1 and media/stream-relay data paths available without WASM publisher authorization, under independent stream and gateway resource/rate/backpressure limits.
+
+### Compatibility and security boundary
+
+- Existing BRK1/BRK2, WSM1, NXR1 and MED1 framing identities remain unchanged; executable handoff is a separate application protocol.
+- The receiver is a library API, not a handler on the ordinary BRK1/BRK2 TCP listener.
+- A production caller must provide an authenticated protected transport (mTLS 1.3 or equivalent), bind transport identity to the signed deployment sender, and provide durable replay/staging for restart-safe deployment semantics.
+- The current shared-Store Wasmtime embedding is not a multi-tenant sandbox.
+- Application-level rate/byte limits do not replace upstream controls against volumetric DDoS.
+
+### Release metadata and validation
+
+The CMake, Conan and root vcpkg manifest versions are advanced to 1.7.0 in this candidate. The vcpkg registry port and Homebrew formula remain pinned to the published 1.6.0 archive until a 1.7.0 tag exists and its exact archive checksums can be computed. No 1.7.0 tag, GitHub Release or external package publication is claimed. Run the release gate in VERSIONING.md on the exact candidate before tagging.
+
+---
 ## v1.6.0 (published 2026-11-22)
 Date: 2026-11-22
 

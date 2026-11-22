@@ -1,72 +1,57 @@
 # Overhauled versioning
 
-## Current published release
+## Release state
 
-- **Published version:** `1.6.0`
-- **CMake project version:** `1.6.0`
-- **Conan recipe version:** `1.6.0`
-- **vcpkg manifest version:** `1.6.0`
-- **Runtime/package identity:** `OverhauledTensorRuntime` / `nvlink_placement`
-- **Release state:** published 2026-11-22; tag `1.6.0` points to release commit `326609fa7ad7a21b3fe62a8c29743b0a40eac57d`. The GitHub Release has no separately uploaded binary assets; GitHub source archives are available.
+- **Latest published version:** 1.6.0 (2026-11-22).
+- **Next minor release candidate:** 1.7.0 (not tagged or published).
+- **CMake project version:** 1.7.0 in this candidate.
+- **Conan recipe version:** 1.7.0 in this candidate.
+- **Root vcpkg manifest:** 1.7.0 in this candidate.
+- **Published vcpkg registry baseline and Homebrew formula:** remain pinned to immutable 1.6.0 sources until the 1.7.0 tag archive and its checksums are available.
+- **Package identity:** OverhauledTensorRuntime / nvlink_placement.
+
+No 1.7.0 tag, GitHub Release, Homebrew update, vcpkg registry entry, or external package upload is claimed by this candidate.
 
 ## Version assessment
 
-The published v1.6.0 minor release carries additive broker-side WASM handoff receiver primitives on top of the Wasmtime v51 correction previously tracked as v1.5.1:
+The additive receiver and admission capabilities merged in PR #86 justify a minor increment from 1.6.0:
 
-- OpenSSL EVP Ed25519 verification over caller-supplied RFC 8785 canonical message bytes.
-- Operator-provisioned trust entries binding key IDs to exact issuer, subject and audience values.
-- SHA-256 digest parsing and hashing.
-- Bounded process-local replay guard keyed by sender, audience and nonce.
-- Strict sequential artifact chunk staging with per-chunk digest checks and final artifact digest verification.
-- Opt-in CMake integration via `ENABLE_WASM_HANDOFF=ON`; OpenSSL Crypto is required only for that feature. The default broker build and the separate `ENABLE_WASM_RUNTIME` Wasmtime option remain unchanged.
-
-This is a meaningful additive capability and warrants a minor version increment. It is not a complete network-facing handoff implementation: there is no authenticated BRK2 handoff endpoint, complete schema decoder/canonicalizer, transport identity binding, publisher-provenance verifier, durable replay store, signed prepare/receipt flow, runtime backend admission, or release activation. Do not expose or advertise a deployable authenticated handoff service yet.
+- A prepare/transfer/activation receiver state machine verifies signed deployment messages and artifact publisher provenance in separate trust domains.
+- Ed25519 identities are bound to exact issuer, subject, audience and key ID values; expiry, nonce/replay and signed message validation are enforced.
+- Strict sequential chunk transfer verifies per-chunk, module and aggregate digests before activation.
+- Signed prepare decisions and activation receipts report the receiver's selected backend and engine/ABI information.
+- Global and per-sender message and ingress-byte token buckets operate alongside bounded sender tracking, session counts, module/chunk sizes and total staged-byte ceilings.
+- The optional Wasmtime runtime bridge validates and compiles a complete staged module set, then publishes the release through the configured activation callback. Failed validation or activation leaves the previous active release unchanged.
+- The untrusted NXR1, MED1 and media/stream-relay paths remain separately accessible without executable-artifact publisher authorization; their own framing, size, connection, rate and backpressure limits continue to apply.
 
 ## Compatibility and security boundaries
 
-- No BRK1, BRK2 or WSM1 wire-format changes are introduced by the receiver primitives.
-- The verifier consumes already-canonicalized RFC 8785 bytes; it does not canonicalize JSON itself.
-- Trust keys must be provisioned out of band and must never be accepted from the incoming artifact.
-- Replay protection is process-local and bounded. Multi-process deployments need shared replay state or routing to a single replay authority.
-- Artifacts are staged sequentially and bytes are unavailable through the API until final digest verification succeeds.
-- `ENABLE_WASM_HANDOFF` and `ENABLE_WASM_RUNTIME` are independent opt-in features.
-- The Wasmtime C API embedding still shares one Store/resource domain and is not tenant isolation. Fuel metering, epoch interruption, fine-grained WASI grants and per-task isolation/teardown remain incomplete.
-- The locality codec remains a wire contract only; no broker-owned payload allocator applies or verifies physical memory placement.
-- Deadlines order and reject expired queued work; they do not preempt arbitrary native code or provide hard real-time guarantees.
-- Mainline Windows/MSVC is unsupported. Browser-WASM and WASI are not Overhauled deployment targets.
+- The handoff application contract is separate from WSM1 task/lifecycle messages; existing BRK1, BRK2, NXR1, MED1 and WSM1 framing identities are preserved.
+- The receiver API is not wired into the ordinary BRK1/BRK2 TCP listener. The listener must not be exposed directly to untrusted networks.
+- A deployment integration must provide mTLS 1.3 or an equivalent authenticated protected channel, bind the authenticated transport peer to the signed sender, and enforce frame limits before decoding.
+- Replay and staged artifact state are process-local and in-memory. Restart-safe or multi-process deployments require durable shared replay and staging/activation services.
+- The current Wasmtime C API composition runtime shares a Store/resource domain. It is not a multi-tenant sandbox; restrict it to operator-authorized artifacts or an independent process-isolation boundary.
+- Application rate and memory budgets do not stop volumetric network DDoS. Apply firewall, reverse-proxy or provider edge controls where the service is exposed.
+- Untrusted stream access does not require a WASM publisher key. Keep stream trust independent from executable-artifact trust.
 
-## v1.6.0 release validation
+## Release gate for 1.7.0
 
-The GitHub release was published on 2026-11-22. The seven reported PR #79 workflow runs
-completed successfully on release-candidate commit
-`4bcba05c6381bff6cd0fb9c8ec28495944ba003a`: Package Consumer Smoke Test,
-Overhauled CI (including ASan/UBSan and the Wasmtime v51 compile/runtime test),
-YuKKi-OS paired interoperability, BRK2 C++ Protocol Tests, Overhauled ASan/UBSan,
-Ethos-U85 DRM Linux Build, and Worker Fabric Mixed-Class Saturation validation.
-The mixed-class workflow's actual pipelined A/B benchmark job was skipped.
+Before tagging or publishing:
 
-**Validation gap discovered after publication:** none of those original workflows
-configured CMake with `ENABLE_WASM_HANDOFF=ON`, so they did not compile or run
-`wasm_handoff_receiver_test`. This release PR had explicitly required that lane.
-The main Overhauled CI workflow is being extended with a dedicated OpenSSL-enabled
-build and CTest lane. Do not treat the receiver primitive tests as release-validated
-until that new lane passes. This is a post-publication verification; the existing
-GitHub release is already live.
+1. Run the complete Overhauled CI suite on the exact release candidate, including the OpenSSL-enabled receiver conformance tests and the Wasmtime bridge composition test.
+2. Confirm paired YuKKi-OS sender/Overhauled receiver interoperability and the independent untrusted-stream regression tests.
+3. Confirm default CPU-only builds remain unchanged and optional CUDA, Ethos-U85 and Wasmtime paths remain feature-gated.
+4. After the release tag exists, calculate the exact source-archive SHA-256/SHA-512 values and update the Homebrew and vcpkg recipes/registry database. Do not insert guessed or placeholder checksums.
+5. Verify each external package publication independently; a manifest or recipe in this repository is not evidence of an upload.
 
-## Release policy
-
-- v1.6.0 is the published baseline and introduces the opt-in authenticated-WASM receiver primitives alongside the Wasmtime v51 correction.
-- The v1.5.1 patch candidate corrected the Wasmtime v51 C API integration; its correction is included in v1.6.0, but v1.5.1 was not separately published.
-- Updating CMake, Conan and vcpkg repository metadata does not publish external package-manager packages. Verify each registry independently.
-- Updating CMake, Conan and vcpkg repository metadata does not publish external package-manager packages. Verify each registry independently.
-- The Conan and vcpkg default recipes do not enable `ENABLE_WASM_HANDOFF`; consumers building the optional handoff feature directly with CMake must install OpenSSL Crypto and enable the option explicitly.
+PR #86 (receiver state machine, runtime bridge and rate limits) is merged to main at 019e762ddbf0ba2c69777732ecc1c9e9c6540a2e. This version candidate records the feature set; its own CI and release approval remain separate.
 
 ## Published release history
 
-- `v1.6.0` — published 2026-11-22; opt-in authenticated-WASM receiver primitives and Wasmtime v51 C API correction. Original CI passed except the separately required `ENABLE_WASM_HANDOFF=ON` lane, now added as post-release verification.
-- `v1.5.0` — published 2026-11-21; optional native Wasmtime runtime composition.
-- `v1.3.0` — published 2026-11-21; hierarchical worker topology, per-class CPU-group queues, bounded elasticity and large-host scheduling.
-- `v1.2.0` — published 2026-11-20; YuKKi-aware worker classes, broker-local NUMA affinity, process-wide admission budgets and BRK2 worker telemetry.
-- `v1.1.4` — published 2026-11-18; architecture/heuristic and release metadata alignment.
-- `v1.1.3` — published 2026-11-18; release metadata and prior broker hardening.
-- `v1.1.2` — prior published release.
+- v1.6.0 — published 2026-11-22; opt-in authenticated-WASM receiver primitives and Wasmtime v51 C API correction. The receiver's full state machine, signed decisions/receipts, runtime bridge and bounded rate controls were added after that release by PR #86.
+- v1.5.0 — published 2026-11-21; optional native Wasmtime runtime composition.
+- v1.3.0 — published 2026-11-21; hierarchical worker topology, per-class CPU-group queues, bounded elasticity and large-host scheduling.
+- v1.2.0 — published 2026-11-20; YuKKi-aware worker classes, broker-local NUMA affinity, process-wide admission budgets and BRK2 worker telemetry.
+- v1.1.4 — published 2026-11-18; architecture/heuristic and release metadata alignment.
+- v1.1.3 — published 2026-11-18; release metadata and prior broker hardening.
+- v1.1.2 — prior published release.
