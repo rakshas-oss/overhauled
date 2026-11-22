@@ -46,10 +46,31 @@ The receiver fails closed unless local policy supplies:
   promotes the complete release. A failed callback must not change the
   previously active runtime.
 
+The optional `WasmHandoffRuntimeBridge` is compiled when both
+`ENABLE_WASM_RUNTIME=ON` and `ENABLE_WASM_HANDOFF=ON`. It binds the receiver
+policy to a real Wasmtime compile-only validator and a runtime activation
+callback. The callback builds a fresh `WasmCompositionRuntime`, rechecks every
+module digest, compiles/registers the full release in a new Store/Linker, and
+swaps the active runtime pointer only after the entire set succeeds. Readers
+that already hold the previous runtime shared pointer can finish against it;
+new readers observe the promoted release. A failed compile leaves the active
+pointer unchanged.
+
+Enable and test the combined runtime path with:
+
+```sh
+cmake -S . -B build-wasm \
+  -DENABLE_WASM_RUNTIME=ON \
+  -DENABLE_WASM_HANDOFF=ON \
+  -DWASMTIME_ROOT=/path/to/wasmtime-c-api
+cmake --build build-wasm --target wasm_handoff_runtime_bridge_test
+ctest --test-dir build-wasm --output-on-failure -R 'wasm_(composition|handoff_runtime_bridge)_test'
+```
+
 The receiver currently supports the Wasmtime engine family only. It does not
 infer availability from discovery labels or from a remote preferred-backend
-hint. The callback is responsible for mapping the validated release into the
-configured runtime.
+hint. The bridge is an in-process activation manager; it does not create
+task-level isolation or wire a new network listener into the broker.
 
 ## Deliberate integration boundaries
 
