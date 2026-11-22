@@ -167,6 +167,11 @@ struct ActivationRequest {
     std::string transfer_id;
 };
 
+struct VerifiedModuleView {
+    const ModuleDescriptor* descriptor = nullptr;
+    const std::vector<std::uint8_t>* bytes = nullptr;
+};
+
 struct HandoffPolicy {
     std::string audience = "overhauled";
     std::string receipt_audience = "yukkios";
@@ -190,6 +195,10 @@ struct HandoffPolicy {
     // Must perform real Wasmtime compile/validation without activating the module.
     // The receiver fails closed when no validator is installed.
     std::function<bool(const ModuleDescriptor&, const std::vector<std::uint8_t>&, std::string*)> module_validator;
+    // Must stage the complete validated release and atomically make it active.
+    // Return false without changing the previous active release on any failure.
+    std::function<bool(const std::string&, const std::string&,
+                       const std::vector<VerifiedModuleView>&, std::string*)> activate_release;
     // The current shared-Store Wasmtime embedding is only suitable for
     // operator-authorized trusted artifacts. This is false by default.
     bool allow_trusted_shared_store_workloads = false;
