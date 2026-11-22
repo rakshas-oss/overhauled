@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cassert>
+#include <cstdlib>
 #include <iostream>
 #include <utility>
 #include <chrono>
@@ -16,7 +17,7 @@
 #define CHECK(condition) do { \
     if (!(condition)) { \
         std::cerr << "CHECK failed: " #condition << " at " << __FILE__ << ':' << __LINE__ << "\n"; \
-        return 1; \
+        std::exit(EXIT_FAILURE); \
     } \
 } while (false)
 
