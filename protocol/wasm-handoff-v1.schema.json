@@ -1,0 +1,574 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rakshas-oss.github.io/wasm-handoff/v1/schema.json",
+  "title": "Authenticated WASM handoff v1",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/capability_offer"
+    },
+    {
+      "$ref": "#/$defs/signed_prepare"
+    },
+    {
+      "$ref": "#/$defs/signed_decision"
+    },
+    {
+      "$ref": "#/$defs/signed_receipt"
+    },
+    {
+      "$ref": "#/$defs/signed_cancel"
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "issuer",
+        "subject",
+        "key_id"
+      ],
+      "properties": {
+        "issuer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "subject": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "key_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "alg",
+        "key_id",
+        "value"
+      ],
+      "properties": {
+        "alg": {
+          "const": "Ed25519"
+        },
+        "key_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "value": {
+          "type": "string",
+          "contentEncoding": "base64",
+          "minLength": 80,
+          "maxLength": 128
+        }
+      }
+    },
+    "signed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "message_id",
+        "issued_at",
+        "expires_at",
+        "audience",
+        "sender",
+        "nonce",
+        "payload",
+        "signature"
+      ],
+      "properties": {
+        "contract": {
+          "const": "wasm-handoff/1"
+        },
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "issued_at": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expires_at": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "audience": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "sender": {
+          "$ref": "#/$defs/identity"
+        },
+        "nonce": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 128
+        },
+        "payload": {
+          "type": "object"
+        },
+        "signature": {
+          "$ref": "#/$defs/signature"
+        }
+      }
+    },
+    "module": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "module_id",
+        "version",
+        "digest",
+        "size_bytes",
+        "format"
+      ],
+      "properties": {
+        "module_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 67108864
+        },
+        "format": {
+          "const": "wasm-core-1"
+        },
+        "imports_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_module_bytes": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 67108864
+        },
+        "max_total_bytes": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 268435456
+        },
+        "memory_bytes": {
+          "type": "integer",
+          "minimum": 65536,
+          "maximum": 4294967296
+        },
+        "table_elements": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "fuel": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "wall_time_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600000
+        },
+        "max_instances": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        }
+      }
+    },
+    "capability_offer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "node",
+        "protocol_versions",
+        "backends",
+        "expires_at"
+      ],
+      "properties": {
+        "kind": {
+          "const": "capability_offer"
+        },
+        "node": {
+          "$ref": "#/$defs/identity"
+        },
+        "protocol_versions": {
+          "type": "array",
+          "items": {
+            "const": "wasm-handoff/1"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "backends": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "backend_id",
+              "engine",
+              "engine_version",
+              "targets",
+              "features",
+              "abi_profiles"
+            ],
+            "properties": {
+              "backend_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "engine": {
+                "enum": [
+                  "wasmtime",
+                  "native-wasm"
+                ]
+              },
+              "engine_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "targets": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              },
+              "features": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true
+              },
+              "abi_profiles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              },
+              "wasi_profiles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true
+              }
+            }
+          },
+          "minItems": 1
+        },
+        "expires_at": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "signed_prepare": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/signed"
+        },
+        {
+          "properties": {
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "request_id",
+                "deployment_id",
+                "release_id",
+                "artifact_set_digest",
+                "manifest_digest",
+                "modules",
+                "runtime_policy",
+                "limits",
+                "required_capabilities"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "prepare_request"
+                },
+                "request_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "deployment_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "release_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "artifact_set_digest": {
+                  "$ref": "#/$defs/digest"
+                },
+                "manifest_digest": {
+                  "$ref": "#/$defs/digest"
+                },
+                "modules": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/module"
+                  },
+                  "minItems": 1,
+                  "maxItems": 256
+                },
+                "runtime_policy": {
+                  "enum": [
+                    "auto",
+                    "wasmtime",
+                    "native-wasm"
+                  ]
+                },
+                "preferred_backend": {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                "required_capabilities": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "uniqueItems": true
+                },
+                "limits": {
+                  "$ref": "#/$defs/limits"
+                },
+                "entrypoint_policy": {
+                  "enum": [
+                    "manifest-defined",
+                    "broker-task"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "signed_decision": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/signed"
+        },
+        {
+          "properties": {
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "request_id",
+                "decision"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "prepare_decision"
+                },
+                "request_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "decision": {
+                  "enum": [
+                    "accepted",
+                    "rejected"
+                  ]
+                },
+                "backend_id": {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                "engine": {
+                  "enum": [
+                    "wasmtime",
+                    "native-wasm"
+                  ]
+                },
+                "engine_version": {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                "abi_profile": {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                "accepted_capabilities": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "uniqueItems": true
+                },
+                "rejection_code": {
+                  "enum": [
+                    "unsupported_format",
+                    "unsupported_feature",
+                    "capability_denied",
+                    "signature_invalid",
+                    "artifact_digest_mismatch",
+                    "policy_limit_exceeded",
+                    "abi_incompatible",
+                    "backend_unavailable",
+                    "expired_request",
+                    "replay_detected"
+                  ]
+                },
+                "artifact_transfer_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "chunk_size_bytes": {
+                  "type": "integer",
+                  "minimum": 4096,
+                  "maximum": 4194304
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "signed_receipt": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/signed"
+        },
+        {
+          "properties": {
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "request_id",
+                "state",
+                "backend_id",
+                "artifact_set_digest"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "execution_receipt"
+                },
+                "request_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "state": {
+                  "enum": [
+                    "prepared",
+                    "activated",
+                    "running",
+                    "succeeded",
+                    "failed",
+                    "cancelled"
+                  ]
+                },
+                "backend_id": {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                "engine": {
+                  "enum": [
+                    "wasmtime",
+                    "native-wasm"
+                  ]
+                },
+                "engine_version": {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                "artifact_set_digest": {
+                  "$ref": "#/$defs/digest"
+                },
+                "fuel_consumed": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "peak_memory_bytes": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "error_code": {
+                  "type": "string",
+                  "maxLength": 128
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "signed_cancel": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/signed"
+        },
+        {
+          "properties": {
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "request_id",
+                "reason"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "cancel_request"
+                },
+                "request_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "reason": {
+                  "type": "string",
+                  "maxLength": 256
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
