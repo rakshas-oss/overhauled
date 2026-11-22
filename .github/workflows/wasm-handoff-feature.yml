@@ -1,0 +1,49 @@
+name: Authenticated WASM Handoff Feature
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/wasm-handoff-feature.yml"
+      - "CMakeLists.txt"
+      - "include/wasm_handoff_receiver.h"
+      - "src/wasm_handoff_receiver.cpp"
+      - "tests/wasm_handoff_receiver_test.cpp"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wasm-handoff-feature-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  handoff-enabled-build-and-test:
+    name: OpenSSL-enabled WASM handoff build and tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install OpenSSL development files and Ninja
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev ninja-build
+
+      - name: Configure with authenticated WASM handoff enabled
+        run: >-
+          cmake -S . -B build/wasm-handoff -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_BROKER=ON
+          -DBUILD_TESTING=ON
+          -DBUILD_EXAMPLES=OFF
+          -DENABLE_CUDA=OFF
+          -DENABLE_WASM_HANDOFF=ON
+          -DENABLE_WASM_RUNTIME=OFF
+
+      - name: Build broker and handoff test target
+        run: cmake --build build/wasm-handoff --parallel 2
+
+      - name: Run CTest suite including wasm_handoff_receiver_test
+        run: ctest --test-dir build/wasm-handoff --output-on-failure
