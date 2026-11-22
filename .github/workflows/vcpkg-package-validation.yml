@@ -47,6 +47,14 @@ jobs:
             --classic \
             --overlay-ports="$GITHUB_WORKSPACE/ports/nvlink-placement"
 
+      - name: Verify installed CMake package config
+        env:
+          VCPKG_ROOT: ${{ runner.temp }}/vcpkg
+        run: |
+          config="$VCPKG_ROOT/installed/x64-linux/lib/cmake/OverhauledTensorRuntime/OverhauledTensorRuntimeConfig.cmake"
+          test -f "$config"
+          echo "Found installed package config: $config"
+
       - name: Configure installed-package consumer
         env:
           VCPKG_ROOT: ${{ runner.temp }}/vcpkg
@@ -54,7 +62,7 @@ jobs:
           cmake -S tests/package-consumer -B build/vcpkg-consumer \
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_MANIFEST_MODE=OFF \
-            -DCMAKE_PREFIX_PATH="$VCPKG_ROOT/installed/x64-linux" \
+            -DOverhauledTensorRuntime_DIR="$VCPKG_ROOT/installed/x64-linux/lib/cmake/OverhauledTensorRuntime" \
             -DCMAKE_BUILD_TYPE=Release
 
       - name: Build and run installed-package consumer
