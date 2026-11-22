@@ -204,6 +204,12 @@ struct HandoffPolicy {
     bool allow_trusted_shared_store_workloads = false;
     std::size_t maximum_concurrent_sessions = 16;
     std::size_t maximum_staged_bytes = 512U * 1024U * 1024U;
+    std::size_t maximum_active_deployments = 256;
+    double message_rate_per_second = 100.0;
+    std::size_t message_burst = 200;
+    double per_sender_message_rate_per_second = 20.0;
+    std::size_t per_sender_message_burst = 40;
+    std::size_t maximum_rate_limit_subjects = 1024;
 };
 
 struct PrepareDecision {
