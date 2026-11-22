@@ -844,6 +844,12 @@ bool HandoffReceiver::activate(const ActivationRequest& request,
     next.abi_profile = pimpl_->policy.abi_profile;
     next.artifact_set_digest = session.request.artifact_set_digest;
     next.issued_at = issued;
+    next.expires_at = issued + pimpl_->policy.maximum_message_lifetime_seconds;
+    next.message_id = random_uuid();
+    next.nonce = random_uuid();
+    next.audience = pimpl_->policy.receipt_audience;
+    next.issuer = pimpl_->receipt_signer.issuer();
+    next.subject = pimpl_->receipt_signer.subject();
     next.signer_key_id = pimpl_->receipt_signer.key_id();
     const std::string receipt_bytes = canonical_receipt(next);
     next.signature = pimpl_->receipt_signer.sign(
