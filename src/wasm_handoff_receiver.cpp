@@ -130,17 +130,16 @@ bool ArtifactChunkReceiver::append(std::size_t offset, const std::uint8_t* data,
     if (sha256_hex(data, size) != chunk_sha256) return fail("artifact chunk digest mismatch");
     const bool reached_end = size == expected_size_ - bytes_.size();
     if (final_chunk != reached_end) return fail("final-chunk flag does not match declared artifact length");
+    const std::size_t previous_size = bytes_.size();
+    bytes_.insert(bytes_.end(), data, data + size);
     if (reached_end) {
-        std::vector<std::uint8_t> candidate = bytes_;
-        candidate.insert(candidate.end(), data, data + size);
         Digest actual{};
-        if (!digest_bytes(candidate.data(), candidate.size(), &actual) ||
-            !std::equal(actual.begin(), actual.end(), expected_digest_.begin()))
+        if (!digest_bytes(bytes_.data(), bytes_.size(), &actual) ||
+            !std::equal(actual.begin(), actual.end(), expected_digest_.begin())) {
+            bytes_.resize(previous_size);
             return fail("artifact digest mismatch");
-        bytes_.swap(candidate);
+        }
         complete_ = true;
-    } else {
-        bytes_.insert(bytes_.end(), data, data + size);
     }
     if (error) error->clear();
     return true;
@@ -282,8 +281,10 @@ bool time_valid(const SignedMetadata& message,
         return false;
     const auto now_seconds = static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
-    if (message.issued_at > now_seconds + policy.clock_skew_seconds) return false;
-    if (message.expires_at + policy.clock_skew_seconds < now_seconds) return false;
+    if (message.issued_at > now_seconds &&
+        message.issued_at - now_seconds > policy.clock_skew_seconds) return false;
+    if (message.expires_at < now_seconds &&
+        now_seconds - message.expires_at > policy.clock_skew_seconds) return false;
     return true;
 }
 
@@ -600,8 +601,10 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
     }
     const auto now_seconds = static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
-    if (publisher.issued_at > now_seconds + pimpl_->policy.clock_skew_seconds ||
-        publisher.expires_at + pimpl_->policy.clock_skew_seconds < now_seconds)
+    if ((publisher.issued_at > now_seconds &&
+         publisher.issued_at - now_seconds > pimpl_->policy.clock_skew_seconds) ||
+        (publisher.expires_at < now_seconds &&
+         now_seconds - publisher.expires_at > pimpl_->policy.clock_skew_seconds))
         return reject("expired_request");
     const std::string provenance = canonical_publisher_attestation(request);
     if (!pimpl_->publisher_trust.verify(
