@@ -546,6 +546,8 @@ public:
         double tokens = 0.0;
         std::chrono::steady_clock::time_point updated;
         std::chrono::steady_clock::time_point last_seen;
+        double byte_tokens = 0.0;
+        std::chrono::steady_clock::time_point byte_updated;
     };
 
     Impl(const TrustStore& sender, const TrustStore& publisher,
@@ -553,11 +555,19 @@ public:
         : sender_trust(sender), publisher_trust(publisher), replay_guard(replay),
           policy(std::move(policy)), receipt_signer(signer),
           global_tokens(static_cast<double>(this->policy.message_burst)),
-          global_updated(std::chrono::steady_clock::now()) {
+          global_updated(std::chrono::steady_clock::now()),
+          global_byte_tokens(static_cast<double>(this->policy.ingress_byte_burst)),
+          global_byte_updated(std::chrono::steady_clock::now()) {
         if (!std::isfinite(this->policy.message_rate_per_second) ||
             !std::isfinite(this->policy.per_sender_message_rate_per_second) ||
+            !std::isfinite(this->policy.ingress_bytes_per_second) ||
+            !std::isfinite(this->policy.per_sender_ingress_bytes_per_second) ||
             this->policy.message_rate_per_second <= 0.0 ||
             this->policy.per_sender_message_rate_per_second <= 0.0 ||
+            this->policy.ingress_bytes_per_second <= 0.0 ||
+            this->policy.per_sender_ingress_bytes_per_second <= 0.0 ||
+            this->policy.ingress_byte_burst == 0 ||
+            this->policy.per_sender_ingress_byte_burst == 0 ||
             this->policy.message_burst == 0 ||
             this->policy.per_sender_message_burst == 0 ||
             this->policy.maximum_rate_limit_subjects == 0 ||
@@ -565,7 +575,7 @@ public:
             throw std::invalid_argument("invalid handoff flood-control policy");
     }
 
-    bool admit_message(const std::string& subject) {
+    bool admit_message(const std::string& subject, std::size_t byte_cost = 0) {
         const auto now = std::chrono::steady_clock::now();
         std::lock_guard<std::mutex> lock(rate_mutex);
         const double global_elapsed =
@@ -591,6 +601,8 @@ public:
             bucket.tokens = static_cast<double>(policy.per_sender_message_burst);
             bucket.updated = now;
             bucket.last_seen = now;
+            bucket.byte_tokens = static_cast<double>(policy.per_sender_ingress_byte_burst);
+            bucket.byte_updated = now;
             found = sender_buckets.emplace(key, bucket).first;
         }
         SenderBucket& bucket = found->second;
@@ -601,8 +613,27 @@ public:
         bucket.updated = now;
         bucket.last_seen = now;
         if (bucket.tokens < 1.0) return false;
+
+        const double global_byte_elapsed =
+            std::chrono::duration<double>(now - global_byte_updated).count();
+        global_byte_tokens = std::min<double>(
+            static_cast<double>(policy.ingress_byte_burst),
+            global_byte_tokens + global_byte_elapsed * policy.ingress_bytes_per_second);
+        global_byte_updated = now;
+        const double sender_byte_elapsed =
+            std::chrono::duration<double>(now - bucket.byte_updated).count();
+        bucket.byte_tokens = std::min<double>(
+            static_cast<double>(policy.per_sender_ingress_byte_burst),
+            bucket.byte_tokens + sender_byte_elapsed * policy.per_sender_ingress_bytes_per_second);
+        bucket.byte_updated = now;
+        if (static_cast<double>(byte_cost) > global_byte_tokens ||
+            static_cast<double>(byte_cost) > bucket.byte_tokens)
+            return false;
+
         bucket.tokens -= 1.0;
         global_tokens -= 1.0;
+        global_byte_tokens -= static_cast<double>(byte_cost);
+        bucket.byte_tokens -= static_cast<double>(byte_cost);
         return true;
     }
 
@@ -616,6 +647,8 @@ public:
     std::map<std::string, SenderBucket> sender_buckets;
     double global_tokens;
     std::chrono::steady_clock::time_point global_updated;
+    double global_byte_tokens;
+    std::chrono::steady_clock::time_point global_byte_updated;
     mutable std::mutex mutex;
     std::map<std::string, Session> sessions;
     std::map<std::string, HandoffReceipt> active;
@@ -810,8 +843,8 @@ bool HandoffReceiver::append_chunk(const ArtifactChunkMessage& chunk,
                                    std::string* error,
                                    std::chrono::system_clock::time_point now) {
     auto fail = [&](const char* why) { if (error) *error = why; return false; };
-    if (!pimpl_->admit_message(chunk.envelope.subject))
-        return fail("handoff message rate limit exceeded");
+    if (!pimpl_->admit_message(chunk.envelope.subject, chunk.data.size()))
+        return fail("handoff message or byte-rate limit exceeded");
     const std::string canonical = canonical_chunk_message(chunk);
     if (!verify_message(pimpl_->sender_trust, pimpl_->replay_guard,
                         chunk.envelope, canonical, now, pimpl_->policy, error))
@@ -868,6 +901,12 @@ bool HandoffReceiver::activate(const ActivationRequest& request,
         if (it == pimpl_->sessions.end() || it->second.transfer_id != request.transfer_id)
             return fail("unknown or mismatched prepared transfer");
         Impl::Session& session = it->second;
+        if (pimpl_->active.find(session.request.deployment_id) == pimpl_->active.end() &&
+            pimpl_->active.size() >= pimpl_->policy.maximum_active_deployments) {
+            pimpl_->staged_bytes -= session.staged_bytes;
+            pimpl_->sessions.erase(it);
+            return fail("active deployment limit reached");
+        }
         if (request.envelope.issuer != session.request.envelope.issuer ||
             request.envelope.subject != session.request.envelope.subject ||
             request.envelope.key_id != session.request.envelope.key_id)
