@@ -5,6 +5,6 @@
   "description": "NVLink-aware GPU task placement library with optional system-supplied CUDA and TensorRT support",
   "homepage": "https://github.com/rakshas-oss/overhauled",
   "license": "MIT",
-  "supports": "!(uwp)",
+  "supports": "!windows",
   "dependencies": []
 }

@@ -1,0 +1,39 @@
+name: Release Source Digests
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/release-source-digests.yml"
+      - "nvlink-placement.rb"
+      - "vcpkg-portfile.cmake"
+      - "ports/**"
+      - "versions/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-digests:
+    name: Compute immutable v1.6.0 source archive digests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the exact tagged source archive
+        run: |
+          curl --fail --location --retry 3 \
+            https://github.com/rakshas-oss/overhauled/archive/refs/tags/1.6.0.tar.gz \
+            --output overhauled-1.6.0.tar.gz
+
+      - name: Calculate vcpkg and Homebrew checksums
+        run: |
+          sha512=$(sha512sum overhauled-1.6.0.tar.gz | cut -d ' ' -f 1)
+          sha256=$(sha256sum overhauled-1.6.0.tar.gz | cut -d ' ' -f 1)
+          {
+            printf '%s\n\n' '## Immutable source archive checksums'
+            printf '%s\n' '- Source: https://github.com/rakshas-oss/overhauled/archive/refs/tags/1.6.0.tar.gz'
+            printf '%s\n' "- SHA512 (vcpkg): $sha512"
+            printf '%s\n' "- SHA256 (Homebrew): $sha256"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "SHA512=$sha512"
+          echo "SHA256=$sha256"

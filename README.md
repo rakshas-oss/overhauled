@@ -22,6 +22,13 @@ Overhauled is a C++17 placement and execution library with an interoperable brok
 - **Independent feature gates:** `ENABLE_WASM_HANDOFF=ON` enables the receiver primitives and OpenSSL Crypto dependency; `ENABLE_WASM_RUNTIME=ON` remains a separate optional Wasmtime embedding. The default build remains unchanged.
 - **Explicit security boundary:** this is not yet a network-facing BRK2 handoff handler. Transport peer authentication, full schema decoding/canonicalization, publisher provenance, durable replay storage, signed prepare decisions/receipts, backend selection, and activation remain future integration work. Do not advertise a deployable authenticated handoff endpoint yet.
 
+## Package managers
+
+The vcpkg port and Homebrew formula are maintained alongside the source. They
+target the portable CPU-only build; optional CUDA/TensorRT and WASM handoff
+features remain separately enabled. See
+[package-manager installation and publication](docs/PACKAGING.md).
+
 ## Capabilities
 
 - NVLink-aware topology detection, sticky home-GPU affinity, and queue-aware placement.

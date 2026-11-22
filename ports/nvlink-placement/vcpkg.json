@@ -1,0 +1,18 @@
+{
+  "name": "nvlink-placement",
+  "version": "1.6.0",
+  "description": "C++17 topology-aware CPU/GPU/NPU placement library and broker runtime",
+  "homepage": "https://github.com/rakshas-oss/overhauled",
+  "license": "MIT",
+  "supports": "!windows",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ]
+}

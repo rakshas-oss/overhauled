@@ -1,0 +1,105 @@
+name: vcpkg Package Validation
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "ports/**"
+      - "versions/**"
+      - "vcpkg.json"
+      - "vcpkg-portfile.cmake"
+      - "tests/package-consumer/**"
+      - ".github/workflows/vcpkg-package-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vcpkg-package-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  vcpkg-consumer:
+    name: Build and consume nvlink-placement with vcpkg
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Overhauled
+        uses: actions/checkout@v4
+
+      - name: Install vcpkg host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake curl git pkg-config zip unzip tar
+
+      - name: Bootstrap vcpkg
+        env:
+          VCPKG_ROOT: ${{ runner.temp }}/vcpkg
+        run: |
+          git clone --depth 1 https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
+
+      - name: Build the port from the pinned 1.6.0 source tag
+        env:
+          VCPKG_ROOT: ${{ runner.temp }}/vcpkg
+        run: |
+          "$VCPKG_ROOT/vcpkg" install nvlink-placement:x64-linux \
+            --classic \
+            --overlay-ports="$GITHUB_WORKSPACE/ports/nvlink-placement"
+
+      - name: Verify installed CMake package config
+        env:
+          VCPKG_ROOT: ${{ runner.temp }}/vcpkg
+        run: |
+          config="$VCPKG_ROOT/installed/x64-linux/lib/cmake/OverhauledTensorRuntime/OverhauledTensorRuntimeConfig.cmake"
+          test -f "$config"
+          echo "Found installed package config: $config"
+
+      - name: Configure installed-package consumer
+        env:
+          VCPKG_ROOT: ${{ runner.temp }}/vcpkg
+        run: |
+          cmake -S tests/package-consumer -B build/vcpkg-consumer \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_MANIFEST_MODE=OFF \
+            -DOverhauledTensorRuntime_DIR="$VCPKG_ROOT/installed/x64-linux/lib/cmake/OverhauledTensorRuntime" \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build and run installed-package consumer
+        run: |
+          cmake --build build/vcpkg-consumer --parallel 2
+          ctest --test-dir build/vcpkg-consumer --output-on-failure
+
+  homebrew-formula:
+    name: Build and test Homebrew formula
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Overhauled
+        uses: actions/checkout@v4
+
+      - name: Install formula from pinned release source
+        run: brew install --build-from-source "$GITHUB_WORKSPACE/nvlink-placement.rb"
+
+      - name: Run installed formula test
+        run: brew test "$GITHUB_WORKSPACE/nvlink-placement.rb"
+
+  conan-package:
+    name: Build Conan 2 package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Overhauled
+        uses: actions/checkout@v4
+
+      - name: Install Conan in an isolated virtual environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-venv
+          python3 -m venv "$RUNNER_TEMP/conan-venv"
+          "$RUNNER_TEMP/conan-venv/bin/pip" install "conan>=2,<3"
+          echo "$RUNNER_TEMP/conan-venv/bin" >> "$GITHUB_PATH"
+
+      - name: Detect Conan profile
+        run: conan profile detect --force
+
+      - name: Build and package nvlink_placement
+        run: conan create . --build=missing
