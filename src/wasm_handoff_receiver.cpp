@@ -158,6 +158,7 @@ const std::vector<std::uint8_t>& ArtifactChunkReceiver::bytes() const {
 #include <openssl/rand.h>
 
 #include <algorithm>
+#include <cmath>
 #include <ctime>
 #include <set>
 #include <sstream>
@@ -541,16 +542,80 @@ public:
         std::size_t staged_bytes = 0;
     };
 
+    struct SenderBucket {
+        double tokens = 0.0;
+        std::chrono::steady_clock::time_point updated;
+        std::chrono::steady_clock::time_point last_seen;
+    };
+
     Impl(const TrustStore& sender, const TrustStore& publisher,
          ReplayGuard& replay, HandoffPolicy policy, const Ed25519Signer& signer)
         : sender_trust(sender), publisher_trust(publisher), replay_guard(replay),
-          policy(std::move(policy)), receipt_signer(signer) {}
+          policy(std::move(policy)), receipt_signer(signer),
+          global_tokens(static_cast<double>(this->policy.message_burst)),
+          global_updated(std::chrono::steady_clock::now()) {
+        if (!std::isfinite(this->policy.message_rate_per_second) ||
+            !std::isfinite(this->policy.per_sender_message_rate_per_second) ||
+            this->policy.message_rate_per_second <= 0.0 ||
+            this->policy.per_sender_message_rate_per_second <= 0.0 ||
+            this->policy.message_burst == 0 ||
+            this->policy.per_sender_message_burst == 0 ||
+            this->policy.maximum_rate_limit_subjects == 0 ||
+            this->policy.maximum_active_deployments == 0)
+            throw std::invalid_argument("invalid handoff flood-control policy");
+    }
+
+    bool admit_message(const std::string& subject) {
+        const auto now = std::chrono::steady_clock::now();
+        std::lock_guard<std::mutex> lock(rate_mutex);
+        const double global_elapsed =
+            std::chrono::duration<double>(now - global_updated).count();
+        global_tokens = std::min<double>(
+            static_cast<double>(policy.message_burst),
+            global_tokens + global_elapsed * policy.message_rate_per_second);
+        global_updated = now;
+        if (global_tokens < 1.0) return false;
+
+        const std::string key = subject.empty() ? std::string("<missing>") : subject;
+        for (auto it = sender_buckets.begin(); it != sender_buckets.end();) {
+            if (now - it->second.last_seen > std::chrono::minutes(5))
+                it = sender_buckets.erase(it);
+            else
+                ++it;
+        }
+        auto found = sender_buckets.find(key);
+        if (found == sender_buckets.end()) {
+            if (sender_buckets.size() >= policy.maximum_rate_limit_subjects)
+                return false;
+            SenderBucket bucket;
+            bucket.tokens = static_cast<double>(policy.per_sender_message_burst);
+            bucket.updated = now;
+            bucket.last_seen = now;
+            found = sender_buckets.emplace(key, bucket).first;
+        }
+        SenderBucket& bucket = found->second;
+        const double elapsed = std::chrono::duration<double>(now - bucket.updated).count();
+        bucket.tokens = std::min<double>(
+            static_cast<double>(policy.per_sender_message_burst),
+            bucket.tokens + elapsed * policy.per_sender_message_rate_per_second);
+        bucket.updated = now;
+        bucket.last_seen = now;
+        if (bucket.tokens < 1.0) return false;
+        bucket.tokens -= 1.0;
+        global_tokens -= 1.0;
+        return true;
+    }
 
     const TrustStore& sender_trust;
     const TrustStore& publisher_trust;
     ReplayGuard& replay_guard;
     HandoffPolicy policy;
     const Ed25519Signer& receipt_signer;
+    std::mutex activation_mutex;
+    std::mutex rate_mutex;
+    std::map<std::string, SenderBucket> sender_buckets;
+    double global_tokens;
+    std::chrono::steady_clock::time_point global_updated;
     mutable std::mutex mutex;
     std::map<std::string, Session> sessions;
     std::map<std::string, HandoffReceipt> active;
@@ -577,6 +642,9 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
         decision.rejection_code = code;
         return decision;
     };
+
+    if (!pimpl_->admit_message(request.envelope.subject))
+        return reject("policy_limit_exceeded");
 
     if (!valid_uuid(request.request_id) ||
         !safe_identifier(request.deployment_id, 128) ||
@@ -687,6 +755,9 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
         }
         if (pimpl_->sessions.find(request.request_id) != pimpl_->sessions.end())
             return reject("replay_detected");
+        if (pimpl_->active.find(request.deployment_id) == pimpl_->active.end() &&
+            pimpl_->active.size() >= pimpl_->policy.maximum_active_deployments)
+            return reject("policy_limit_exceeded");
         if (pimpl_->sessions.size() >= pimpl_->policy.maximum_concurrent_sessions ||
             pimpl_->staged_bytes > pimpl_->policy.maximum_staged_bytes ||
             total_bytes > pimpl_->policy.maximum_staged_bytes - pimpl_->staged_bytes)
@@ -739,6 +810,8 @@ bool HandoffReceiver::append_chunk(const ArtifactChunkMessage& chunk,
                                    std::string* error,
                                    std::chrono::system_clock::time_point now) {
     auto fail = [&](const char* why) { if (error) *error = why; return false; };
+    if (!pimpl_->admit_message(chunk.envelope.subject))
+        return fail("handoff message rate limit exceeded");
     const std::string canonical = canonical_chunk_message(chunk);
     if (!verify_message(pimpl_->sender_trust, pimpl_->replay_guard,
                         chunk.envelope, canonical, now, pimpl_->policy, error))
@@ -775,6 +848,9 @@ bool HandoffReceiver::activate(const ActivationRequest& request,
                                HandoffReceipt* receipt, std::string* error,
                                std::chrono::system_clock::time_point now) {
     auto fail = [&](const char* why) { if (error) *error = why; return false; };
+    if (!pimpl_->admit_message(request.envelope.subject))
+        return fail("handoff message rate limit exceeded");
+    std::unique_lock<std::mutex> activation_lock(pimpl_->activation_mutex);
     if (!receipt || !valid_uuid(request.request_id) || !valid_uuid(request.transfer_id))
         return fail("invalid activation request");
     const std::string canonical = canonical_activation_message(request);
@@ -904,8 +980,9 @@ bool HandoffReceiver::activate(const ActivationRequest& request,
         }
     }
     pimpl_->active[deployment_id] = next;
-    session.activated = true;
-    session.validating = false;
+    const std::size_t released_bytes = session.staged_bytes;
+    pimpl_->staged_bytes -= released_bytes;
+    pimpl_->sessions.erase(it);
     *receipt = next;
     if (error) error->clear();
     return true;
