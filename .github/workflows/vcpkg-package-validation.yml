@@ -54,6 +54,7 @@ jobs:
           cmake -S tests/package-consumer -B build/vcpkg-consumer \
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_MANIFEST_MODE=OFF \
+            -DCMAKE_PREFIX_PATH="$VCPKG_ROOT/installed/x64-linux" \
             -DCMAKE_BUILD_TYPE=Release
 
       - name: Build and run installed-package consumer
