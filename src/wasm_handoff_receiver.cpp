@@ -379,6 +379,8 @@ Ed25519Signer::~Ed25519Signer() {
 }
 
 const std::string& Ed25519Signer::key_id() const noexcept { return key_id_; }
+const std::string& Ed25519Signer::issuer() const noexcept { return issuer_; }
+const std::string& Ed25519Signer::subject() const noexcept { return subject_; }
 
 Ed25519Signature Ed25519Signer::sign(const std::uint8_t* message,
                                      std::size_t size) const {
@@ -498,20 +500,27 @@ std::string canonical_activation_message(const ActivationRequest& request) {
 }
 
 std::string canonical_receipt(const HandoffReceipt& receipt) {
-    return "{\"contract\":\"wasm-handoff/1\","
-           "\"payload\":{"
-           "\"abi_profile\":" + json_string(receipt.abi_profile) +
-           ",\"artifact_set_digest\":" + json_string(receipt.artifact_set_digest) +
-           ",\"backend_id\":" + json_string(receipt.backend_id) +
-           ",\"deployment_id\":" + json_string(receipt.deployment_id) +
-           ",\"engine\":" + json_string(receipt.engine) +
-           ",\"engine_version\":" + json_string(receipt.engine_version) +
-           ",\"issued_at\":" + std::to_string(receipt.issued_at) +
-           ",\"kind\":\"execution_receipt\","
-           "\"release_id\":" + json_string(receipt.release_id) +
-           ",\"request_id\":" + json_string(receipt.request_id) +
-           ",\"state\":" + json_string(receipt.state) + "},"
-           "\"signer_key_id\":" + json_string(receipt.signer_key_id) + "}";
+    SignedMetadata envelope;
+    envelope.message_id = receipt.message_id;
+    envelope.issued_at = receipt.issued_at;
+    envelope.expires_at = receipt.expires_at;
+    envelope.audience = receipt.audience;
+    envelope.issuer = receipt.issuer;
+    envelope.subject = receipt.subject;
+    envelope.key_id = receipt.signer_key_id;
+    envelope.nonce = receipt.nonce;
+    const std::string payload =
+        "{\\"abi_profile\\":" + json_string(receipt.abi_profile) +
+        ",\\"artifact_set_digest\\":" + json_string(receipt.artifact_set_digest) +
+        ",\\"backend_id\\":" + json_string(receipt.backend_id) +
+        ",\\"deployment_id\\":" + json_string(receipt.deployment_id) +
+        ",\\"engine\\":" + json_string(receipt.engine) +
+        ",\\"engine_version\\":" + json_string(receipt.engine_version) +
+        ",\\"kind\\":\\"execution_receipt\\""
+        ",\\"release_id\\":" + json_string(receipt.release_id) +
+        ",\\"request_id\\":" + json_string(receipt.request_id) +
+        ",\\"state\\":" + json_string(receipt.state) + "}";
+    return envelope_prefix(envelope, payload);
 }
 
 class HandoffReceiver::Impl {
