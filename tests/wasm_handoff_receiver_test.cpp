@@ -244,6 +244,15 @@ int main() {
     CHECK(decision.decision == "accepted");
     CHECK(!decision.transfer_id.empty());
 
+    CHECK(decision.envelope.audience == "yukki-os");
+    CHECK(receipt_trust.verify(
+        decision.envelope.key_id, decision.envelope.issuer,
+        decision.envelope.subject, decision.envelope.audience,
+        reinterpret_cast<const std::uint8_t*>(
+            canonical_prepare_decision_message(decision).data()),
+        canonical_prepare_decision_message(decision).size(),
+        decision.envelope.signature));
+
     ArtifactChunkMessage chunk;
     chunk.envelope = envelope_for(
         deployment_signer, "overhauled", 'c',
@@ -285,6 +294,26 @@ int main() {
     HandoffReceipt active_receipt;
     CHECK(handoff.get_active_release("deployment-1", &active_receipt));
     CHECK(active_receipt.release_id == "release-1");
+
+    // The receiver rate-limits attempts by signed sender identity as well as
+    // globally. A burst over the sender's configured token budget is rejected
+    // without creating another staged deployment.
+    HandoffPolicy limited_policy = policy;
+    limited_policy.per_sender_message_burst = 1;
+    limited_policy.per_sender_message_rate_per_second = 0.001;
+    ReplayGuard limited_replay(64);
+    HandoffReceiver limited_receiver(sender_trust, publisher_trust, limited_replay,
+                                     limited_policy, receipt_signer);
+    PrepareRequest first_limited = make_prepare(
+        wasm_v1, "release-rate-1", 'h',
+        "77777777-7777-4777-8777-777777777777");
+    PrepareRequest second_limited = make_prepare(
+        wasm_v1, "release-rate-2", 'i',
+        "88888888-8888-4888-8888-888888888888");
+    CHECK(limited_receiver.prepare(first_limited, now_tp).accepted);
+    const PrepareDecision throttled = limited_receiver.prepare(second_limited, now_tp);
+    CHECK(!throttled.accepted);
+    CHECK(throttled.rejection_code == "policy_limit_exceeded");
 
     // A subsequent artifact that fails module validation cannot replace the
     // active release and its staged bytes are discarded.
