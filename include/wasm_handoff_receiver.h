@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -182,9 +183,14 @@ struct HandoffPolicy {
     std::string engine_version;
     std::string abi_profile = "wasm-core-1";
     bool wasmtime_available = false;
+    // Must perform real Wasmtime compile/validation without activating the module.
+    // The receiver fails closed when no validator is installed.
+    std::function<bool(const ModuleDescriptor&, const std::vector<std::uint8_t>&, std::string*)> module_validator;
     // The current shared-Store Wasmtime embedding is only suitable for
     // operator-authorized trusted artifacts. This is false by default.
     bool allow_trusted_shared_store_workloads = false;
+    std::size_t maximum_concurrent_sessions = 16;
+    std::size_t maximum_staged_bytes = 512U * 1024U * 1024U;
 };
 
 struct PrepareDecision {
