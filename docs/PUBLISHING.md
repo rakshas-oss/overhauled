@@ -203,21 +203,23 @@ sudo dnf install nvlink-placement-devel
 
 ---
 
-## Published v1.5.0 and v1.5.1 patch candidate
+## Published v1.5.0 and v1.6.0 minor release candidate
 
-Overhauled v1.5.0 is published. Its optional native Wasmtime composition feature was released with a Wasmtime v51 C API integration defect. The fix is merged on main and the v1.5.1 patch candidate metadata is in place. The corrected main merge commit passed all 8 reported CI checks on 2026-11-21, including the Wasmtime v51 runtime lane, BRK2 mutation tests, paired YuKKi-OS interoperability, sanitizers and Ubuntu/Windows installed-package consumer checks. v1.5.1 is still not a published release: verify the exact release/tag commit and GitHub release assets before describing it as released.
+Overhauled v1.5.0 is published. Its optional native Wasmtime composition feature was released with a Wasmtime v51 C API integration defect. The Wasmtime v51 correction is carried into the v1.6.0 minor release candidate together with opt-in authenticated-WASM receiver primitives. The receiver feature is enabled separately with `ENABLE_WASM_HANDOFF=ON` and requires OpenSSL Crypto 1.1.1 or newer. This candidate is not published: verify all required checks on the exact release commit, then verify its tag and GitHub release assets before describing it as released.
 
-For the v1.5.1 candidate:
+For the v1.6.0 candidate:
 
-- CMake, Conan and the root vcpkg manifest are aligned to 1.5.1 on the candidate branch.
+- CMake, Conan and the root vcpkg manifest are aligned to 1.6.0 on the candidate branch.
+- The Conan and vcpkg default recipes do not enable `ENABLE_WASM_HANDOFF`; the optional receiver build requires OpenSSL Crypto and must be tested with that CMake option explicitly enabled.
+- The receiver primitives are not a network-facing authenticated BRK2 endpoint. Do not claim complete authenticated handoff, publisher provenance, durable replay protection or runtime admission.
 - The Wasmtime C API CI lane pins v51.0.0 on Linux x86_64. The candidate must pass the Wasmtime-enabled compile **and** provider/consumer runtime test.
 - The default build, BRK2 conformance, sanitizer, package-consumer and paired YuKKi-OS interoperability gates must also pass on the exact release commit.
-- Do not update Homebrew, vcpkg portfile archive hashes, or other external package registries until the final v1.5.1 archive exists. Generate checksums from that exact archive; never reuse a checksum from a different tag.
+- Do not update Homebrew, vcpkg portfile archive hashes, or other external package registries until the final v1.6.0 archive exists. Generate checksums from that exact archive; never reuse a checksum from a different tag.
 - A GitHub release does not automatically publish Conan Center, vcpkg, Homebrew, apt or dnf packages. Submit and verify each registry independently.
 
 ## Release checklist
 
-Before publishing a patch release:
+Before publishing a release:
 
 - [ ] Confirm the intended source tag and published baseline.
 - [ ] Update CMakeLists.txt, conanfile.py and vcpkg.json.

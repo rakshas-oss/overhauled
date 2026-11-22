@@ -1,4 +1,4 @@
-# Overhauled v1.5.1 (patch release candidate)
+# Overhauled v1.6.0 (release candidate)
 
 > **Published v1.5.0:** adds optional native Wasmtime runtime composition on top of the v1.4.0 BRK2 locality codec baseline. v1.5.1 corrects the Wasmtime v51 C API integration and its composition test.
 
@@ -6,7 +6,7 @@
 >
 > Turn GPU interconnect awareness into higher throughput, better tail latency, and more effective use of accelerator infrastructure.
 
-> **Release status:** v1.5.0 is published. v1.5.1 is a patch candidate carrying the Wasmtime v51 C API build and test correction; it must pass the pinned Wasmtime lane and full release gates before publication.
+> **Release status:** v1.5.0 is the published baseline. v1.6.0 is a release candidate combining the Wasmtime v51 C API correction with opt-in authenticated-WASM handoff receiver primitives. It is not published until the exact release commit passes all required gates and is tagged.
 
 Overhauled is a C++17 placement and execution library with an interoperable broker service. It provides topology-aware GPU scheduling and broker dispatch for CPU, GPU, and optional NPU execution.
 
@@ -15,12 +15,12 @@ Overhauled is a C++17 placement and execution library with an interoperable brok
 [![Release](https://img.shields.io/badge/Release-v1.5.1--rc-blueviolet)](#)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2FBRK2-orange)](#)
 
-## What's new in v1.5.1
+## What's new in v1.6.0
 
-- **Wasmtime v51 C API compatibility:** use the supported `wasm_name_t` trap-message helpers and correct scalar result handling so the opt-in runtime compiles against the pinned Wasmtime v51 C API. The feature remains opt-in through `ENABLE_WASM_RUNTIME`; the default build remains unchanged.
-- **Runtime composition regression coverage:** validate import-signature mismatch at module registration, matching Wasmtime linker validation semantics.
-- **Retained instances and typed invocation:** the initial host API retains instantiated roots and supports exported `() -> i32` calls with explicit errors for missing exports, traps and incompatible results.
-- **Composition conformance coverage:** provider/consumer fixtures exercise cross-module imports and result propagation. Wasmtime-enabled CI is a release gate; this candidate does not claim production tenant isolation.
+- **Wasmtime v51 C API correction:** retain the supported `wasm_name_t` lifecycle and linker-time import-signature validation from the 1.5.1 patch candidate.
+- **Opt-in authenticated-WASM receiver primitives:** add OpenSSL-backed Ed25519 verification over caller-supplied RFC 8785 canonical bytes, issuer/subject/audience trust binding, SHA-256 integrity checks, bounded process-local replay protection, and strict sequential artifact chunk staging.
+- **Independent feature gates:** `ENABLE_WASM_HANDOFF=ON` enables the receiver primitives and OpenSSL Crypto dependency; `ENABLE_WASM_RUNTIME=ON` remains a separate optional Wasmtime embedding. The default build remains unchanged.
+- **Explicit security boundary:** this is not yet a network-facing BRK2 handoff handler. Transport peer authentication, full schema decoding/canonicalization, publisher provenance, durable replay storage, signed prepare decisions/receipts, backend selection, and activation remain future integration work. Do not advertise a deployable authenticated handoff endpoint yet.
 
 ## Capabilities
 

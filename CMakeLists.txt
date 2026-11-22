@@ -2,7 +2,7 @@
 # Copyright (c) 2024 NVLink Placement Contributors
 
 cmake_minimum_required(VERSION 3.18)
-project(OverhauledTensorRuntime VERSION 1.5.1 LANGUAGES CXX)
+project(OverhauledTensorRuntime VERSION 1.6.0 LANGUAGES CXX)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
