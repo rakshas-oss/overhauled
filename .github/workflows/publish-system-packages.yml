@@ -22,7 +22,7 @@ jobs:
     if: ${{ inputs.publish_confirmation == 'publish' }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
       - name: Checkout exact release tag
         uses: actions/checkout@v4
