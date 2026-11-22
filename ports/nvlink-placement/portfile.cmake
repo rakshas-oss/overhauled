@@ -20,6 +20,11 @@ vcpkg_cmake_configure(
 )
 
 vcpkg_cmake_install()
+
+# Relocate exported CMake package files to vcpkg's canonical share/<port>
+# directory so find_package works for manifest and classic consumers.
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/OverhauledTensorRuntime)
+
 file(REMOVE_RECURSE
     "${CURRENT_PACKAGES_DIR}/debug/include"
     "${CURRENT_PACKAGES_DIR}/debug/share"
