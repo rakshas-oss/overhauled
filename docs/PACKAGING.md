@@ -8,7 +8,7 @@ binary.
 
 | Channel | Intended use | Current state |
 |---|---|---|
-| vcpkg Git registry | C++ library and broker, CPU-only baseline | Registry port and 1.6.0 baseline merged to `main`; overlay build and installed CMake consumer passed. A consumer test against the Git registry itself remains a separate verification step. |
+| vcpkg Git registry | C++ library and broker, CPU-only baseline | Registry port and 1.6.0 baseline merged to `main`; overlay build and installed CMake consumer passed. PR #82 adds a consumer install through the actual Git registry; that check is pending. |
 | Homebrew formula | macOS/Linux developer installation | 1.6.0 formula and immutable source checksum are in `main`; Homebrew CI invocation fix is under review in PR #82, so formula installation is not yet marked verified. |
 | Conan | Existing Conan consumers | Conan 2 recipe is in `main` and `conan create . --build=missing` passed; no remote upload is claimed. |
 | Conan Center Index | Public curated Conan package | Not submitted; CCI reviews project maturity, usage and maintenance. An upstream PR is a separate contribution |
