@@ -210,6 +210,10 @@ struct HandoffPolicy {
     double per_sender_message_rate_per_second = 20.0;
     std::size_t per_sender_message_burst = 40;
     std::size_t maximum_rate_limit_subjects = 1024;
+    std::size_t ingress_byte_burst = 16U * 1024U * 1024U;
+    std::size_t per_sender_ingress_byte_burst = 8U * 1024U * 1024U;
+    double ingress_bytes_per_second = 32.0 * 1024.0 * 1024.0;
+    double per_sender_ingress_bytes_per_second = 8.0 * 1024.0 * 1024.0;
 };
 
 struct PrepareDecision {
