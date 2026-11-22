@@ -1,0 +1,8 @@
+{
+  "default": {
+    "nvlink-placement": {
+      "baseline": "1.6.0",
+      "port-version": 0
+    }
+  }
+}
