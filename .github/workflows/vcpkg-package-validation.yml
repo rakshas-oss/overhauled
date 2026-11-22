@@ -43,7 +43,8 @@ jobs:
         env:
           VCPKG_ROOT: ${{ runner.temp }}/vcpkg
         run: |
-          git fetch origin main --depth=1
+          registry_ref="${GITHUB_HEAD_REF:-main}"
+          git fetch origin "$registry_ref" --depth=1
           registry_baseline=$(git rev-parse FETCH_HEAD)
           builtin_baseline=$(git -C "$VCPKG_ROOT" rev-parse HEAD)
           consumer="$RUNNER_TEMP/git-registry-consumer"
@@ -65,7 +66,7 @@ jobs:
               {
                 "kind": "git",
                 "repository": "https://github.com/rakshas-oss/overhauled",
-                "reference": "main",
+                "reference": "$registry_ref",
                 "baseline": "$registry_baseline",
                 "packages": ["nvlink-placement"]
               }
@@ -117,6 +118,8 @@ jobs:
 
       - name: Install formula from pinned release source
         run: |
+          pwd
+          ls -l "$GITHUB_WORKSPACE/nvlink-placement.rb"
           test -f "$GITHUB_WORKSPACE/nvlink-placement.rb"
           brew install --build-from-source --formula ./nvlink-placement.rb
 
