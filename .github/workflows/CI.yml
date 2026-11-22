@@ -73,6 +73,7 @@ jobs:
             -DBUILD_BROKER=ON \
             -DBUILD_TESTING=ON \
             -DENABLE_WASM_RUNTIME=ON \
+            -DENABLE_WASM_HANDOFF=ON \
             -DWASMTIME_ROOT="$RUNNER_TEMP/wasmtime"
 
       - name: Build Wasmtime integration
@@ -81,7 +82,7 @@ jobs:
       - name: Run Wasmtime composition smoke test
         env:
           LD_LIBRARY_PATH: ${{ runner.temp }}/wasmtime/lib:${{ env.LD_LIBRARY_PATH }}
-        run: ctest --test-dir build-wasm --output-on-failure -R wasm_composition_test
+        run: ctest --test-dir build-wasm --output-on-failure -R 'wasm_(composition|handoff_runtime_bridge)_test'
 
   wasm-handoff-receiver:
     name: OpenSSL-enabled authenticated WASM handoff
