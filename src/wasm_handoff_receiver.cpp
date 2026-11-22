@@ -503,6 +503,62 @@ std::string canonical_activation_message(const ActivationRequest& request) {
     return envelope_prefix(request.envelope, payload);
 }
 
+std::string canonical_prepare_decision_message(const PrepareDecision& decision) {
+    std::vector<std::string> capabilities = decision.accepted_capabilities;
+    std::sort(capabilities.begin(), capabilities.end());
+    std::string caps = "[";
+    bool first = true;
+    for (const auto& capability : capabilities) {
+        if (!first) caps.push_back(',');
+        first = false;
+        caps += json_string(capability);
+    }
+    caps.push_back(']');
+
+    std::string payload;
+    if (decision.accepted) {
+        payload =
+            "{\"accepted_capabilities\":" + caps +
+            ",\"abi_profile\":" + json_string(decision.abi_profile) +
+            ",\"artifact_transfer_id\":" + json_string(decision.transfer_id) +
+            ",\"backend_id\":" + json_string(decision.backend_id) +
+            ",\"chunk_size_bytes\":" + std::to_string(decision.chunk_size_bytes) +
+            ",\"decision\":\"accepted\""
+            ",\"engine\":" + json_string(decision.engine) +
+            ",\"engine_version\":" + json_string(decision.engine_version) +
+            ",\"kind\":\"prepare_decision\""
+            ",\"request_id\":" + json_string(decision.request_id) + "}";
+    } else {
+        payload =
+            "{\"decision\":\"rejected\","
+            "\"kind\":\"prepare_decision\","
+            "\"rejection_code\":" + json_string(decision.rejection_code) +
+            ",\"request_id\":" + json_string(decision.request_id) + "}";
+    }
+    return envelope_prefix(decision.envelope, payload);
+}
+
+namespace {
+void sign_prepare_decision(PrepareDecision* decision, const HandoffPolicy& policy,
+                           const Ed25519Signer& signer,
+                           std::chrono::system_clock::time_point now) {
+    if (!decision) throw std::invalid_argument("decision pointer must not be null");
+    const auto issued = static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
+    decision->envelope.message_id = random_uuid();
+    decision->envelope.issued_at = issued;
+    decision->envelope.expires_at = issued + policy.maximum_message_lifetime_seconds;
+    decision->envelope.audience = policy.receipt_audience;
+    decision->envelope.issuer = signer.issuer();
+    decision->envelope.subject = signer.subject();
+    decision->envelope.key_id = signer.key_id();
+    decision->envelope.nonce = random_uuid();
+    const std::string bytes = canonical_prepare_decision_message(*decision);
+    decision->envelope.signature = signer.sign(
+        reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size());
+}
+} // namespace
+
 std::string canonical_receipt(const HandoffReceipt& receipt) {
     SignedMetadata envelope;
     envelope.message_id = receipt.message_id;
@@ -669,15 +725,19 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
                                          std::chrono::system_clock::time_point now) {
     PrepareDecision decision;
     decision.request_id = request.request_id;
+    bool rate_admitted = pimpl_->admit_message(request.envelope.subject);
     auto reject = [&](const char* code) {
         decision.accepted = false;
         decision.decision = "rejected";
         decision.rejection_code = code;
+        // When the source is already over budget, do not spend more CPU
+        // signing a rejection; the transport should return a rate-limit status.
+        if (rate_admitted) sign_prepare_decision(&decision, pimpl_->policy,
+                                                  pimpl_->receipt_signer, now);
         return decision;
     };
 
-    if (!pimpl_->admit_message(request.envelope.subject))
-        return reject("policy_limit_exceeded");
+    if (!rate_admitted) return reject("policy_limit_exceeded");
 
     if (!valid_uuid(request.request_id) ||
         !safe_identifier(request.deployment_id, 128) ||
@@ -836,6 +896,7 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
             return reject("replay_detected");
         pimpl_->staged_bytes += total_bytes;
     }
+    sign_prepare_decision(&accepted, pimpl_->policy, pimpl_->receipt_signer, now);
     return accepted;
 }
 
