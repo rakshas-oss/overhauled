@@ -20,36 +20,51 @@ Do not begin with optional accelerators. Prove the CPU-only path first, then ena
 
 ### WASM integration paths
 
-Overhauled supports two distinct paths; do not conflate them.
+Overhauled currently exposes three distinct WebAssembly-related paths. They are separate APIs and must not be described as one automatic deployment pipeline.
 
-**WSM1 host-mediated task/lifecycle path (the YuKKi-OS integration):** YuKKi-OS
-validates, compiles, instantiates and runs guest modules. Overhauled receives
-host-prepared task data and module-version lifecycle messages. Do not upload a
-`.wasm` file through WSM1 expecting the broker to compile or execute it.
+**1. WSM1 host-mediated task/lifecycle path (YuKKi-OS broker adapter).** YuKKi-OS validates, compiles, instantiates and runs its guest modules. Overhauled receives host-prepared task data and module-version lifecycle messages. Do not upload a `.wasm` file through WSM1 expecting the broker to compile or execute it. The broker's WSM1 `Prepare` operation registers a module/version identity and placement lease; it does not receive the executable artifact.
 
-For YuKKi-OS, the WSM1 adapter is opt-in and configured in the **YuKKi-OS
-process**, not here: set `YUKKI_GPU_ADAPTER_ENABLED=true`, set
-`YUKKI_GPU_USE_WSM1=true` when using the WSM1 task/lifecycle wire mode, and
-point `YUKKI_GPU_BROKER_ENDPOINT` at this broker. See [YuKKi-OS
-SYSADMIN_HOWTO](https://github.com/rakshas-oss/YuKKi-OS/blob/main/docs/SYSADMIN_HOWTO.md)
-for guest compilation, Wasmtime limits, host authentication and module
-lifecycle.
+For YuKKi-OS, enable the WSM1 adapter in the YuKKi-OS process, not here: set `YUKKI_GPU_ADAPTER_ENABLED=true`, set `YUKKI_GPU_USE_WSM1=true`, and point `YUKKI_GPU_BROKER_ENDPOINT` at this broker. See the YuKKi-OS system administration guide for guest compilation and lifecycle configuration.
 
-The broker's `Prepare` operation registers a module/version identity and
-placement lease; it does not receive the executable artifact or compile it.
-The `TaskRequest` carries application task data and is dispatched to the
-configured compute callback or broker reference path.
+**2. Optional native Wasmtime composition API.** Applications may enable `ENABLE_WASM_RUNTIME=ON` to compile and compose core-Wasm modules inside the Overhauled process through `WasmCompositionRuntime`. This is a separate native API, not a WSM1 feature and not automatically connected to YuKKi-OS composition. The CI-qualified C API is Wasmtime v51.0.0 on Linux x86_64. The embedding shares a Store/resource domain and is not a multi-tenant sandbox; see [Native Wasmtime runtime composition](WASM_RUNTIME_COMPOSITION.md).
 
-**Optional native Wasmtime composition path:** applications may explicitly
-enable `ENABLE_WASM_RUNTIME=ON` to compile and compose core-Wasm modules
-inside the Overhauled process through `WasmCompositionRuntime`. This is a
-separate native API, not a WSM1 feature and not an automatic handoff from
-YuKKi-OS. The CI-supported C API is pinned to Wasmtime v51.0.0 on Linux
-x86_64. See [Native Wasmtime runtime composition](WASM_RUNTIME_COMPOSITION.md)
-for dependency layout, configuration, runtime tests and security limits.
-The native embedding shares a Store/resource domain; it is not a complete
-multi-tenant sandbox.
+**3. Authenticated executable-artifact handoff receiver.** `ENABLE_WASM_HANDOFF=ON` builds the OpenSSL-backed `HandoffReceiver` API. It verifies the deployment sender and publisher through separate Ed25519 trust stores, enforces expiry/replay and bounded sequential chunks, and signs prepare decisions and activation receipts. It does not add a network listener. An integrating application must supply a transport adapter protected by mTLS 1.3 or equivalent, bind transport identity to the signed sender, and decode the shared handoff schema into the typed receiver API.
 
+The feature can be compiled and tested without enabling the native Wasmtime composition runtime:
+
+```bash
+cmake -S . -B build-handoff \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_BROKER=ON \
+  -DBUILD_TESTING=ON \
+  -DENABLE_CUDA=OFF \
+  -DENABLE_TENSORRT=OFF \
+  -DENABLE_WASM_HANDOFF=ON
+cmake --build build-handoff --target wasm_handoff_receiver_test --parallel
+ctest --test-dir build-handoff --output-on-failure -R wasm_handoff_receiver_test
+```
+
+To build the receiver together with the optional Wasmtime runtime bridge, install the Wasmtime C API and enable both feature switches:
+
+```bash
+cmake -S . -B build-handoff-wasmtime \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_BROKER=ON \
+  -DBUILD_TESTING=ON \
+  -DENABLE_CUDA=OFF \
+  -DENABLE_TENSORRT=OFF \
+  -DENABLE_WASM_HANDOFF=ON \
+  -DENABLE_WASM_RUNTIME=ON \
+  -DWASMTIME_ROOT=/path/to/wasmtime-c-api
+cmake --build build-handoff-wasmtime --target wasm_handoff_runtime_bridge_test --parallel
+ctest --test-dir build-handoff-wasmtime --output-on-failure -R 'wasm_(composition|handoff_runtime_bridge)_test'
+```
+
+The runtime bridge compiles and registers the complete staged module set in a fresh runtime/store, then atomically switches the process-local active runtime after successful validation. It does not automatically route every WSM1 task through that runtime. The shared-Store embedding remains suitable only for operator-authorized trusted artifacts or an independently isolated process boundary.
+
+Receiver defaults include 16 concurrent preparations, 512 MiB of staged bytes, 64 MiB per module, 256 MiB per artifact set and 4 MiB per chunk. Message and ingress-byte rates are limited globally and per sender, with bounded sender-bucket tracking. Operators can lower policy values but cannot configure them above the implementation's hard ceilings. See [receiver implementation and limits](WASM_HANDOFF_RECEIVER_IMPLEMENTATION.md).
+
+Untrusted streams remain independent of executable-artifact trust: NXR1, MED1 and stream-relay paths do not require a WASM publisher key. They continue to use their own frame, byte, connection, rate and backpressure limits. Application-level controls do not replace edge mitigation against volumetric DDoS.
 ## 2. Install prerequisites
 
 Required for the broker:
@@ -84,13 +99,13 @@ cd overhauled
 git fetch --tags origin
 ```
 
-For the currently published release baseline, check out the v1.5.0 tag:
+For the currently published release baseline, check out the 1.6.0 tag:
 
 ```bash
-git checkout v1.5.0
+git checkout 1.6.0
 ```
 
-`v1.5.0` is published. The Wasmtime v51 C API correction is being prepared for v1.5.1; do not use or describe v1.5.1 as released until its tag and release are published.
+`1.6.0` is the latest published release baseline (2026-11-22). The `1.7.0` version metadata is present on `main` after the release-candidate PR merged, but no `1.7.0` tag or GitHub Release has been published. Use the published `1.6.0` tag for a reproducible stable build; use a reviewed `main` commit only when intentionally validating the next release candidate.
 
 If the tag has not yet been created, use the reviewed release commit or the intended branch supplied by your release process. Do not assume an open pull request is already part of `main` or a published release.
 

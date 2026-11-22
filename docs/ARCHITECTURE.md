@@ -2,7 +2,7 @@
 
 ## 1. System boundary
 
-Overhauled is the broker execution plane. It accepts bounded binary broker frames, validates optional YuKKi worker directives, admits requests into nested CPU-group/NUMA worker-class queue shards, applies process-cpuset-bounded CPU-group affinity where supported, optionally borrows bounded elastic worker capacity for eligible classes, selects an execution backend, and returns structured results and telemetry. YuKKi-OS owns workload semantics, class selection, spatial resolution, logical affinity keys, deadlines, and advisory preferred-NUMA hints; Overhauled owns local queue shards, dedicated and elastic worker admission, Linux process-allowed CPU discovery/worker affinity, GPU topology, accelerator placement, and execution. This repository does not embed YuKKi-OS or Wasmtime.
+Overhauled is the broker execution plane. It accepts bounded binary broker frames, validates optional YuKKi worker directives, admits requests into nested CPU-group/NUMA worker-class queue shards, applies process-cpuset-bounded CPU-group affinity where supported, optionally borrows bounded elastic worker capacity for eligible classes, selects an execution backend, and returns structured results and telemetry. YuKKi-OS owns workload semantics, class selection, spatial resolution, logical affinity keys, deadlines, and advisory preferred-NUMA hints; Overhauled owns local queue shards, dedicated and elastic worker admission, Linux process-allowed CPU discovery/worker affinity, GPU topology, accelerator placement, and execution. This repository does not embed YuKKi-OS. It can optionally link the Wasmtime C API when the native runtime feature is enabled; that runtime remains an independent broker-side component.
 
 ```text
 YuKKi-OS / external client
@@ -54,6 +54,25 @@ The NPU simulator is CPU emulation, not acceleration.
 
 
 ## Authenticated WASM deployment boundary
+The explicit artifact-deployment path is separate from the normal broker listener:
+
+```text
+YuKKi-OS HandoffSender
+        |
+        | caller-provided HandoffTransport
+        | mutually authenticated TLS 1.3 / equivalent
+        v
+Overhauled HandoffReceiver API
+        |  sender + publisher trust, replay, size/rate admission
+        |  sequential chunks + SHA-256 verification
+        v
+WasmHandoffRuntimeBridge (optional)
+        |  compile full release in a fresh runtime/store
+        v
+atomic process-local active-runtime promotion
+```
+
+The diagram is a library/API integration path, not a new BRK1/BRK2, HTTP or WSM1 endpoint. The transport adapter must decode the shared schema into the receiver's typed request structures and bind its authenticated peer identity to the signed sender. A local successful activation is not a distributed transaction.
 
 The optional `ENABLE_WASM_HANDOFF` component provides the Overhauled-side
 prepare/transfer/activation API. It verifies signed deployment messages,
