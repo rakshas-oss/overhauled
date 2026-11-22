@@ -82,10 +82,13 @@ jobs:
       - name: Checkout Overhauled
         uses: actions/checkout@v4
 
-      - name: Install Conan
+      - name: Install Conan in an isolated virtual environment
         run: |
-          python3 -m pip install --user "conan>=2,<3"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          sudo apt-get update
+          sudo apt-get install -y python3-venv
+          python3 -m venv "$RUNNER_TEMP/conan-venv"
+          "$RUNNER_TEMP/conan-venv/bin/pip" install "conan>=2,<3"
+          echo "$RUNNER_TEMP/conan-venv/bin" >> "$GITHUB_PATH"
 
       - name: Detect Conan profile
         run: conan profile detect --force
