@@ -471,6 +471,8 @@ std::string canonical_prepare_message(const PrepareRequest& request) {
         ",\"wall_time_ms\":" + std::to_string(request.requested_wall_time_ms) + "}"
         ",\"manifest_digest\":" + json_string(request.manifest_digest) +
         ",\"modules\":" + modules +
+        (request.preferred_backend.empty() ? std::string() :
+            ",\"preferred_backend\":" + json_string(request.preferred_backend)) +
         ",\"publisher_provenance\":" + publisher_object(request.publisher) +
         ",\"release_id\":" + json_string(request.release_id) +
         ",\"request_id\":" + json_string(request.request_id) +
