@@ -118,13 +118,15 @@ jobs:
 
       - name: Install formula from pinned release source
         run: |
-          pwd
-          ls -l "$GITHUB_WORKSPACE/Formula/nvlink-placement.rb"
           test -f "$GITHUB_WORKSPACE/Formula/nvlink-placement.rb"
-          brew install --build-from-source ./Formula/nvlink-placement.rb
+          brew tap-new --no-git rakshas-oss/overhauled-ci
+          tap_dir="$(brew --repository rakshas-oss/overhauled-ci)"
+          mkdir -p "$tap_dir/Formula"
+          cp "$GITHUB_WORKSPACE/Formula/nvlink-placement.rb" "$tap_dir/Formula/nvlink-placement.rb"
+          brew install --build-from-source rakshas-oss/overhauled-ci/nvlink-placement
 
       - name: Run installed formula test
-        run: brew test nvlink-placement
+        run: brew test rakshas-oss/overhauled-ci/nvlink-placement
 
   conan-package:
     name: Build Conan 2 package
