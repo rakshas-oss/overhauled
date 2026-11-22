@@ -1,0 +1,59 @@
+name: Authenticated WASM Handoff Validation
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "CMakeLists.txt"
+      - "include/wasm_handoff_receiver.h"
+      - "src/wasm_handoff_receiver.cpp"
+      - "include/wasm_composition.h"
+      - "src/wasm_composition.cpp"
+      - "protocol/wasm-handoff-v1.schema.json"
+      - "tests/wasm_handoff_receiver_test.cpp"
+      - ".github/workflows/wasm-handoff-validation.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "CMakeLists.txt"
+      - "include/wasm_handoff_receiver.h"
+      - "src/wasm_handoff_receiver.cpp"
+      - "include/wasm_composition.h"
+      - "src/wasm_composition.cpp"
+      - "protocol/wasm-handoff-v1.schema.json"
+      - "tests/wasm_handoff_receiver_test.cpp"
+      - ".github/workflows/wasm-handoff-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  receiver-conformance:
+    name: Compile and test authenticated WASM receiver (CPU-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install native build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ libssl-dev
+
+      - name: Configure receiver and broker
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_CUDA=OFF \
+            -DENABLE_TENSORRT=OFF \
+            -DENABLE_WASM_HANDOFF=ON \
+            -DBUILD_BROKER=ON \
+            -DBUILD_EXAMPLES=OFF
+
+      - name: Build receiver conformance test
+        run: cmake --build build --target wasm_handoff_receiver_test --parallel 2
+
+      - name: Run receiver conformance tests
+        run: ctest --test-dir build --output-on-failure -R wasm_handoff_receiver_test
