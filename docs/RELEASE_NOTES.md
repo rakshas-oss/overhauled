@@ -1,3 +1,25 @@
+## v1.6.0 (minor release candidate; tag pending)
+Date: 2026-11-22
+
+### Highlights
+
+- **Authenticated-WASM receiver primitives:** add opt-in OpenSSL EVP Ed25519 signature verification over caller-supplied RFC 8785 canonical bytes, with out-of-band trust entries bound to issuer, subject and audience.
+- **Artifact integrity:** add SHA-256 helpers, bounded process-local replay protection, sequential bounded chunk staging, per-chunk digest validation and final artifact digest verification.
+- **Independent build options:** `ENABLE_WASM_HANDOFF=ON` enables the new receiver primitives and requires OpenSSL Crypto 1.1.1 or newer. `ENABLE_WASM_RUNTIME` remains an independent optional Wasmtime feature; the default build remains unchanged.
+- **Wasmtime v51 correction:** carry forward the C API and linker-validation fixes previously documented in the v1.5.1 patch candidate.
+
+### Explicit implementation boundary
+
+This release candidate does not yet provide a network-facing authenticated BRK2 handoff handler. It does not establish mTLS or authenticated peer identity, decode and canonicalize the full handoff schema, verify artifact publisher provenance, persist replay state across processes, issue signed prepare decisions or execution receipts, select/admit a runtime backend, or activate a release. Do not advertise the receiver as a deployable authenticated handoff service.
+
+The verifier expects RFC 8785 canonical bytes from its caller. Replay protection is process-local. The Wasmtime embedding continues to use a shared Store/resource domain and is not a complete tenant sandbox.
+
+### Validation and release gate
+
+The feature-specific test target is enabled only with `ENABLE_WASM_HANDOFF=ON`. Require that opt-in build/test lane, default native CI, BRK2 conformance/mutation, sanitizers, package-consumer checks, Wasmtime v51 lane, and paired YuKKi-OS interoperability to pass on the exact release candidate commit before tagging or publishing. The merged feature PR alone is not release validation.
+
+---
+
 ## v1.5.1 (patch release candidate; tag pending)
 Date: 2026-11-21
 

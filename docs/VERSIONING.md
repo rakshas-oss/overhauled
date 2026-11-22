@@ -2,54 +2,50 @@
 
 ## Current release candidate
 
-- **Proposed version:** `1.5.1`
-- **CMake project version:** `1.5.1`
-- **Conan recipe version:** `1.5.1`
-- **vcpkg manifest version:** `1.5.1`
+- **Proposed version:** `1.6.0`
+- **CMake project version:** `1.6.0`
+- **Conan recipe version:** `1.6.0`
+- **vcpkg manifest version:** `1.6.0`
 - **Runtime/package identity:** `OverhauledTensorRuntime` / `nvlink_placement`
-- **Release state:** patch candidate; v1.5.0 is published; v1.5.1 tag and release archive are pending
+- **Release state:** candidate only; v1.5.0 remains the published baseline. Do not describe v1.6.0 as released until the exact approved commit is tagged and its release assets are verified.
 
 ## Version assessment
 
-The v1.5.1 patch follows published v1.5.0 and corrects the optional Wasmtime v51 C API integration and its regression test:
+The v1.6.0 minor candidate carries additive broker-side WASM handoff receiver primitives on top of the Wasmtime v51 correction previously tracked as v1.5.1:
 
-- Use the supported `wasm_name_t` lifecycle (`wasm_name_new_empty` / `wasm_name_delete`) for trap messages; remove calls to unavailable `wasm_message_new_empty`, `wasm_message_delete`, and `wasmtime_val_delete` symbols.
-- Validate incompatible consumer imports at module registration, where the Wasmtime linker reports signature mismatches, rather than expecting instantiation to fail.
-- Preserve the optional `ENABLE_WASM_RUNTIME` feature and its existing runtime-composition API.
-- Keep the default build unchanged when `ENABLE_WASM_RUNTIME=OFF`; no BRK1, BRK2 or WSM1 wire-format change is intended.
+- OpenSSL EVP Ed25519 verification over caller-supplied RFC 8785 canonical message bytes.
+- Operator-provisioned trust entries binding key IDs to exact issuer, subject and audience values.
+- SHA-256 digest parsing and hashing.
+- Bounded process-local replay guard keyed by sender, audience and nonce.
+- Strict sequential artifact chunk staging with per-chunk digest checks and final artifact digest verification.
+- Opt-in CMake integration via `ENABLE_WASM_HANDOFF=ON`; OpenSSL Crypto is required only for that feature. The default broker build and the separate `ENABLE_WASM_RUNTIME` Wasmtime option remain unchanged.
 
-This patch does not expand the sandbox security model. Modules still share one Store/resource domain; fuel metering, epoch interruption, WASI capability grants, artifact signing/cache eviction and task-level teardown remain incomplete.
+This is a meaningful additive capability and warrants a minor version increment. It is not a complete network-facing handoff implementation: there is no authenticated BRK2 handoff endpoint, complete schema decoder/canonicalizer, transport identity binding, publisher-provenance verifier, durable replay store, signed prepare/receipt flow, runtime backend admission, or release activation. Do not expose or advertise a deployable authenticated handoff service yet.
 
-## Verified CI result (2026-11-21)
+## Compatibility and security boundaries
 
-The documentation update merged as commit `bacb67ec5918697ffabd0e533b1c403f85105a1a`. All **8/8 GitHub Actions checks** on that merge commit completed successfully:
-
-- Paired repository release gate.
-- Wasmtime v51 compile and runtime composition.
-- BRK2 C++ codec and mutation tests.
-- Paired YuKKi-OS BRK1/BRK2 interoperability.
-- ASan + UBSan validation and the Overhauled C++ sanitizer verification.
-- Installed CMake package consumer tests on Ubuntu and Windows.
-
-This is a successful CI result for the documentation merge commit and the code it contains; it is not by itself a v1.5.1 release approval. The Windows result is an installed-package consumer test, not a claim that native Windows/MSVC broker execution is supported. The Wasmtime lane remains the documented Linux x86_64 / Wasmtime C API v51.0.0 target.
+- No BRK1, BRK2 or WSM1 wire-format changes are introduced by the receiver primitives.
+- The verifier consumes already-canonicalized RFC 8785 bytes; it does not canonicalize JSON itself.
+- Trust keys must be provisioned out of band and must never be accepted from the incoming artifact.
+- Replay protection is process-local and bounded. Multi-process deployments need shared replay state or routing to a single replay authority.
+- Artifacts are staged sequentially and bytes are unavailable through the API until final digest verification succeeds.
+- `ENABLE_WASM_HANDOFF` and `ENABLE_WASM_RUNTIME` are independent opt-in features.
+- The Wasmtime C API embedding still shares one Store/resource domain and is not tenant isolation. Fuel metering, epoch interruption, fine-grained WASI grants and per-task isolation/teardown remain incomplete.
+- The locality codec remains a wire contract only; no broker-owned payload allocator applies or verifies physical memory placement.
+- Deadlines order and reject expired queued work; they do not preempt arbitrary native code or provide hard real-time guarantees.
+- Mainline Windows/MSVC is unsupported. Browser-WASM and WASI are not Overhauled deployment targets.
 
 ## Release policy
 
-- v1.5.0 is the published baseline. Its Wasmtime-enabled build was affected by the C API mismatch described above.
-- The v1.5.1 release-metadata PR is merged and the corrected mainline CI gates listed above pass. Still verify the exact intended release/tag commit and release artifacts before tagging or publishing v1.5.1.
-- Updating this repository does not publish Conan Center, vcpkg, Homebrew, apt or dnf packages. Verify each external registry separately.
-- Update vcpkg/Homebrew archive URLs and checksums only from the exact final v1.5.1 release archive.
-- YuKKi-OS owns workload semantics, spatial resolution and directives. Overhauled owns broker queues, admission, local physical CPU/NUMA worker placement, GPU topology, accelerator placement and execution.
-- The locality codec is a wire contract only: no broker-owned payload allocator applies or verifies physical memory placement. Do not claim locality for WASM linear memory, datasets, accelerator staging, GPU VRAM or NPU memory.
-- Deadlines order and reject expired queued work; they do not preempt arbitrary native code or provide a hard real-time guarantee.
-- Mainline Windows/MSVC is unsupported. Browser-WASM and WASI are not Overhauled deployment targets.
-
-## Release candidate history
-
-- `v1.4.0` — merged release candidate for the BRK2 locality-placement codec; release tag/publication remains subject to its release gates.
+- v1.5.0 is the published baseline and introduced optional native Wasmtime runtime composition.
+- The v1.5.1 patch candidate corrected the Wasmtime v51 C API integration. Its correction is included in the v1.6.0 candidate; do not claim v1.5.1 was published unless a corresponding tag/release is independently verified.
+- A successful merge or CI run is not a release. Tag and publish only from the exact approved release commit after all required checks pass.
+- Updating CMake, Conan and vcpkg repository metadata does not publish external package-manager packages. Verify each registry independently.
+- The Conan and vcpkg default recipes do not enable `ENABLE_WASM_HANDOFF`; consumers building the optional handoff feature directly with CMake must install OpenSSL Crypto and enable the option explicitly.
 
 ## Published release history
 
+- `v1.5.0` — published 2026-11-21; optional native Wasmtime runtime composition.
 - `v1.3.0` — published 2026-11-21; hierarchical worker topology, per-class CPU-group queues, bounded elasticity and large-host scheduling.
 - `v1.2.0` — published 2026-11-20; YuKKi-aware worker classes, broker-local NUMA affinity, process-wide admission budgets and BRK2 worker telemetry.
 - `v1.1.4` — published 2026-11-18; architecture/heuristic and release metadata alignment.
