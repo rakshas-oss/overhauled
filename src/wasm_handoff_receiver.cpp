@@ -172,8 +172,8 @@ std::string json_string(const std::string& value) {
     std::string out = "\"" ;
     for (unsigned char ch : value) {
         switch (ch) {
-            case '"': out += "\\""; break;
-            case '\\': out += "\\\"; break;
+            case '"': out += "\""; break;
+            case '\\': out += "\\"; break;
             case '\b': out += "\\b"; break;
             case '\f': out += "\\f"; break;
             case '\n': out += "\\n"; break;
@@ -510,16 +510,16 @@ std::string canonical_receipt(const HandoffReceipt& receipt) {
     envelope.key_id = receipt.signer_key_id;
     envelope.nonce = receipt.nonce;
     const std::string payload =
-        "{\\"abi_profile\\":" + json_string(receipt.abi_profile) +
-        ",\\"artifact_set_digest\\":" + json_string(receipt.artifact_set_digest) +
-        ",\\"backend_id\\":" + json_string(receipt.backend_id) +
-        ",\\"deployment_id\\":" + json_string(receipt.deployment_id) +
-        ",\\"engine\\":" + json_string(receipt.engine) +
-        ",\\"engine_version\\":" + json_string(receipt.engine_version) +
-        ",\\"kind\\":\\"execution_receipt\\""
-        ",\\"release_id\\":" + json_string(receipt.release_id) +
-        ",\\"request_id\\":" + json_string(receipt.request_id) +
-        ",\\"state\\":" + json_string(receipt.state) + "}";
+        "{\"abi_profile\":" + json_string(receipt.abi_profile) +
+        ",\"artifact_set_digest\":" + json_string(receipt.artifact_set_digest) +
+        ",\"backend_id\":" + json_string(receipt.backend_id) +
+        ",\"deployment_id\":" + json_string(receipt.deployment_id) +
+        ",\"engine\":" + json_string(receipt.engine) +
+        ",\"engine_version\":" + json_string(receipt.engine_version) +
+        ",\"kind\":\"execution_receipt\""
+        ",\"release_id\":" + json_string(receipt.release_id) +
+        ",\"request_id\":" + json_string(receipt.request_id) +
+        ",\"state\":" + json_string(receipt.state) + "}";
     return envelope_prefix(envelope, payload);
 }
 
