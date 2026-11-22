@@ -245,13 +245,12 @@ int main() {
     CHECK(!decision.transfer_id.empty());
 
     CHECK(decision.envelope.audience == "yukki-os");
+    const std::string decision_canonical = canonical_prepare_decision_message(decision);
     CHECK(receipt_trust.verify(
         decision.envelope.key_id, decision.envelope.issuer,
         decision.envelope.subject, decision.envelope.audience,
-        reinterpret_cast<const std::uint8_t*>(
-            canonical_prepare_decision_message(decision).data()),
-        canonical_prepare_decision_message(decision).size(),
-        decision.envelope.signature));
+        reinterpret_cast<const std::uint8_t*>(decision_canonical.data()),
+        decision_canonical.size(), decision.envelope.signature));
 
     ArtifactChunkMessage chunk;
     chunk.envelope = envelope_for(
