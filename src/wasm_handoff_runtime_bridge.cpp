@@ -75,8 +75,9 @@ void WasmHandoffRuntimeBridge::bind_policy(
             if (!module.descriptor || !module.bytes ||
                 module.descriptor->format != "wasm-core-1" ||
                 module.bytes->empty() ||
-                module.bytes->size() != module.descriptor->size_bytes) {
-                return fail("verified module view is incomplete or inconsistent");
+                module.bytes->size() != module.descriptor->size_bytes ||
+                sha256_hex(module.bytes->data(), module.bytes->size()) != module.descriptor->digest) {
+                return fail("verified module view is incomplete, inconsistent, or has a digest mismatch");
             }
             if (!staged->compile_and_register(
                     module.descriptor->module_id, *module.bytes, error)) {
