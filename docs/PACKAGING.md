@@ -14,6 +14,42 @@ binary.
 | Conan Center Index | Public curated Conan package | Not submitted; CCI reviews project maturity, usage and maintenance. An upstream PR is a separate contribution |
 | Debian/RPM | System package installation | CPack emits native packages when built on Linux; no hosted apt/dnf repository is currently published |
 
+## CI boundary: packages versus physical NVLink hardware
+
+Package-manager validation is deliberately hardware-independent. The vcpkg
+port, Homebrew formula, Conan recipe, and installed-CMake consumer builds
+disable CUDA/TensorRT or default CUDA off. They validate compilation,
+installation, exported CMake targets, and downstream linking; they do not
+claim to validate a physical NVLink fabric.
+
+The ordinary pull-request CI follows the same rule: CUDA/TensorRT are disabled
+for CPU conformance, sanitizers, WASM, and package-consumer checks. Synthetic
+GPU topologies remain suitable for deterministic scheduler and dispatch
+tests, but they are not evidence that a physical NVLink connection works.
+
+Physical validation is isolated in the manually dispatched
+`.github/workflows/nvlink-hardware-validation.yml` workflow. It requires an
+administrator-provisioned self-hosted Linux runner with these labels:
+
+```text
+self-hosted, linux, x64, nvlink
+```
+
+That runner must have the NVIDIA driver, `nvidia-smi`, the CUDA toolkit
+(`nvcc`), at least two visible CUDA GPUs, and at least one physical NVLink
+connection between them. Dispatch the workflow and explicitly choose
+`run`; the default `no` selection does not schedule a job. The test verifies
+the reported system topology, builds the opt-in
+`nvlink_hardware_smoke_test`, checks that Overhauled detects an NVLink peer
+pair, and exercises CUDA peer-access enablement.
+
+The CMake option `ENABLE_NVLINK_HARDWARE_TESTS` defaults to `OFF`. Enabling it
+requires both `BUILD_TESTING=ON` and a detected CUDA compiler/toolkit. The
+hardware test is labelled `hardware;cuda;nvlink` and is not part of standard
+CTest or any package-manager publication gate. No GitHub-hosted runner needs
+physical NVLink access, and absence of an NVLink runner does not block
+portable package validation.
+
 ## vcpkg Git registry
 
 The repository-hosted Git registry provides a versioned port for `nvlink-placement`.
