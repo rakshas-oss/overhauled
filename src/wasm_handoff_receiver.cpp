@@ -128,15 +128,19 @@ bool ArtifactChunkReceiver::append(std::size_t offset, const std::uint8_t* data,
     if (offset != bytes_.size()) return fail("artifact chunk offset is not the next expected byte");
     if (size > expected_size_ - bytes_.size()) return fail("artifact chunk exceeds declared artifact size");
     if (sha256_hex(data, size) != chunk_sha256) return fail("artifact chunk digest mismatch");
-    bytes_.insert(bytes_.end(), data, data + size);
-    const bool reached_end = bytes_.size() == expected_size_;
+    const bool reached_end = size == expected_size_ - bytes_.size();
     if (final_chunk != reached_end) return fail("final-chunk flag does not match declared artifact length");
     if (reached_end) {
+        std::vector<std::uint8_t> candidate = bytes_;
+        candidate.insert(candidate.end(), data, data + size);
         Digest actual{};
-        if (!digest_bytes(bytes_.data(), bytes_.size(), &actual) ||
+        if (!digest_bytes(candidate.data(), candidate.size(), &actual) ||
             !std::equal(actual.begin(), actual.end(), expected_digest_.begin()))
             return fail("artifact digest mismatch");
+        bytes_.swap(candidate);
         complete_ = true;
+    } else {
+        bytes_.insert(bytes_.end(), data, data + size);
     }
     if (error) error->clear();
     return true;
