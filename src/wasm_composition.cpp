@@ -53,6 +53,23 @@ WasmCompositionRuntime::WasmCompositionRuntime(Limits limits)
 
 WasmCompositionRuntime::~WasmCompositionRuntime() = default;
 
+bool WasmCompositionRuntime::validate_module(
+    const std::vector<std::uint8_t>& wasm, std::string* error) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto fail = [&](const std::string& message) {
+        if (error) *error = message;
+        return false;
+    };
+    if (wasm.empty() || wasm.size() > max_module_bytes_)
+        return fail("module binary is empty or exceeds configured byte limit");
+    wasmtime_module_t* raw = nullptr;
+    if (auto* compile_error = wasmtime_module_new(engine_.get(), wasm.data(), wasm.size(), &raw))
+        return fail(error_message(compile_error));
+    ModulePtr checked(raw);
+    if (error) error->clear();
+    return true;
+}
+
 bool WasmCompositionRuntime::compile_and_register(
     const std::string& module_name, const std::vector<std::uint8_t>& wasm,
     std::string* error) {
