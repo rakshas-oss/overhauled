@@ -39,6 +39,44 @@ jobs:
           git clone --depth 1 https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
           "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
 
+      - name: Verify the repository-hosted vcpkg Git registry
+        env:
+          VCPKG_ROOT: ${{ runner.temp }}/vcpkg
+        run: |
+          git fetch origin main --depth=1
+          registry_baseline=$(git rev-parse FETCH_HEAD)
+          builtin_baseline=$(git -C "$VCPKG_ROOT" rev-parse HEAD)
+          consumer="$RUNNER_TEMP/git-registry-consumer"
+          mkdir -p "$consumer"
+          cat > "$consumer/vcpkg.json" <<'EOF'
+          {
+            "name": "overhauled-registry-consumer",
+            "version-string": "1.0.0",
+            "dependencies": ["nvlink-placement"]
+          }
+          EOF
+          cat > "$consumer/vcpkg-configuration.json" <<EOF
+          {
+            "default-registry": {
+              "kind": "builtin",
+              "baseline": "$builtin_baseline"
+            },
+            "registries": [
+              {
+                "kind": "git",
+                "repository": "https://github.com/rakshas-oss/overhauled",
+                "reference": "main",
+                "baseline": "$registry_baseline",
+                "packages": ["nvlink-placement"]
+              }
+            ]
+          }
+          EOF
+          "$VCPKG_ROOT/vcpkg" install --triplet x64-linux --x-manifest-root="$consumer"
+          config="$VCPKG_ROOT/installed/x64-linux/lib/cmake/OverhauledTensorRuntime/OverhauledTensorRuntimeConfig.cmake"
+          test -f "$config"
+          echo "Installed nvlink-placement from the repository-hosted Git registry at $registry_baseline"
+
       - name: Build the port from the pinned 1.6.0 source tag
         env:
           VCPKG_ROOT: ${{ runner.temp }}/vcpkg
@@ -78,10 +116,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install formula from pinned release source
-        run: brew install --build-from-source "$GITHUB_WORKSPACE/nvlink-placement.rb"
+        run: brew install --build-from-source ./nvlink-placement.rb
 
       - name: Run installed formula test
-        run: brew test "$GITHUB_WORKSPACE/nvlink-placement.rb"
+        run: brew test nvlink-placement
 
   conan-package:
     name: Build Conan 2 package

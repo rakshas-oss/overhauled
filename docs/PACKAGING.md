@@ -8,9 +8,9 @@ binary.
 
 | Channel | Intended use | Current state |
 |---|---|---|
-| vcpkg Git registry | C++ library and broker, CPU-only baseline | Registry recipe being added to this repository |
-| Homebrew formula | macOS/Linux developer installation | Formula being refreshed for 1.6.0; start with direct formula installation or maintain a third-party tap |
-| Conan | Existing Conan consumers | Recipe remains available; package build and remote upload are separate |
+| vcpkg Git registry | C++ library and broker, CPU-only baseline | Registry port and 1.6.0 baseline merged to `main`; overlay build and installed CMake consumer passed. PR #82 adds a consumer install through the actual Git registry; that check is pending. |
+| Homebrew formula | macOS/Linux developer installation | 1.6.0 formula and immutable source checksum are in `main`; Homebrew CI invocation fix is under review in PR #82, so formula installation is not yet marked verified. |
+| Conan | Existing Conan consumers | Conan 2 recipe is in `main` and `conan create . --build=missing` passed; no remote upload is claimed. |
 | Conan Center Index | Public curated Conan package | Not submitted; CCI reviews project maturity, usage and maintenance. An upstream PR is a separate contribution |
 | Debian/RPM | System package installation | CPack emits native packages when built on Linux; no hosted apt/dnf repository is currently published |
 
@@ -21,7 +21,7 @@ Consumers configure the repository as an additional Git registry and pin the
 registry baseline to a commit that contains the port and versions database.
 
 A consumer's `vcpkg-configuration.json` should include an entry like this,
-replacing `REGISTRY_BASELINE_COMMIT` with the merge commit that adds the registry:
+The registry files were merged in commit `fd69f5af7b60a6c542f198edc78d87aa20c41d94`; use that immutable commit as the registry baseline:
 
 ```json
 {
@@ -35,7 +35,7 @@ replacing `REGISTRY_BASELINE_COMMIT` with the merge commit that adds the registr
       "kind": "git",
       "repository": "https://github.com/rakshas-oss/overhauled",
       "reference": "main",
-      "baseline": "REGISTRY_BASELINE_COMMIT",
+      "baseline": "fd69f5af7b60a6c542f198edc78d87aa20c41d94",
       "packages": ["nvlink-placement"]
     }
   ]
@@ -86,8 +86,7 @@ repository does not mean it has been accepted or published there.
 
 The project configures CPack to generate TGZ/ZIP and, on Linux, DEB/RPM
 packages. Those files can be installed locally with the native package tools.
-A hosted apt or dnf repository requires additional signed repository metadata
-and hosting; no such repository is currently advertised.
+The manual DEB/RPM workflow can attach locally built packages to the GitHub Release after an explicit dispatch confirmation. It has not yet been run, and no hosted apt or dnf repository is advertised.
 
 ## Release checksum policy
 
