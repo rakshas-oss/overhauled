@@ -8,8 +8,8 @@ binary.
 
 | Channel | Intended use | Current state |
 |---|---|---|
-| vcpkg Git registry | C++ library and broker, CPU-only baseline | Registry port and 1.6.0 baseline merged to `main`; overlay build and installed CMake consumer passed. PR #82 adds a consumer install through the actual Git registry; that check is pending. |
-| Homebrew formula | macOS/Linux developer installation | 1.6.0 formula and immutable source checksum are in `main`; Homebrew CI invocation fix is under review in PR #82, so formula installation is not yet marked verified. |
+| vcpkg Git registry | C++ library and broker, CPU-only baseline | Registry port and 1.6.0 baseline merged to `main`; overlay build passed. The installed-package consumer exposed a CMake export-layout issue; PR #83 adds canonical `share/<port>` relocation and re-tests both overlay and Git-registry installs. |
+| Homebrew formula | macOS/Linux developer installation | 1.6.0 formula and immutable source checksum are maintained under `Formula/nvlink-placement.rb`; PR #83 moves it to Homebrew's conventional Formula directory and reruns source installation. |
 | Conan | Existing Conan consumers | Conan 2 recipe is in `main` and `conan create . --build=missing` passed; no remote upload is claimed. |
 | Conan Center Index | Public curated Conan package | Not submitted; CCI reviews project maturity, usage and maintenance. An upstream PR is a separate contribution |
 | Debian/RPM | System package installation | CPack emits native packages when built on Linux; no hosted apt/dnf repository is currently published |
@@ -59,7 +59,7 @@ disabled by default. Until a dedicated tap repository is created, consumers
 can install the maintained formula directly from its raw GitHub URL:
 
 ```sh
-brew install https://raw.githubusercontent.com/rakshas-oss/overhauled/main/nvlink-placement.rb
+brew install https://raw.githubusercontent.com/rakshas-oss/overhauled/main/Formula/nvlink-placement.rb
 ```
 
 Homebrew Core inclusion is not guaranteed: it requires reproducible source
