@@ -71,6 +71,14 @@ byte rate and a bounded sender bucket table. The callback must copy/own
 verified module bytes before returning and must not change active state when
 activation fails. See [WASM_HANDOFF_RECEIVER_IMPLEMENTATION.md](WASM_HANDOFF_RECEIVER_IMPLEMENTATION.md).
 
+When both `ENABLE_WASM_RUNTIME` and `ENABLE_WASM_HANDOFF` are enabled,
+`WasmHandoffRuntimeBridge` connects receiver admission to the local Wasmtime
+C API. It builds a fresh runtime/store per staged release and atomically
+publishes it after the complete module set compiles and registers. The broker
+does not yet route every WSM1 task through this bridge; callers must obtain the
+active runtime and select/invoke the appropriate module. This is not a
+multi-tenant isolation boundary.
+
 The executable-artifact trust policy does not apply to streaming. NXR1,
 MED1 and existing stream-relay paths remain usable with untrusted sources
 under their independent framing, byte, connection, rate and backpressure
