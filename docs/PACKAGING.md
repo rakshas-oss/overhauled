@@ -8,8 +8,8 @@ binary.
 
 | Channel | Intended use | Current state |
 |---|---|---|
-| vcpkg Git registry | C++ library and broker, CPU-only baseline | Registry port and 1.6.0 baseline merged to `main`; overlay build passed. The installed-package consumer exposed a CMake export-layout issue; PR #83 adds canonical `share/<port>` relocation and re-tests both overlay and Git-registry installs. |
-| Homebrew formula | macOS/Linux developer installation | 1.6.0 formula and immutable source checksum are maintained under `Formula/nvlink-placement.rb`; PR #83 moves it to Homebrew's conventional Formula directory and reruns source installation. |
+| vcpkg Git registry | C++ library and broker, CPU-only baseline | Registry recipe and 1.6.0 baseline remain in `main`. Automated vcpkg validation has been removed after repeated failures: the port still places CMake exports under `lib/cmake` instead of vcpkg's canonical `share/<port>` layout. The registry recipe is not currently CI-validated. |
+| Homebrew formula | macOS/Linux developer installation | The 1.6.0 formula and immutable source checksum remain under `Formula/nvlink-placement.rb`. Automated Homebrew installation validation has been removed after repeatable macOS compilation failure in `src/broker_server.cpp` (`std::chrono` time-point/duration mismatch); the formula is not currently CI-validated. |
 | Conan | Existing Conan consumers | Conan 2 recipe is in `main` and `conan create . --build=missing` passed; no remote upload is claimed. |
 | Conan Center Index | Public curated Conan package | Not submitted; CCI reviews project maturity, usage and maintenance. An upstream PR is a separate contribution |
 | Debian/RPM | System package installation | CPack emits native packages when built on Linux; no hosted apt/dnf repository is currently published |
@@ -86,13 +86,19 @@ vcpkg install nvlink-placement
 
 The port intentionally builds the CPU-only default. CUDA/TensorRT and the
 optional Ethos-U85 executor depend on system/toolchain-specific prerequisites
-and are not silently enabled by the portable registry build.
+and are not silently enabled by the portable registry build. The vcpkg CI
+consumer job is currently paused: the package installs, but its exported
+CMake files are not yet relocated to vcpkg's canonical share directory.
 
 ## Homebrew
 
-The formula builds from the immutable 1.6.0 source tag with CUDA and TensorRT
-disabled by default. Until a dedicated tap repository is created, consumers
-can install the maintained formula directly from its raw GitHub URL:
+The formula targets the immutable 1.6.0 source tag with CUDA and TensorRT
+disabled by default. Its automated macOS installation check is currently
+paused because the broker server does not compile on the current macOS SDK;
+the failure is a C++ chrono type mismatch, not missing NVLink hardware.
+Do not treat the formula as a verified macOS installation until that build
+issue is resolved. Until a dedicated tap repository is created, consumers
+can try the maintained formula directly from its raw GitHub URL:
 
 ```sh
 brew install https://raw.githubusercontent.com/rakshas-oss/overhauled/main/Formula/nvlink-placement.rb
