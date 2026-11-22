@@ -767,19 +767,60 @@ bool HandoffReceiver::activate(const ActivationRequest& request,
                         request.envelope, canonical, now, pimpl_->policy, error))
         return false;
 
+    // Mark the session immutable before invoking the potentially expensive
+    // compiler/validator outside the global receiver mutex.
+    std::vector<std::pair<const ModuleDescriptor*, const std::vector<std::uint8_t>*>> modules;
+    {
+        std::lock_guard<std::mutex> lock(pimpl_->mutex);
+        auto it = pimpl_->sessions.find(request.request_id);
+        if (it == pimpl_->sessions.end() || it->second.transfer_id != request.transfer_id)
+            return fail("unknown or mismatched prepared transfer");
+        Impl::Session& session = it->second;
+        if (request.envelope.issuer != session.request.envelope.issuer ||
+            request.envelope.subject != session.request.envelope.subject ||
+            request.envelope.key_id != session.request.envelope.key_id)
+            return fail("activation sender changed");
+        if (session.activated || session.validating)
+            return fail("transfer already activated or being validated");
+        for (const auto& module : session.modules) {
+            if (!module.receiver->complete()) return fail("artifact set is incomplete");
+            modules.emplace_back(&module.descriptor, &module.receiver->bytes());
+        }
+        session.validating = true;
+    }
+
+    std::string validation_error;
+    bool validated = false;
+    try {
+        validated = true;
+        for (const auto& item : modules) {
+            if (!pimpl_->policy.module_validator(*item.first, *item.second,
+                                                  &validation_error)) {
+                validated = false;
+                break;
+            }
+        }
+    } catch (const std::exception& exception) {
+        validation_error = exception.what();
+        validated = false;
+    } catch (...) {
+        validation_error = "module validator threw an unknown exception";
+        validated = false;
+    }
+
     std::lock_guard<std::mutex> lock(pimpl_->mutex);
     auto it = pimpl_->sessions.find(request.request_id);
     if (it == pimpl_->sessions.end() || it->second.transfer_id != request.transfer_id)
-        return fail("unknown or mismatched prepared transfer");
+        return fail("prepared transfer disappeared during validation");
     Impl::Session& session = it->second;
-    if (request.envelope.issuer != session.request.envelope.issuer ||
-        request.envelope.subject != session.request.envelope.subject ||
-        request.envelope.key_id != session.request.envelope.key_id)
-        return fail("activation sender changed");
-    if (session.activated) return fail("transfer already activated");
-    for (const auto& module : session.modules) {
-        if (!module.receiver->complete()) return fail("artifact set is incomplete");
+    if (!validated) {
+        pimpl_->staged_bytes -= session.staged_bytes;
+        pimpl_->sessions.erase(it);
+        if (error) *error = validation_error.empty() ? "WASM module validation failed" : validation_error;
+        return false;
     }
+    if (!session.validating || session.activated)
+        return fail("prepared transfer state changed during validation");
 
     const auto issued = static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
@@ -800,10 +841,11 @@ bool HandoffReceiver::activate(const ActivationRequest& request,
         reinterpret_cast<const std::uint8_t*>(receipt_bytes.data()),
         receipt_bytes.size());
 
-    // One mutex-protected replacement is the activation commit point. The old
-    // active release remains intact unless all modules passed full-digest checks.
+    // This is the activation commit point. No pointer changes until every
+    // module has passed the configured Wasmtime compile-only validator.
     pimpl_->active[next.deployment_id] = next;
     session.activated = true;
+    session.validating = false;
     *receipt = next;
     if (error) error->clear();
     return true;
