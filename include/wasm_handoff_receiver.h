@@ -70,6 +70,8 @@ public:
     ~Ed25519Signer();
 
     const std::string& key_id() const noexcept;
+    const std::string& issuer() const noexcept;
+    const std::string& subject() const noexcept;
     Ed25519Signature sign(const std::uint8_t* message, std::size_t size) const;
     Ed25519PublicKey public_key() const;
 
@@ -218,6 +220,12 @@ struct HandoffReceipt {
     std::string abi_profile;
     std::string artifact_set_digest;
     std::uint64_t issued_at = 0;
+    std::uint64_t expires_at = 0;
+    std::string message_id;
+    std::string nonce;
+    std::string audience;
+    std::string issuer;
+    std::string subject;
     std::string signer_key_id;
     Ed25519Signature signature{};
 };
