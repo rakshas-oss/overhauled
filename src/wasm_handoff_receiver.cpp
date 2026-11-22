@@ -619,14 +619,23 @@ public:
             !std::isfinite(this->policy.ingress_bytes_per_second) ||
             !std::isfinite(this->policy.per_sender_ingress_bytes_per_second) ||
             this->policy.message_rate_per_second <= 0.0 ||
+            this->policy.message_rate_per_second > 10000.0 ||
             this->policy.per_sender_message_rate_per_second <= 0.0 ||
+            this->policy.per_sender_message_rate_per_second > 1000.0 ||
             this->policy.ingress_bytes_per_second <= 0.0 ||
+            this->policy.ingress_bytes_per_second > 1024.0 * 1024.0 * 1024.0 ||
             this->policy.per_sender_ingress_bytes_per_second <= 0.0 ||
+            this->policy.per_sender_ingress_bytes_per_second > 256.0 * 1024.0 * 1024.0 ||
             this->policy.ingress_byte_burst == 0 ||
+            this->policy.ingress_byte_burst > 64U * 1024U * 1024U ||
             this->policy.per_sender_ingress_byte_burst == 0 ||
+            this->policy.per_sender_ingress_byte_burst > 16U * 1024U * 1024U ||
             this->policy.message_burst == 0 ||
+            this->policy.message_burst > 10000 ||
             this->policy.per_sender_message_burst == 0 ||
+            this->policy.per_sender_message_burst > 1000 ||
             this->policy.maximum_rate_limit_subjects == 0 ||
+            this->policy.maximum_rate_limit_subjects > 1024 ||
             this->policy.maximum_active_deployments == 0 ||
             this->policy.maximum_active_deployments > 256 ||
             this->policy.maximum_concurrent_sessions == 0 ||
