@@ -51,6 +51,10 @@ int main() {
     const auto release_one = bridge.active_runtime();
     CHECK(release_one != nullptr);
     CHECK(release_one->contains("provider"));
+    CHECK(release_one->instantiate("provider", &error));
+    std::int32_t module_result = 0;
+    CHECK(release_one->invoke_i32("provider", "run", &module_result, &error));
+    CHECK(module_result == 42);
     CHECK(bridge.active_release() == std::make_pair(
         std::string("deployment-1"), std::string("release-1")));
 
