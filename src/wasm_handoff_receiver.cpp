@@ -951,10 +951,10 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
     }
 
     Impl::Session session;
-    session.request = request;
     session.transfer_id = accepted.transfer_id;
     session.staged_bytes = total_bytes;
     try {
+        session.request = request;
         for (const auto& module : request.modules) {
             Impl::ModuleState state;
             state.descriptor = module;
@@ -970,14 +970,18 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
         return reject("policy_limit_exceeded");
     }
 
+    bool inserted = false;
     {
         std::lock_guard<std::mutex> lock(pimpl_->mutex);
         --pimpl_->reserved_sessions;
-        if (!pimpl_->sessions.emplace(request.request_id, std::move(session)).second) {
-            pimpl_->staged_bytes -= total_bytes;
-            return reject("replay_detected");
+        try {
+            inserted = pimpl_->sessions.emplace(request.request_id, std::move(session)).second;
+        } catch (...) {
+            inserted = false;
         }
+        if (!inserted) pimpl_->staged_bytes -= total_bytes;
     }
+    if (!inserted) return reject("policy_limit_exceeded");
     return accepted;
 }
 
@@ -1003,6 +1007,14 @@ bool HandoffReceiver::append_chunk(const ArtifactChunkMessage& chunk,
         [&](const auto& entry) { return entry.second.transfer_id == chunk.transfer_id; });
     if (session_it == pimpl_->sessions.end()) return fail("unknown transfer");
     Impl::Session& session = session_it->second;
+    const auto now_seconds = static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
+    if (now_seconds > session.request.envelope.expires_at &&
+        now_seconds - session.request.envelope.expires_at > pimpl_->policy.clock_skew_seconds) {
+        pimpl_->staged_bytes -= session.staged_bytes;
+        pimpl_->sessions.erase(session_it);
+        return fail("prepared transfer expired");
+    }
     if (session.validating) return fail("activation validation is in progress");
     if (chunk.envelope.issuer != session.request.envelope.issuer ||
         chunk.envelope.subject != session.request.envelope.subject ||
@@ -1047,6 +1059,14 @@ bool HandoffReceiver::activate(const ActivationRequest& request,
         if (it == pimpl_->sessions.end() || it->second.transfer_id != request.transfer_id)
             return fail("unknown or mismatched prepared transfer");
         Impl::Session& session = it->second;
+        const auto now_seconds = static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
+        if (now_seconds > session.request.envelope.expires_at &&
+            now_seconds - session.request.envelope.expires_at > pimpl_->policy.clock_skew_seconds) {
+            pimpl_->staged_bytes -= session.staged_bytes;
+            pimpl_->sessions.erase(it);
+            return fail("prepared transfer expired");
+        }
         if (pimpl_->active.find(session.request.deployment_id) == pimpl_->active.end() &&
             pimpl_->active.size() >= pimpl_->policy.maximum_active_deployments) {
             pimpl_->staged_bytes -= session.staged_bytes;
