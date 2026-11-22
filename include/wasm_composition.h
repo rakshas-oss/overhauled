@@ -43,6 +43,11 @@ public:
                               const std::vector<std::uint8_t>& wasm,
                               std::string* error);
 
+    /// Compile-check a module without registering it or changing active runtime state.
+    /// Used during authenticated artifact prepare/activation before promotion.
+    bool validate_module(const std::vector<std::uint8_t>& wasm,
+                        std::string* error);
+
     /// Instantiate a registered root module after resolving its imports through
     /// the linker. Dependencies must already have been registered. Repeated
     /// instantiation under the same module name is rejected.
