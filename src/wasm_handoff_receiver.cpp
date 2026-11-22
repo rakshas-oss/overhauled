@@ -665,6 +665,7 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
         !pimpl_->policy.wasmtime_available ||
         !pimpl_->policy.allow_trusted_shared_store_workloads ||
         !pimpl_->policy.module_validator ||
+        !pimpl_->policy.activate_release ||
         pimpl_->policy.maximum_concurrent_sessions == 0 ||
         pimpl_->policy.maximum_staged_bytes == 0 ||
         pimpl_->policy.engine != "wasmtime" || pimpl_->policy.engine_version.empty())
@@ -783,7 +784,7 @@ bool HandoffReceiver::activate(const ActivationRequest& request,
 
     // Mark the session immutable before invoking the potentially expensive
     // compiler/validator outside the global receiver mutex.
-    std::vector<std::pair<const ModuleDescriptor*, const std::vector<std::uint8_t>*>> modules;
+    std::vector<VerifiedModuleView> modules;
     {
         std::lock_guard<std::mutex> lock(pimpl_->mutex);
         auto it = pimpl_->sessions.find(request.request_id);
@@ -798,7 +799,7 @@ bool HandoffReceiver::activate(const ActivationRequest& request,
             return fail("transfer already activated or being validated");
         for (const auto& module : session.modules) {
             if (!module.receiver->complete()) return fail("artifact set is incomplete");
-            modules.emplace_back(&module.descriptor, &module.receiver->bytes());
+            modules.push_back(VerifiedModuleView{&module.descriptor, &module.receiver->bytes()});
         }
         session.validating = true;
     }
@@ -808,7 +809,7 @@ bool HandoffReceiver::activate(const ActivationRequest& request,
     try {
         validated = true;
         for (const auto& item : modules) {
-            if (!pimpl_->policy.module_validator(*item.first, *item.second,
+            if (!pimpl_->policy.module_validator(*item.descriptor, *item.bytes,
                                                   &validation_error)) {
                 validated = false;
                 break;
@@ -820,6 +821,32 @@ bool HandoffReceiver::activate(const ActivationRequest& request,
     } catch (...) {
         validation_error = "module validator threw an unknown exception";
         validated = false;
+    }
+
+    if (validated) {
+        try {
+            validated = pimpl_->policy.activate_release(
+                request.request_id == std::string() ? std::string() :
+                    [&]() {
+                        std::lock_guard<std::mutex> lock(pimpl_->mutex);
+                        const auto found = pimpl_->sessions.find(request.request_id);
+                        return found == pimpl_->sessions.end() ? std::string() :
+                               found->second.request.deployment_id;
+                    }(),
+                [&]() {
+                    std::lock_guard<std::mutex> lock(pimpl_->mutex);
+                    const auto found = pimpl_->sessions.find(request.request_id);
+                    return found == pimpl_->sessions.end() ? std::string() :
+                           found->second.request.release_id;
+                }(),
+                modules, &validation_error);
+        } catch (const std::exception& exception) {
+            validation_error = exception.what();
+            validated = false;
+        } catch (...) {
+            validation_error = "runtime activation callback threw an unknown exception";
+            validated = false;
+        }
     }
 
     std::lock_guard<std::mutex> lock(pimpl_->mutex);
