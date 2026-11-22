@@ -271,7 +271,7 @@ std::vector<ModuleDescriptor> sorted_modules(const std::vector<ModuleDescriptor>
 
 bool safe_identifier(const std::string& value, std::size_t max_size) {
     return !value.empty() && value.size() <= max_size &&
-        value.find_first_of("\\r\\n|") == std::string::npos;
+        value.find_first_of("\r\n|") == std::string::npos;
 }
 
 bool time_valid(const SignedMetadata& message,
