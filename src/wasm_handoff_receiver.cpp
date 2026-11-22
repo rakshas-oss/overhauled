@@ -782,9 +782,10 @@ bool HandoffReceiver::activate(const ActivationRequest& request,
                         request.envelope, canonical, now, pimpl_->policy, error))
         return false;
 
-    // Mark the session immutable before invoking the potentially expensive
-    // compiler/validator outside the global receiver mutex.
     std::vector<VerifiedModuleView> modules;
+    std::string deployment_id;
+    std::string release_id;
+    std::string artifact_digest;
     {
         std::lock_guard<std::mutex> lock(pimpl_->mutex);
         auto it = pimpl_->sessions.find(request.request_id);
@@ -801,13 +802,15 @@ bool HandoffReceiver::activate(const ActivationRequest& request,
             if (!module.receiver->complete()) return fail("artifact set is incomplete");
             modules.push_back(VerifiedModuleView{&module.descriptor, &module.receiver->bytes()});
         }
+        deployment_id = session.request.deployment_id;
+        release_id = session.request.release_id;
+        artifact_digest = session.request.artifact_set_digest;
         session.validating = true;
     }
 
     std::string validation_error;
-    bool validated = false;
+    bool validated = true;
     try {
-        validated = true;
         for (const auto& item : modules) {
             if (!pimpl_->policy.module_validator(*item.descriptor, *item.bytes,
                                                   &validation_error)) {
@@ -823,23 +826,49 @@ bool HandoffReceiver::activate(const ActivationRequest& request,
         validated = false;
     }
 
+    HandoffReceipt next;
+    if (validated) {
+        try {
+            const auto issued = static_cast<std::uint64_t>(
+                std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
+            next.request_id = request.request_id;
+            next.deployment_id = deployment_id;
+            next.release_id = release_id;
+            next.state = "activated";
+            next.backend_id = pimpl_->policy.backend_id;
+            next.engine = pimpl_->policy.engine;
+            next.engine_version = pimpl_->policy.engine_version;
+            next.abi_profile = pimpl_->policy.abi_profile;
+            next.artifact_set_digest = artifact_digest;
+            next.issued_at = issued;
+            next.expires_at = issued + pimpl_->policy.maximum_message_lifetime_seconds;
+            next.message_id = random_uuid();
+            next.nonce = random_uuid();
+            next.audience = pimpl_->policy.receipt_audience;
+            next.issuer = pimpl_->receipt_signer.issuer();
+            next.subject = pimpl_->receipt_signer.subject();
+            next.signer_key_id = pimpl_->receipt_signer.key_id();
+            const std::string receipt_bytes = canonical_receipt(next);
+            next.signature = pimpl_->receipt_signer.sign(
+                reinterpret_cast<const std::uint8_t*>(receipt_bytes.data()),
+                receipt_bytes.size());
+        } catch (const std::exception& exception) {
+            validation_error = exception.what();
+            validated = false;
+        } catch (...) {
+            validation_error = "receipt signing failed";
+            validated = false;
+        }
+    }
+
+    // The embedding runtime owns executable state. This callback must stage
+    // all verified modules and atomically switch the active release only after
+    // its own compilation/link checks succeed. A false return must leave the
+    // previous release untouched.
     if (validated) {
         try {
             validated = pimpl_->policy.activate_release(
-                request.request_id == std::string() ? std::string() :
-                    [&]() {
-                        std::lock_guard<std::mutex> lock(pimpl_->mutex);
-                        const auto found = pimpl_->sessions.find(request.request_id);
-                        return found == pimpl_->sessions.end() ? std::string() :
-                               found->second.request.deployment_id;
-                    }(),
-                [&]() {
-                    std::lock_guard<std::mutex> lock(pimpl_->mutex);
-                    const auto found = pimpl_->sessions.find(request.request_id);
-                    return found == pimpl_->sessions.end() ? std::string() :
-                           found->second.request.release_id;
-                }(),
-                modules, &validation_error);
+                deployment_id, release_id, modules, &validation_error);
         } catch (const std::exception& exception) {
             validation_error = exception.what();
             validated = false;
@@ -852,45 +881,29 @@ bool HandoffReceiver::activate(const ActivationRequest& request,
     std::lock_guard<std::mutex> lock(pimpl_->mutex);
     auto it = pimpl_->sessions.find(request.request_id);
     if (it == pimpl_->sessions.end() || it->second.transfer_id != request.transfer_id)
-        return fail("prepared transfer disappeared during validation");
+        return fail("prepared transfer disappeared during activation");
     Impl::Session& session = it->second;
     if (!validated) {
         pimpl_->staged_bytes -= session.staged_bytes;
         pimpl_->sessions.erase(it);
-        if (error) *error = validation_error.empty() ? "WASM module validation failed" : validation_error;
+        if (error) *error = validation_error.empty() ?
+            "WASM validation or atomic runtime activation failed" : validation_error;
         return false;
     }
     if (!session.validating || session.activated)
-        return fail("prepared transfer state changed during validation");
+        return fail("prepared transfer state changed during activation");
 
-    const auto issued = static_cast<std::uint64_t>(
-        std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
-    HandoffReceipt next;
-    next.request_id = request.request_id;
-    next.deployment_id = session.request.deployment_id;
-    next.release_id = session.request.release_id;
-    next.state = "activated";
-    next.backend_id = pimpl_->policy.backend_id;
-    next.engine = pimpl_->policy.engine;
-    next.engine_version = pimpl_->policy.engine_version;
-    next.abi_profile = pimpl_->policy.abi_profile;
-    next.artifact_set_digest = session.request.artifact_set_digest;
-    next.issued_at = issued;
-    next.expires_at = issued + pimpl_->policy.maximum_message_lifetime_seconds;
-    next.message_id = random_uuid();
-    next.nonce = random_uuid();
-    next.audience = pimpl_->policy.receipt_audience;
-    next.issuer = pimpl_->receipt_signer.issuer();
-    next.subject = pimpl_->receipt_signer.subject();
-    next.signer_key_id = pimpl_->receipt_signer.key_id();
-    const std::string receipt_bytes = canonical_receipt(next);
-    next.signature = pimpl_->receipt_signer.sign(
-        reinterpret_cast<const std::uint8_t*>(receipt_bytes.data()),
-        receipt_bytes.size());
-
-    // This is the activation commit point. No pointer changes until every
-    // module has passed the configured Wasmtime compile-only validator.
-    pimpl_->active[next.deployment_id] = next;
+    // Release the previous active artifact set only after the runtime manager
+    // has confirmed the new release's atomic activation.
+    const auto old = pimpl_->active.find(deployment_id);
+    if (old != pimpl_->active.end() && old->second.request_id != request.request_id) {
+        const auto old_session = pimpl_->sessions.find(old->second.request_id);
+        if (old_session != pimpl_->sessions.end() && !old_session->second.validating) {
+            pimpl_->staged_bytes -= old_session->second.staged_bytes;
+            pimpl_->sessions.erase(old_session);
+        }
+    }
+    pimpl_->active[deployment_id] = next;
     session.activated = true;
     session.validating = false;
     *receipt = next;
