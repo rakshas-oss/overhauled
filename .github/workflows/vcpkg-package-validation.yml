@@ -73,7 +73,7 @@ jobs:
           }
           EOF
           "$VCPKG_ROOT/vcpkg" install --triplet x64-linux --x-manifest-root="$consumer"
-          config="$VCPKG_ROOT/installed/x64-linux/lib/cmake/OverhauledTensorRuntime/OverhauledTensorRuntimeConfig.cmake"
+          config="$VCPKG_ROOT/installed/x64-linux/share/nvlink-placement/OverhauledTensorRuntimeConfig.cmake"
           test -f "$config"
           echo "Installed nvlink-placement from the repository-hosted Git registry at $registry_baseline"
 
@@ -89,7 +89,7 @@ jobs:
         env:
           VCPKG_ROOT: ${{ runner.temp }}/vcpkg
         run: |
-          config="$VCPKG_ROOT/installed/x64-linux/lib/cmake/OverhauledTensorRuntime/OverhauledTensorRuntimeConfig.cmake"
+          config="$VCPKG_ROOT/installed/x64-linux/share/nvlink-placement/OverhauledTensorRuntimeConfig.cmake"
           test -f "$config"
           echo "Found installed package config: $config"
 
@@ -100,7 +100,7 @@ jobs:
           cmake -S tests/package-consumer -B build/vcpkg-consumer \
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_MANIFEST_MODE=OFF \
-            -DOverhauledTensorRuntime_DIR="$VCPKG_ROOT/installed/x64-linux/lib/cmake/OverhauledTensorRuntime" \
+            -DOverhauledTensorRuntime_DIR="$VCPKG_ROOT/installed/x64-linux/share/nvlink-placement" \
             -DCMAKE_BUILD_TYPE=Release
 
       - name: Build and run installed-package consumer
@@ -116,7 +116,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install formula from pinned release source
-        run: brew install --build-from-source ./nvlink-placement.rb
+        run: |
+          test -f "$GITHUB_WORKSPACE/nvlink-placement.rb"
+          brew install --build-from-source --formula ./nvlink-placement.rb
 
       - name: Run installed formula test
         run: brew test nvlink-placement
