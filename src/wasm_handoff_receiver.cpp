@@ -627,7 +627,26 @@ public:
             this->policy.message_burst == 0 ||
             this->policy.per_sender_message_burst == 0 ||
             this->policy.maximum_rate_limit_subjects == 0 ||
-            this->policy.maximum_active_deployments == 0)
+            this->policy.maximum_active_deployments == 0 ||
+            this->policy.maximum_active_deployments > 256 ||
+            this->policy.maximum_concurrent_sessions == 0 ||
+            this->policy.maximum_concurrent_sessions > 256 ||
+            this->policy.maximum_staged_bytes == 0 ||
+            this->policy.maximum_staged_bytes > 512U * 1024U * 1024U ||
+            this->policy.maximum_modules == 0 ||
+            this->policy.maximum_modules > 256 ||
+            this->policy.maximum_module_bytes < 8 ||
+            this->policy.maximum_module_bytes > 64U * 1024U * 1024U ||
+            this->policy.maximum_total_bytes < this->policy.maximum_module_bytes ||
+            this->policy.maximum_total_bytes > 256U * 1024U * 1024U ||
+            this->policy.maximum_chunk_bytes < 4096 ||
+            this->policy.maximum_chunk_bytes > 4U * 1024U * 1024U ||
+            this->policy.chunk_size_bytes < 4096 ||
+            this->policy.chunk_size_bytes > this->policy.maximum_chunk_bytes ||
+            this->policy.maximum_message_lifetime_seconds == 0 ||
+            this->policy.maximum_message_lifetime_seconds > 300 ||
+            this->policy.audience.empty() || this->policy.receipt_audience.empty() ||
+            this->policy.available_capabilities.size() > 256)
             throw std::invalid_argument("invalid handoff flood-control policy");
     }
 
@@ -797,6 +816,9 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
             return reject("policy_limit_exceeded");
         total_bytes += static_cast<std::size_t>(module.size_bytes);
     }
+
+    if (total_bytes > pimpl_->policy.maximum_total_bytes)
+        return reject("policy_limit_exceeded");
 
     const std::string manifest = canonical_manifest(request.modules);
     if (sha256_hex(reinterpret_cast<const std::uint8_t*>(manifest.data()), manifest.size()) !=
