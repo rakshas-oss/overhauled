@@ -39,7 +39,8 @@ class NvlinkPlacement < Formula
       }
     CPP
     system "cmake", "-S", testpath, "-B", "build-consumer",
-           "-DCMAKE_PREFIX_PATH=#{prefix}"
+           "-DCMAKE_PREFIX_PATH=#{prefix}",
+           "-DCMAKE_BUILD_TYPE=Release"
     system "cmake", "--build", "build-consumer"
     system "./build-consumer/consumer"
   end
