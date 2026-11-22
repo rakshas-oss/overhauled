@@ -20,6 +20,9 @@
     },
     {
       "$ref": "#/$defs/signed_artifact_chunk"
+    },
+    {
+      "$ref": "#/$defs/signed_activation"
     }
   ],
   "$defs": {
@@ -225,7 +228,8 @@
                 "modules",
                 "runtime_policy",
                 "limits",
-                "required_capabilities"
+                "required_capabilities",
+                "publisher_provenance"
               ],
               "properties": {
                 "kind": {
@@ -278,13 +282,63 @@
                   "uniqueItems": true
                 },
                 "limits": {
-                  "$ref": "#/$defs/limits"
+                  "$ref": "#/$defs/limits",
+                  "required": [
+                    "fuel",
+                    "max_instances",
+                    "memory_bytes",
+                    "wall_time_ms"
+                  ]
                 },
                 "entrypoint_policy": {
                   "enum": [
                     "manifest-defined",
                     "broker-task"
                   ]
+                },
+                "publisher_provenance": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "issuer",
+                    "subject",
+                    "key_id",
+                    "audience",
+                    "issued_at",
+                    "expires_at",
+                    "signature"
+                  ],
+                  "properties": {
+                    "issuer": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "subject": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "key_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    },
+                    "audience": {
+                      "const": "wasm-artifact-publisher"
+                    },
+                    "issued_at": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "expires_at": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "signature": {
+                      "$ref": "#/$defs/signature"
+                    }
+                  }
                 }
               }
             }
@@ -634,6 +688,39 @@
                 },
                 "final": {
                   "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "signed_activation": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/signed"
+        },
+        {
+          "properties": {
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "request_id",
+                "transfer_id"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "activate_request"
+                },
+                "request_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "transfer_id": {
+                  "type": "string",
+                  "format": "uuid"
                 }
               }
             }
