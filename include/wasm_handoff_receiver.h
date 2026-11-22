@@ -217,6 +217,7 @@ struct HandoffPolicy {
 };
 
 struct PrepareDecision {
+    SignedMetadata envelope;
     bool accepted = false;
     std::string request_id;
     std::string decision = "rejected";
@@ -255,6 +256,7 @@ std::string canonical_manifest(const std::vector<ModuleDescriptor>& modules);
 std::string canonical_prepare_message(const PrepareRequest& request);
 std::string canonical_chunk_message(const ArtifactChunkMessage& message);
 std::string canonical_activation_message(const ActivationRequest& request);
+std::string canonical_prepare_decision_message(const PrepareDecision& decision);
 std::string canonical_publisher_attestation(const PrepareRequest& request);
 std::string canonical_receipt(const HandoffReceipt& receipt);
 
