@@ -525,6 +525,8 @@ public:
         std::string transfer_id;
         std::vector<ModuleState> modules;
         bool activated = false;
+        bool validating = false;
+        std::size_t staged_bytes = 0;
     };
 
     Impl(const TrustStore& sender, const TrustStore& publisher,
@@ -540,6 +542,7 @@ public:
     mutable std::mutex mutex;
     std::map<std::string, Session> sessions;
     std::map<std::string, HandoffReceipt> active;
+    std::size_t staged_bytes = 0;
 };
 
 HandoffReceiver::HandoffReceiver(const TrustStore& sender_trust,
@@ -647,13 +650,32 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
     if ((request.runtime_policy != "auto" && request.runtime_policy != "wasmtime") ||
         !pimpl_->policy.wasmtime_available ||
         !pimpl_->policy.allow_trusted_shared_store_workloads ||
+        !pimpl_->policy.module_validator ||
+        pimpl_->policy.maximum_concurrent_sessions == 0 ||
+        pimpl_->policy.maximum_staged_bytes == 0 ||
         pimpl_->policy.engine != "wasmtime" || pimpl_->policy.engine_version.empty())
         return reject("backend_unavailable");
 
     {
         std::lock_guard<std::mutex> lock(pimpl_->mutex);
+        const auto now_seconds = static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
+        for (auto it = pimpl_->sessions.begin(); it != pimpl_->sessions.end();) {
+            const auto expiry = it->second.request.envelope.expires_at +
+                                pimpl_->policy.clock_skew_seconds;
+            if (!it->second.activated && !it->second.validating && expiry < now_seconds) {
+                pimpl_->staged_bytes -= it->second.staged_bytes;
+                it = pimpl_->sessions.erase(it);
+            } else {
+                ++it;
+            }
+        }
         if (pimpl_->sessions.find(request.request_id) != pimpl_->sessions.end())
             return reject("replay_detected");
+        if (pimpl_->sessions.size() >= pimpl_->policy.maximum_concurrent_sessions ||
+            pimpl_->staged_bytes > pimpl_->policy.maximum_staged_bytes ||
+            total_bytes > pimpl_->policy.maximum_staged_bytes - pimpl_->staged_bytes)
+            return reject("policy_limit_exceeded");
     }
 
     PrepareDecision accepted;
@@ -672,6 +694,7 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
     Impl::Session session;
     session.request = request;
     session.transfer_id = accepted.transfer_id;
+    session.staged_bytes = total_bytes;
     try {
         for (const auto& module : request.modules) {
             Impl::ModuleState state;
@@ -687,8 +710,12 @@ PrepareDecision HandoffReceiver::prepare(const PrepareRequest& request,
 
     {
         std::lock_guard<std::mutex> lock(pimpl_->mutex);
-        if (!pimpl_->sessions.emplace(request.request_id, std::move(session)).second)
+        if (pimpl_->sessions.size() >= pimpl_->policy.maximum_concurrent_sessions ||
+            pimpl_->staged_bytes > pimpl_->policy.maximum_staged_bytes ||
+            total_bytes > pimpl_->policy.maximum_staged_bytes - pimpl_->staged_bytes ||
+            !pimpl_->sessions.emplace(request.request_id, std::move(session)).second)
             return reject("replay_detected");
+        pimpl_->staged_bytes += total_bytes;
     }
     return accepted;
 }
@@ -711,6 +738,7 @@ bool HandoffReceiver::append_chunk(const ArtifactChunkMessage& chunk,
         [&](const auto& entry) { return entry.second.transfer_id == chunk.transfer_id; });
     if (session_it == pimpl_->sessions.end()) return fail("unknown transfer");
     Impl::Session& session = session_it->second;
+    if (session.validating) return fail("activation validation is in progress");
     if (chunk.envelope.issuer != session.request.envelope.issuer ||
         chunk.envelope.subject != session.request.envelope.subject ||
         chunk.envelope.key_id != session.request.envelope.key_id)
