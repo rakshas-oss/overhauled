@@ -1,4 +1,4 @@
-## v1.6.0 (minor release candidate; tag pending)
+## v1.6.0 (published 2026-11-22)
 Date: 2026-11-22
 
 ### Highlights
@@ -10,13 +10,27 @@ Date: 2026-11-22
 
 ### Explicit implementation boundary
 
-This release candidate does not yet provide a network-facing authenticated BRK2 handoff handler. It does not establish mTLS or authenticated peer identity, decode and canonicalize the full handoff schema, verify artifact publisher provenance, persist replay state across processes, issue signed prepare decisions or execution receipts, select/admit a runtime backend, or activate a release. Do not advertise the receiver as a deployable authenticated handoff service.
+This published release does not provide a network-facing authenticated BRK2 handoff handler. It does not establish mTLS or authenticated peer identity, decode and canonicalize the full handoff schema, verify artifact publisher provenance, persist replay state across processes, issue signed prepare decisions or execution receipts, select/admit a runtime backend, or activate a release. Do not advertise the receiver as a deployable authenticated handoff service.
 
 The verifier expects RFC 8785 canonical bytes from its caller. Replay protection is process-local. The Wasmtime embedding continues to use a shared Store/resource domain and is not a complete tenant sandbox.
 
-### Validation and release gate
+### Validation and follow-up verification
 
-The feature-specific test target is enabled only with `ENABLE_WASM_HANDOFF=ON`. Require that opt-in build/test lane, default native CI, BRK2 conformance/mutation, sanitizers, package-consumer checks, Wasmtime v51 lane, and paired YuKKi-OS interoperability to pass on the exact release candidate commit before tagging or publishing. The merged feature PR alone is not release validation.
+The GitHub release tag `1.6.0` points to commit
+`326609fa7ad7a21b3fe62a8c29743b0a40eac57d`. On candidate commit
+`4bcba05c6381bff6cd0fb9c8ec28495944ba003a`, the seven reported release PR
+workflow runs completed successfully: package consumer smoke, native CI,
+Wasmtime v51 compile/runtime, paired YuKKi-OS interoperability, BRK2 C++
+protocol tests, ASan/UBSan, Ethos-U85 Linux build, and mixed-class saturation
+validation. The mixed-class A/B benchmark job itself was skipped.
+
+**Post-publication test gap:** the original release workflows did not configure
+`ENABLE_WASM_HANDOFF=ON`, so they did not execute the optional receiver test
+target. A dedicated OpenSSL-enabled CMake/CTest lane is being added to the
+primary CI workflow. Its result must be green before claiming the optional
+handoff primitives passed feature-specific validation. The GitHub release is
+already published; this follow-up does not retroactively change the original
+release CI record.
 
 ---
 
