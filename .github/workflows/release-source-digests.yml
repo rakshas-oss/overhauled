@@ -30,11 +30,10 @@ jobs:
           sha512=$(sha512sum overhauled-1.6.0.tar.gz | cut -d ' ' -f 1)
           sha256=$(sha256sum overhauled-1.6.0.tar.gz | cut -d ' ' -f 1)
           {
-            echo "## Immutable source archive checksums"
-            echo
-            echo "- Source: `https://github.com/rakshas-oss/overhauled/archive/refs/tags/1.6.0.tar.gz`"
-            echo "- SHA512 (vcpkg): `$sha512`"
-            echo "- SHA256 (Homebrew): `$sha256`"
+            printf '%s\n\n' '## Immutable source archive checksums'
+            printf '%s\n' '- Source: https://github.com/rakshas-oss/overhauled/archive/refs/tags/1.6.0.tar.gz'
+            printf '%s\n' "- SHA512 (vcpkg): $sha512"
+            printf '%s\n' "- SHA256 (Homebrew): $sha256"
           } >> "$GITHUB_STEP_SUMMARY"
           echo "SHA512=$sha512"
           echo "SHA256=$sha256"
