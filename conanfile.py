@@ -47,6 +47,7 @@ class NVLinkPlacementConan(ConanFile):
     def generate(self):
         tc = CMakeToolchain(self)
         tc.variables["ENABLE_CUDA"] = bool(self.options.cuda)
+        tc.variables["ENABLE_NVLINK_HARDWARE_TESTS"] = False
         tc.variables["ENABLE_TENSORRT"] = False
         tc.variables["BUILD_BROKER"] = bool(self.options.broker)
         tc.variables["BUILD_EXAMPLES"] = False
