@@ -15,7 +15,7 @@ YuKKi-OS's generic JSON broker client is a different protocol and must not be po
 
 ## BRK2 backend selection
 
-BRK2 request field 10, `device_preference`, is optional and accepts `cpu`, `gpu`, or `npu`; unknown values are rejected. The broker uses the preference during backend dispatch. BRK2 response field 7, `backend`, reports the selected/executing backend (`cpu`, `gpu`, or `npu`) so a client can verify the outcome instead of interpreting its request as proof of hardware execution.
+BRK2 request field 10, `device_preference`, is optional and accepts `cpu`, `gpu`, or `npu`; unknown values are rejected. The broker uses the preference during backend dispatch. An explicit `gpu` preference bypasses the automatic minimum-byte offload heuristic, but it does not bypass forced-CPU mode, exact-CPU/verification policy, or GPU availability. Without an explicit GPU preference, the configured data-parallel byte/FLOP thresholds continue to apply. BRK2 response field 7, `backend`, reports the selected/executing backend (`cpu`, `gpu`, or `npu`) so a client can verify the outcome instead of interpreting its request as proof of hardware execution.
 
 A request that asks for NPU does not guarantee that an NPU executor is available or selected. CPU fallback remains governed by the request's fallback-safety policy. `--npu-simulated` installs a CPU-emulated executor for CI and conformance testing; it is not a hardware acceleration path.
 

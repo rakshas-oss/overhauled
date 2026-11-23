@@ -186,6 +186,27 @@ int main() {
         CHECK(r.backend == BackendKind::Npu && first_value(r.result) == 3.0);
     }
 
+    // An explicit BRK2 GPU preference requests the GPU even when the
+    // payload is smaller than the automatic offload threshold. Availability
+    // is still authoritative; the response reports CPU if no GPU exists.
+    {
+        BrokerService svc(gpu_config());
+        BrokerRequest req = make_request();
+        req.profile = std::nullopt;
+        req.device_preference = "gpu";
+        CHECK(req.payload.size() < (1u << 20));
+        const auto response = svc.handle_request(req);
+        CHECK(response.status == TaskStatus::Ok);
+        CHECK(response.backend == BackendKind::Gpu);
+        CHECK(response.selected_gpu >= 0);
+
+        BrokerService cpu_service(BrokerServiceConfig{});
+        const auto cpu_response = cpu_service.handle_request(req);
+        CHECK(cpu_response.status == TaskStatus::Ok);
+        CHECK(cpu_response.backend == BackendKind::Cpu);
+        CHECK(cpu_response.selected_gpu == -1);
+    }
+
     // GPU failure: CPU fallback only when declared safe.
     {
         BrokerServiceConfig c = gpu_config();
