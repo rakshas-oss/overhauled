@@ -204,7 +204,13 @@ BrokerResponse BrokerService::handle_request(const BrokerRequest& request) {
         TaskProfile p = effective_profile.value_or(TaskProfile{});
         p.is_data_parallel = true;
         p.is_inference = false;
-        p.estimated_bytes = request.payload.size();
+        // An explicit BRK2 GPU preference is a placement request, not an
+        // automatic heuristic candidate. Preserve the broker's normal
+        // threshold for inferred/profile-less work, but let an explicit
+        // preference reach the GPU when one is available. force_cpu and
+        // exact-CPU policy still take precedence in select_backend().
+        p.estimated_bytes = std::max(
+            request.payload.size(), policy.gpu_offload_threshold_bytes);
         p.fallback_safe = true;
         effective_profile = p;
         fallback_safe = true;
