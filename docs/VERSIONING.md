@@ -3,18 +3,18 @@
 ## Release state
 
 - **Latest published version:** 1.6.0 (2026-11-22).
-- **Next minor release candidate:** 1.7.0 (not tagged or published).
-- **CMake project version:** 1.7.0 in this candidate.
-- **Conan recipe version:** 1.7.0 in this candidate.
-- **Root vcpkg manifest:** 1.7.0 in this candidate.
-- **Published vcpkg registry baseline and Homebrew formula:** remain pinned to immutable 1.6.0 sources until the 1.7.0 tag archive and its checksums are available.
+- **Next minor release candidate:** 1.8.0 (not tagged or published).
+- **CMake project version:** 1.8.0 in this candidate.
+- **Conan recipe version:** 1.8.0 in this candidate.
+- **Root vcpkg manifest:** 1.8.0 in this candidate.
+- **Published vcpkg registry baseline and Homebrew formula:** remain pinned to immutable 1.6.0 sources until the 1.8.0 tag archive and its checksums are available.
 - **Package identity:** OverhauledTensorRuntime / nvlink_placement.
 
-No 1.7.0 tag, GitHub Release, Homebrew update, vcpkg registry entry, or external package upload is claimed by this candidate.
+No 1.8.0 tag, GitHub Release, Homebrew update, vcpkg registry entry, or external package upload is claimed by this candidate.
 
 ## Version assessment
 
-The additive receiver and admission capabilities merged in PR #86 justify a minor increment from 1.6.0:
+The additive receiver and admission capabilities in 1.7.0 established the previous candidate. The explicit BRK2 GPU-preference behavior merged in PR #89 justifies advancing this candidate to 1.8.0:
 
 - A prepare/transfer/activation receiver state machine verifies signed deployment messages and artifact publisher provenance in separate trust domains.
 - Ed25519 identities are bound to exact issuer, subject, audience and key ID values; expiry, nonce/replay and signed message validation are enforced.
@@ -34,7 +34,7 @@ The additive receiver and admission capabilities merged in PR #86 justify a mino
 - Application rate and memory budgets do not stop volumetric network DDoS. Apply firewall, reverse-proxy or provider edge controls where the service is exposed.
 - Untrusted stream access does not require a WASM publisher key. Keep stream trust independent from executable-artifact trust.
 
-## Release gate for 1.7.0
+## Release gate for 1.8.0
 
 Before tagging or publishing:
 
@@ -44,7 +44,7 @@ Before tagging or publishing:
 4. After the release tag exists, calculate the exact source-archive SHA-256/SHA-512 values and update the Homebrew and vcpkg recipes/registry database. Do not insert guessed or placeholder checksums.
 5. Verify each external package publication independently; a manifest or recipe in this repository is not evidence of an upload.
 
-PR #86 (receiver state machine, runtime bridge and rate limits) is merged to main at 019e762ddbf0ba2c69777732ecc1c9e9c6540a2e. This version candidate records the feature set; its own CI and release approval remain separate.
+PR #89 (explicit BRK2 GPU preference below the automatic offload threshold) is merged to main. This candidate records that behavior; its release CI and approval remain separate. The previous 1.7.0 candidate is retained in the release notes.
 
 ## Published release history
 
