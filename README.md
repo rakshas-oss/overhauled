@@ -1,4 +1,4 @@
-# Overhauled v1.7.0 (release candidate)
+# Overhauled v1.8.0 (release candidate)
 
 > **Published v1.5.0:** adds optional native Wasmtime runtime composition on top of the v1.4.0 BRK2 locality codec baseline. v1.5.1 corrects the Wasmtime v51 C API integration and its composition test.
 
@@ -6,16 +6,18 @@
 >
 > Turn GPU interconnect awareness into higher throughput, better tail latency, and more effective use of accelerator infrastructure.
 
-> **Release status:** v1.7.0 is the next minor release candidate after published v1.6.0 (2026-11-22). It adds the bounded authenticated-WASM handoff receiver/runtime bridge and independent stream flood controls. No 1.7.0 tag or GitHub Release has been created yet.
+> **Release status:** v1.8.0 is the next minor release candidate after published v1.6.0 (2026-11-22). It adds the bounded authenticated-WASM handoff receiver/runtime bridge and independent stream flood controls. No 1.8.0 tag or GitHub Release has been created yet.
 
 Overhauled is a C++17 placement and execution library with an interoperable broker service. It provides topology-aware GPU scheduling and broker dispatch for CPU, GPU, and optional NPU execution.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
-[![Release](https://img.shields.io/badge/Release-v1.7.0--rc-blueviolet)](#)
+[![Release](https://img.shields.io/badge/Release-v1.8.0--rc-blueviolet)](#)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2FBRK2-orange)](#)
 
-## What's new in v1.7.0 (release candidate)
+## What's new in v1.8.0 (release candidate)
+
+- **Explicit BRK2 GPU preference:** an explicit `device_preference=gpu` bypasses only the automatic minimum-byte offload heuristic; GPU availability, forced-CPU mode and exact-CPU/verification policy remain authoritative. Broker responses continue to report the backend actually selected.
 
 - **Authenticated receiver state machine:** verify deployment-sender signatures and artifact-publisher provenance using separate trust stores; bind issuer, subject, audience and key ID; enforce expiry, nonce/replay checks and digest validation.
 - **Prepare, transfer and activation:** accept bounded sequential chunks, produce signed prepare decisions and activation receipts, and preserve the previous active release when validation or activation fails.

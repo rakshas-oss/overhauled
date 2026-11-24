@@ -1,3 +1,25 @@
+## v1.8.0 (release candidate; not published)
+Date: 2026-11-23
+
+### Highlights
+
+- Honor an explicit BRK2 `device_preference=gpu` for bounded workloads even when the payload is below the automatic GPU offload threshold.
+- Keep automatic threshold-based GPU selection unchanged when no explicit GPU preference is supplied.
+- Preserve forced-CPU, exact-CPU/verification-sensitive policy and real GPU availability as higher-priority constraints; report the backend actually selected rather than treating the preference as proof of acceleration.
+- Keep CPU fallback authoritative when the requested GPU is unavailable.
+
+### Compatibility and validation
+
+- No BRK1/BRK2 wire-format change; this clarifies and enforces existing BRK2 field 10 semantics.
+- Validate both available-GPU dispatch for sub-threshold payloads and CPU selection when no GPU is available.
+- CUDA/NVLink hardware validation remains opt-in and requires a capable runner; ordinary CPU CI does not claim hardware coverage.
+
+### Release metadata
+
+CMake, Conan and the root vcpkg manifest advance to 1.8.0. The vcpkg registry port and Homebrew formula remain pinned to the latest published release until a 1.8.0 tag exists and exact archive checksums can be calculated. No tag, GitHub Release or external package publication is claimed.
+
+---
+
 ## v1.7.0 (release candidate; not published)
 Date: 2026-11-22
 
