@@ -17,6 +17,8 @@ inline constexpr std::size_t kMaximumBrokerClientSessions = 1024;
 
 struct BrokerServerConfig {
     int port = 9090;
+    // Bind to loopback when using an external mTLS terminator (for example stunnel).
+    std::string bind_address = "0.0.0.0";
     int socket_timeout_ms = 5000;
     std::size_t max_clients = 128;
     std::size_t max_inflight_per_client = 32;
