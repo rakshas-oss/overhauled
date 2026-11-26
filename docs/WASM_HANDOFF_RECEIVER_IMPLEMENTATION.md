@@ -80,7 +80,7 @@ task-level isolation or wire a new network listener into the broker.
   envelope sender, apply frame bounds before allocating/parsing the JSON
   envelope, and map signed decisions/receipts to the shared schema.
 - **Replay journal (optional):** construct `ReplayGuard(capacity, journal_path)`
-  to append accepted nonces to a 0600 file and fsync each record before
+  to append accepted nonces to a private journal file (0600 on POSIX) and fsync each record before
   returning success. The journal is restored on process restart, is limited to
   64 MiB, and is intended for a single broker process. Do not share one journal
   across concurrent broker processes.
