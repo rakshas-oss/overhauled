@@ -35,11 +35,12 @@ bool MultivariateAccumulator::observe(
         }
     }
 
+    auto updated = pairs_;
     for (std::size_t i = 0; i < dimensions_; ++i) {
         if ((present_mask & (std::uint32_t{1} << i)) == 0U) continue;
         for (std::size_t j = 0; j < dimensions_; ++j) {
             if ((present_mask & (std::uint32_t{1} << j)) == 0U) continue;
-            auto& pair = pairs_[i * kMaxDimensions + j];
+            auto& pair = updated[i * kMaxDimensions + j];
             const double x = values[i];
             const double y = values[j];
             const double next_count = static_cast<double>(pair.count + 1);
@@ -52,8 +53,12 @@ bool MultivariateAccumulator::observe(
             pair.m2_x += dx * (x - pair.mean_x);
             pair.m2_y += dy * dy_after;
             ++pair.count;
+            if (!std::isfinite(pair.mean_x) || !std::isfinite(pair.mean_y)
+                || !std::isfinite(pair.co_moment) || !std::isfinite(pair.m2_x)
+                || !std::isfinite(pair.m2_y)) return false;
         }
     }
+    pairs_ = updated;
     return true;
 }
 
@@ -65,10 +70,11 @@ bool MultivariateAccumulator::merge(const MultivariateAccumulator& other) noexce
             if (!can_add(pairs_[index].count, other.pairs_[index].count)) return false;
         }
     }
+    auto updated = pairs_;
     for (std::size_t i = 0; i < dimensions_; ++i) {
         for (std::size_t j = 0; j < dimensions_; ++j) {
             const auto index = i * kMaxDimensions + j;
-            auto& target = pairs_[index];
+            auto& target = updated[index];
             const auto& source = other.pairs_[index];
             if (source.count == 0) continue;
             if (target.count == 0) {
@@ -87,8 +93,12 @@ bool MultivariateAccumulator::merge(const MultivariateAccumulator& other) noexce
             target.mean_x += dx * b / n;
             target.mean_y += dy * b / n;
             target.count = combined;
+            if (!std::isfinite(target.mean_x) || !std::isfinite(target.mean_y)
+                || !std::isfinite(target.co_moment) || !std::isfinite(target.m2_x)
+                || !std::isfinite(target.m2_y)) return false;
         }
     }
+    pairs_ = updated;
     return true;
 }
 
