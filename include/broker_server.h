@@ -11,6 +11,10 @@
 
 namespace nvlink::broker {
 
+// The listener uses one blocking session-I/O thread per admitted client.
+// Keep the total thread count bounded even if an operator misconfigures it.
+inline constexpr std::size_t kMaximumBrokerClientSessions = 1024;
+
 struct BrokerServerConfig {
     int port = 9090;
     int socket_timeout_ms = 5000;
