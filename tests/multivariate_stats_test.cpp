@@ -27,9 +27,9 @@ int main() {
     MultivariateAccumulator right(3);
     row[0] = 4.0; row[1] = 8.0;
     assert(right.observe(row, 0b011));
-    row[0] = 4.0; row[2] = 200.0;
+    row[0] = 4.0; row[2] = 400.0;
     assert(right.observe(row, 0b101));
-    row[0] = 5.0; row[2] = 300.0;
+    row[0] = 5.0; row[2] = 500.0;
     assert(right.observe(row, 0b101));
     assert(left.merge(right));
     summary = left.snapshot();
