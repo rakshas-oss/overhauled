@@ -22,6 +22,14 @@ Overhauled owns the C++ execution plane: BRK1/BRK2 listener, session admission, 
 - Locality request/response fields exist, but physical memory placement is not yet applied and verified by the broker.
 - Runtime interruption, cancellation acknowledgement, and durable handoff replay must be treated as separate acceptance gates, not assumed from API presence.
 
+## Paired Cargo lockfile contract
+
+YuKKi-OS owns the Rust manifests and checked-in lockfiles; Overhauled remains a C++/CMake project and does not acquire a Cargo dependency of its own. The paired interoperability workflow now runs `cargo metadata --locked` for YuKKi-OS's root, guest-worker, and browser-wasm manifests before BRK conformance and live Rust-to-C++ traffic. This catches an incomplete or stale Rust dependency graph without allowing CI to rewrite lockfiles.
+
+The November 26, 2026 YuKKi-OS incident was repaired by restoring the missing `rand 0.9.5` package record in [YuKKi-OS PR #184](https://github.com/rakshas-oss/YuKKi-OS/pull/184), merged at `39bb428cb35e159e23c4a56fd345bcc185f1e89c`. The failure was on the Rust side: `tungstenite 0.29.0` still referenced the deleted package record. It caused `--locked` validation and the RustSec audit's dependency-tree resolution to fail before meaningful paired interoperability testing.
+
+Restoring that package record repairs graph integrity; it does not resolve the separate low-severity Aikido advisory `AIKIDO-2026-875754` reported for `rand 0.9.5`'s `UniformChar` deserialization path. Keep this visible as a YuKKi-OS dependency-upgrade item; do not attempt to fix it by deleting lockfile entries or bypassing audit. Overhauled's paired gate must continue to run with `--locked` so it detects future regressions at the interoperability boundary.
+
 ## Work packages
 
 ### OH0 — Bounded broker session I/O
