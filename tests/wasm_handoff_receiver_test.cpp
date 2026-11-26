@@ -6,7 +6,7 @@
 #include <array>
 #include <cassert>
 #include <cstdio>
-#include <unistd.h>
+#include <filesystem>
 #include <cstdlib>
 #include <iostream>
 #include <utility>
@@ -68,8 +68,11 @@ int main() {
     CHECK(!replay.consume("yukki-os", "overhauled", nonce, now + std::chrono::minutes(1), now));
     CHECK(!replay.consume("yukki-os", "wrong-audience", nonce, now, now));
 
-    const std::string journal_path =
-        "/tmp/overhauled-replay-guard-" + std::to_string(::getpid()) + ".journal";
+    const std::string journal_path = (
+        std::filesystem::temp_directory_path() /
+        ("overhauled-replay-guard-" + std::to_string(
+            std::chrono::steady_clock::now().time_since_epoch().count()) + ".journal")
+    ).string();
     std::remove(journal_path.c_str());
     const std::string durable_nonce(32, 'd');
     {
