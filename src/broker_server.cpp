@@ -171,6 +171,11 @@ public:
         if (::inet_pton(AF_INET, config_.bind_address.c_str(), &parsed_bind_address) != 1) {
             throw std::invalid_argument("bind_address must be a numeric IPv4 address");
         }
+        if (config_.require_mtls_proxy &&
+            (ntohl(parsed_bind_address.s_addr) & 0xff000000U) != 0x7f000000U) {
+            throw std::invalid_argument(
+                "mTLS proxy mode requires a loopback bind address in 127.0.0.0/8");
+        }
         if (config_.max_inflight_per_client == 0 || config_.max_clients == 0) {
             throw std::invalid_argument("client and in-flight limits must be greater than zero");
         }
