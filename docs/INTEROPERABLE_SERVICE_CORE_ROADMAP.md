@@ -77,6 +77,15 @@ Restoring that package record repairs graph integrity; it does not resolve the s
 - Keep stream-ingress flood controls independently configurable and bounded; bulk array data must use an explicitly provisioned bulk-data path rather than the untrusted-stream defaults.
 - Remove or complete placeholder drivers only after a real hardware qualification path exists.
 
+## Implementation update — combined transport and handoff foundation
+
+- YuKKi-OS now has a bounded persistent single-flight pool for BRK1/BRK2 sessions. `YUKKI_GPU_MAX_CONNECTIONS` defaults to 16 (1..256). `YUKKI_GPU_REQUIRE_MTLS_PROXY=true` additionally requires the configured endpoint to be a numeric loopback socket, so the client is routed through a local TLS terminator.
+- Overhauled now hard-caps per-client session-I/O threads at 1,024, exposes `--max-clients`, and supports an explicit IPv4 `--bind-address` (use `127.0.0.1` behind a TLS terminator).
+- Optional `ReplayGuard` append-only journal records are fsync'd before a nonce is accepted and restored on process restart. The journal is single-process and bounded at 64 MiB. Prepared artifact bytes and active-release state remain process-local; this change alone is not restart-safe artifact staging.
+- `deploy/mtls/` provides stunnel client/server examples that require client certificates and TLS 1.3, with the broker bound to loopback. This is a deployment sidecar profile, not an in-process TLS implementation; the handoff receiver still needs explicit transport-certificate-to-signed-sender identity binding.
+
+The native broker TLS listener, idle connection expiry/keepalive, fixed event-driven I/O workers, and durable artifact/session staging remain further implementation gates.
+
 ## Release gates
 
 1. **A:** OH0 and OH1; shared corpus and live Rust/C++ interoperability green.
