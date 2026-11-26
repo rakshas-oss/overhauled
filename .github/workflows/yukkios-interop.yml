@@ -39,6 +39,11 @@ jobs:
           echo "Overhauled: $(git -C overhauled rev-parse HEAD)"
           echo "YuKKi-OS: $(git -C yukkios rev-parse HEAD)"
       - uses: dtolnay/rust-toolchain@stable
+      - name: Verify paired YuKKi-OS Cargo lockfiles without rewriting them
+        run: |
+          cargo metadata --manifest-path yukkios/Cargo.toml --format-version 1 --locked >/dev/null
+          cargo metadata --manifest-path yukkios/guest-worker/Cargo.toml --format-version 1 --locked >/dev/null
+          cargo metadata --manifest-path yukkios/browser-wasm/Cargo.toml --format-version 1 --locked >/dev/null
       - name: Install C++ build tools
         run: sudo apt-get update && sudo apt-get install -y cmake g++
       - name: Build Overhauled broker and BRK2 tests
