@@ -86,6 +86,7 @@ bool MetricAccumulator::observe(const PageObservation& observation) noexcept {
 }
 
 bool MetricAccumulator::merge(const MetricAccumulator& other) noexcept {
+    if (this == &other) return false;
     if (!can_add(pages_total_, other.pages_total_)
         || !can_add(pages_succeeded_, other.pages_succeeded_)
         || !can_add(pages_failed_, other.pages_failed_)
