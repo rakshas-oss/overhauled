@@ -40,6 +40,8 @@ private:
         double mean_x{0.0};
         double mean_y{0.0};
         double co_moment{0.0};
+        double m2_x{0.0};
+        double m2_y{0.0};
     };
 
     std::size_t dimensions_{0};
