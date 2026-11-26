@@ -17,7 +17,7 @@ network boundary, not an in-process TLS implementation.
 Start the broker with:
 
 ```sh
-broker_server 19091 --bind-address 127.0.0.1
+broker_server 19091 --bind-address 127.0.0.1 --require-mtls-proxy
 ```
 
 Configure the YuKKi-OS process with:
