@@ -2,27 +2,27 @@
 
 ## Release state
 
-- **Latest published version:** 1.6.0 (2026-11-22).
-- **Next minor release candidate:** 1.8.0 (not tagged or published).
-- **CMake project version:** 1.8.0 in this candidate.
-- **Conan recipe version:** 1.8.0 in this candidate.
-- **Root vcpkg manifest:** 1.8.0 in this candidate.
-- **Published vcpkg registry baseline and Homebrew formula:** remain pinned to immutable 1.6.0 sources until the 1.8.0 tag archive and its checksums are available.
+- **Latest published version:** 1.8.0 (2026-11-24).
+- **Next minor release candidate:** 1.9.0 (not tagged or published).
+- **CMake project version:** 1.9.0 in this candidate.
+- **Conan recipe version:** 1.9.0 in this candidate.
+- **Root vcpkg manifest:** 1.9.0 in this candidate.
+- **Published vcpkg registry baseline and Homebrew formula:** remain pinned to the last verified source/archive baseline pending exact source checksums and registry updates.
 - **Package identity:** OverhauledTensorRuntime / nvlink_placement.
 
-No 1.8.0 tag, GitHub Release, Homebrew update, vcpkg registry entry, or external package upload is claimed by this candidate.
+No 1.9.0 tag, GitHub Release, Homebrew update, vcpkg registry entry, or external package upload is claimed by this candidate.
 
 ## Version assessment
 
-The additive receiver and admission capabilities in 1.7.0 established the previous candidate. The explicit BRK2 GPU-preference behavior merged in PR #89 justifies advancing this candidate to 1.8.0:
+The published 1.8.0 release added explicit BRK2 GPU preference behavior. The additive broker-session and replay-hardening changes merged in Overhauled PR #93 justify advancing the independent CMake/Conan/vcpkg project version to 1.9.0:
 
-- A prepare/transfer/activation receiver state machine verifies signed deployment messages and artifact publisher provenance in separate trust domains.
-- Ed25519 identities are bound to exact issuer, subject, audience and key ID values; expiry, nonce/replay and signed message validation are enforced.
-- Strict sequential chunk transfer verifies per-chunk, module and aggregate digests before activation.
-- Signed prepare decisions and activation receipts report the receiver's selected backend and engine/ABI information.
-- Global and per-sender message and ingress-byte token buckets operate alongside bounded sender tracking, session counts, module/chunk sizes and total staged-byte ceilings.
-- The optional Wasmtime runtime bridge validates and compiles a complete staged module set, then publishes the release through the configured activation callback. Failed validation or activation leaves the previous active release unchanged.
-- The untrusted NXR1, MED1 and media/stream-relay paths remain separately accessible without executable-artifact publisher authorization; their own framing, size, connection, rate and backpressure limits continue to apply.
+- Enforce a hard cap of 1,024 broker client sessions and expose the operator-facing `--max-clients` bound.
+- Add numeric IPv4 `--bind-address` and `--require-mtls-proxy`; strict mode refuses a public plaintext listener and requires loopback binding.
+- Add an mTLS 1.3 stunnel deployment profile for client and server sides, preserving existing BRK1/BRK2 protocol framing.
+- Add an optional single-process append-only replay journal; fsync accepted nonces before success and restore them on restart, with a 64 MiB file ceiling and fail-closed error handling.
+- Keep default CPU-only builds and existing protocol contracts unchanged.
+
+The security boundary remains limited: the stunnel peer certificate is not yet bound to the signed handoff sender, prepared artifacts and activation metadata remain in memory, and session I/O is still thread-per-client within its explicit ceiling. The journal is not a distributed replay database and does not make artifact staging restart-safe.
 
 ## Compatibility and security boundaries
 
@@ -34,20 +34,22 @@ The additive receiver and admission capabilities in 1.7.0 established the previo
 - Application rate and memory budgets do not stop volumetric network DDoS. Apply firewall, reverse-proxy or provider edge controls where the service is exposed.
 - Untrusted stream access does not require a WASM publisher key. Keep stream trust independent from executable-artifact trust.
 
-## Release gate for 1.8.0
+## Release gate for 1.9.0
 
 Before tagging or publishing:
 
-1. Run the complete Overhauled CI suite on the exact release candidate, including the OpenSSL-enabled receiver conformance tests and the Wasmtime bridge composition test.
-2. Confirm paired YuKKi-OS sender/Overhauled receiver interoperability and the independent untrusted-stream regression tests.
-3. Confirm default CPU-only builds remain unchanged and optional CUDA, Ethos-U85 and Wasmtime paths remain feature-gated.
-4. After the release tag exists, calculate the exact source-archive SHA-256/SHA-512 values and update the Homebrew and vcpkg recipes/registry database. Do not insert guessed or placeholder checksums.
-5. Verify each external package publication independently; a manifest or recipe in this repository is not evidence of an upload.
-
-PR #89 (explicit BRK2 GPU preference below the automatic offload threshold) is merged to main. This candidate records that behavior; its release CI and approval remain separate. The previous 1.7.0 candidate is retained in the release notes.
+1. Run the complete Overhauled CI suite on the exact candidate: default CPU-only build/tests, OpenSSL-enabled handoff tests, Wasmtime compile/runtime composition, paired YuKKi interoperability, BRK2 conformance, ASan/UBSan, package-consumer smoke tests and Conan package validation.
+2. Verify the 1,024-session ceiling, `--max-clients` argument parsing, numeric bind validation and refusal of public listener bindings in strict mTLS-proxy mode.
+3. Verify the replay journal across restart, duplicate nonce rejection, malformed/torn-journal fail-closed behavior, 64 MiB capacity and restrictive POSIX file permissions.
+4. Validate stunnel configuration with test certificates and confirm TLS 1.3, server hostname validation, client-certificate verification and loopback forwarding.
+5. Confirm paired YuKKi-OS BRK1/BRK2 interoperability and preserve all existing untrusted stream paths and independent stream flood limits.
+6. Do not claim native TLS, transport-certificate-to-signed-sender binding, fixed event-driven I/O, durable artifact staging or restart-safe activation; those remain follow-up capabilities.
+7. After required CI passes and the release commit is approved, create the 1.9.0 tag/GitHub Release. Only then compute exact source archive SHA-256/SHA-512 and update Homebrew/vcpkg registry recipes. Verify external package publication independently.
 
 ## Published release history
 
+- v1.8.0 — published 2026-11-24; explicit BRK2 GPU preference for bounded workloads while preserving forced-CPU/exact-CPU constraints.
+- v1.7.0 — published 2026-11-22; authenticated WASM receiver state machine, bounded admission and stream-flood controls.
 - v1.6.0 — published 2026-11-22; opt-in authenticated-WASM receiver primitives and Wasmtime v51 C API correction. The receiver's full state machine, signed decisions/receipts, runtime bridge and bounded rate controls were added after that release by PR #86.
 - v1.5.0 — published 2026-11-21; optional native Wasmtime runtime composition.
 - v1.3.0 — published 2026-11-21; hierarchical worker topology, per-class CPU-group queues, bounded elasticity and large-host scheduling.

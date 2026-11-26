@@ -1,4 +1,4 @@
-# Overhauled v1.8.0 (release candidate)
+# Overhauled v1.9.0 (release candidate)
 
 > **Published v1.5.0:** adds optional native Wasmtime runtime composition on top of the v1.4.0 BRK2 locality codec baseline. v1.5.1 corrects the Wasmtime v51 C API integration and its composition test.
 
@@ -6,16 +6,28 @@
 >
 > Turn GPU interconnect awareness into higher throughput, better tail latency, and more effective use of accelerator infrastructure.
 
-> **Release status:** v1.8.0 is the next minor release candidate after published v1.6.0 (2026-11-22). It adds the bounded authenticated-WASM handoff receiver/runtime bridge and independent stream flood controls. No 1.8.0 tag or GitHub Release has been created yet.
+> **Release status:** v1.9.0 is the next minor release candidate after published v1.8.0 (2026-11-24). The 1.8.0 GitHub Release is published; the 1.9.0 tag and release assets await validation.
 
 Overhauled is a C++17 placement and execution library with an interoperable broker service. It provides topology-aware GPU scheduling and broker dispatch for CPU, GPU, and optional NPU execution.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
-[![Release](https://img.shields.io/badge/Release-v1.8.0--rc-blueviolet)](#)
+[![Release](https://img.shields.io/badge/Release-v1.9.0--rc-blueviolet)](#)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2FBRK2-orange)](#)
 
-## What's new in v1.8.0 (release candidate)
+## What's new in v1.9.0 (release candidate)
+
+- **Bounded broker sessions:** cap accepted client sessions at 1,024 and expose `--max-clients`. The implementation remains one blocking I/O thread per admitted client; this is a hard thread ceiling, not an event-driven I/O pool.
+- **Private broker listener:** add `--bind-address` and `--require-mtls-proxy`. Strict proxy mode rejects any non-loopback listener address so the plaintext broker socket cannot be exposed remotely behind the TLS terminator.
+- **TLS 1.3 sidecar profile:** add stunnel client/server examples with client-certificate verification, server-chain and hostname verification, loopback forwarding and documented certificate-rotation boundaries. This is external TLS termination, not a native TLS listener.
+- **Replay persistence:** allow `ReplayGuard` to append accepted nonces to a private journal, fsync each record before acknowledging success, and restore unexpired entries after a single-process restart. The journal is capped at 64 MiB and fails closed on malformed data or write/sync/capacity errors.
+- **Cross-platform journal I/O:** use POSIX fsync/0600 permissions and Windows commit/file APIs where supported by the build target.
+
+### Deployment boundary
+
+The mTLS proxy protects the broker connection in transit, but its verified certificate identity is not yet propagated into signed artifact-sender authorization. Replay-nonce persistence does not persist staged module bytes, prepared sessions, active-release state or runtime activation. The existing thread-per-client model remains bounded but is not the planned fixed event-driven I/O pool.
+
+## What's new in v1.8.0 (published)
 
 - **Explicit BRK2 GPU preference:** an explicit `device_preference=gpu` bypasses only the automatic minimum-byte offload heuristic; GPU availability, forced-CPU mode and exact-CPU/verification policy remain authoritative. Broker responses continue to report the backend actually selected.
 
