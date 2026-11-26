@@ -114,6 +114,17 @@ bool read_response(int socket_fd,
 int main() {
     using namespace nvlink::broker;
 
+    BrokerServerConfig invalid_address_config;
+    invalid_address_config.bind_address = "not-an-ip";
+    bool rejected_invalid_bind_address = false;
+    try {
+        BrokerServer invalid_address_server(invalid_address_config);
+    } catch (const std::invalid_argument&) {
+        rejected_invalid_bind_address = true;
+    }
+    require(rejected_invalid_bind_address,
+            "broker accepted a non-numeric bind address");
+
     BrokerServerConfig invalid_config;
     invalid_config.max_clients = kMaximumBrokerClientSessions + 1;
     bool rejected_oversized_client_budget = false;
