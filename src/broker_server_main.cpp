@@ -44,6 +44,7 @@ void print_usage(const char* argv0) {
         << "  Control and ExactCpu never borrow elastic workers.\n"
         << "  --workers-control/realtime/exact-cpu/inference N: dedicated class pool sizes.\n"
         << "  --bind-address IPV4: IPv4 listener address (use 127.0.0.1 behind an mTLS proxy).\n"
+        << "  --require-mtls-proxy: require loopback bind so remote clients cannot reach the plaintext broker.\n"
         << "  --max-clients N: concurrent broker sessions (1..1024; one bounded I/O thread per session).\n"
         << "  --max-outstanding N: process-wide outstanding request cap (0 derives from client limits, max 65536).\n"
         << "  --max-inflight-bytes N: queued plus executing request and metadata memory budget (default 64 MiB).\n"
@@ -67,6 +68,10 @@ int main(int argc, char** argv) {
         const std::string arg = argv[i];
         if (arg == "--bind-address" && i + 1 < argc) {
             config.bind_address = argv[++i];
+            continue;
+        }
+        if (arg == "--require-mtls-proxy") {
+            config.require_mtls_proxy = true;
             continue;
         }
         if (arg == "--cpu-only") {
