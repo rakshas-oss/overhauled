@@ -29,6 +29,18 @@ include(CheckLanguage)
 include(CTest)
 find_package(Threads REQUIRED)
 
+add_library(crawler_metrics src/crawler_metrics.cpp)
+add_library(Overhauled::crawler_metrics ALIAS crawler_metrics)
+target_include_directories(crawler_metrics PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+
+if(BUILD_TESTING)
+    add_executable(crawler_metrics_test tests/crawler_metrics_test.cpp)
+    target_link_libraries(crawler_metrics_test PRIVATE crawler_metrics)
+    add_test(NAME crawler_metrics_test COMMAND crawler_metrics_test)
+endif()
+
 set(HAS_CUDA OFF)
 set(HAS_CUBLAS OFF)
 if(ENABLE_CUDA)
@@ -100,7 +112,7 @@ if(HAS_CUBLAS)
     target_link_libraries(adi_server PUBLIC CUDA::cublas)
 endif()
 
-set(OVERHAULED_INSTALL_TARGETS nvlink_placement adi_server)
+set(OVERHAULED_INSTALL_TARGETS crawler_metrics nvlink_placement adi_server)
 if(BUILD_BROKER)
     add_library(broker_service
         src/broker_protocol.cpp src/brk2_protocol.cpp src/broker_service.cpp

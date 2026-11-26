@@ -40,6 +40,16 @@ The mTLS proxy protects the broker connection in transit, but its verified certi
 
 **Deployment boundary:** the receiver is not yet wired into the ordinary BRK1/BRK2 TCP listener. A caller must provide an authenticated protected transport (mTLS 1.3 or equivalent), bind transport identity to the signed sender, and provide durable replay/staging where restart-safe guarantees are required. The current shared-Store Wasmtime embedding is not a multi-tenant sandbox, and this release candidate does not claim complete remote deployment through the broker listener.
 
+## YuKKi-OS crawler metric integration
+
+Overhauled provides the standalone C++ Overhauled::crawler_metrics library
+for constant-memory aggregation of normalized page observations from YuKKi-OS.
+It tracks success/failure counts, document bytes, links, fetch/extraction
+duration summaries and bounded approximate P50/P95/P99 buckets. Keep one
+accumulator per worker or NUMA shard and merge them at a barrier to avoid a
+shared hot lock. This is a CPU reduction library; it does not yet add a BRK
+message type or GPU/NPU crawler dispatch. See docs/CRAWLER_METRICS.md.
+
 ## Package managers
 
 The vcpkg port and Homebrew formula are maintained alongside the source. They
