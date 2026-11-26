@@ -5,6 +5,8 @@
 
 #include <array>
 #include <cassert>
+#include <cstdio>
+#include <unistd.h>
 #include <cstdlib>
 #include <iostream>
 #include <utility>
@@ -65,6 +67,25 @@ int main() {
     CHECK(replay.consume("yukki-os", "overhauled", nonce, now + std::chrono::minutes(1), now));
     CHECK(!replay.consume("yukki-os", "overhauled", nonce, now + std::chrono::minutes(1), now));
     CHECK(!replay.consume("yukki-os", "wrong-audience", nonce, now, now));
+
+    const std::string journal_path =
+        "/tmp/overhauled-replay-guard-" + std::to_string(::getpid()) + ".journal";
+    std::remove(journal_path.c_str());
+    const std::string durable_nonce(32, 'd');
+    {
+        ReplayGuard durable_replay(8, journal_path);
+        CHECK(durable_replay.consume("yukki-os", "overhauled", durable_nonce,
+                                     now + std::chrono::minutes(1), now));
+    }
+    {
+        ReplayGuard restarted_replay(8, journal_path);
+        CHECK(!restarted_replay.consume("yukki-os", "overhauled", durable_nonce,
+                                        now + std::chrono::minutes(1), now));
+        CHECK(restarted_replay.consume("another-node", "overhauled",
+                                       std::string(32, 'e'),
+                                       now + std::chrono::minutes(1), now));
+    }
+    std::remove(journal_path.c_str());
 
     const std::vector<std::uint8_t> artifact{'w','a','s','m'};
     const auto digest = sha256_hex(artifact.data(), artifact.size());
