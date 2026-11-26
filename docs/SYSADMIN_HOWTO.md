@@ -99,15 +99,41 @@ cd overhauled
 git fetch --tags origin
 ```
 
-For the currently published release baseline, check out the 1.6.0 tag:
+For the currently published GitHub release baseline, check out the v1.9.0 tag:
 
 ```bash
 git checkout 1.6.0
 ```
 
-`1.6.0` is the latest published release baseline (2026-11-22). The `1.7.0` version metadata is present on `main` after the release-candidate PR merged, but no `1.7.0` tag or GitHub Release has been published. Use the published `1.6.0` tag for a reproducible stable build; use a reviewed `main` commit only when intentionally validating the next release candidate.
+`v1.9.0` is the latest published GitHub release baseline (2026-11-26). The `1.10.0` CMake/Conan/root-vcpkg version metadata is a release candidate on its review branch; no `v1.10.0` tag or GitHub Release has been published. Use the published `v1.9.0` tag for a reproducible stable build; use the reviewed `release/1.10.0-crawler-metrics` branch only when intentionally validating the next candidate.
 
 If the tag has not yet been created, use the reviewed release commit or the intended branch supplied by your release process. Do not assume an open pull request is already part of `main` or a published release.
+
+## Standalone crawler metrics library
+
+The Crawler Metrics component is a CPU-only C++17 aggregation library. It
+consumes normalized numeric `PageObservation` values; it does not perform
+network requests, parse HTML or accept raw page bodies. It is not a broker
+operation and is not automatically wired into YuKKi-OS.
+
+Build and test only this target with a portable CPU configuration:
+
+```bash
+cmake -S . -B build-cpu \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_BROKER=ON \
+  -DBUILD_TESTING=ON \
+  -DENABLE_CUDA=OFF \
+  -DENABLE_TENSORRT=OFF
+cmake --build build-cpu --target crawler_metrics_test --parallel
+ctest --test-dir build-cpu --output-on-failure -R crawler_metrics_test
+```
+
+The installed library target is `Overhauled::crawler_metrics`; the public
+header is `crawler_metrics.h`. Use one unsynchronized accumulator per
+worker/NUMA shard and merge at a barrier. Its fixed histograms report percentile
+bucket upper bounds rather than exact quantiles. See
+[CRAWLER_METRICS.md](CRAWLER_METRICS.md).
 
 ## 4. Configure a CPU-only broker build (recommended first run)
 

@@ -1,4 +1,29 @@
-## v1.9.0 (release candidate; not published)
+## v1.10.0 (release candidate; not published)
+Date: 2026-11-26
+
+### Highlights
+
+- Add the standalone C++17 `crawler_metrics` library and `Overhauled::crawler_metrics` target with an installed public header.
+- Aggregate normalized page observations: status success/failure, document bytes, link totals, fetch/extraction duration statistics and bounded histogram percentile upper bounds.
+- Support per-worker/per-NUMA-shard accumulators with barrier-based merging and fixed memory use.
+- Reject counter overflow and self-merge without mutating accumulator state.
+- Pair with the YuKKi-OS v6.21.0 WASM Crawler Fabric by mapping its page-level numeric output into `PageObservation` on the caller side.
+
+### Compatibility and limitations
+
+- The metrics library is CPU-only, accepts normalized numeric observations and contains no crawler networking or HTML parsing.
+- No BRK1/BRK2 message or broker listener route is added. The accumulator is not automatically wired to YuKKi-OS.
+- Raw HTML is not passed into Overhauled; no GPU/NPU crawler acceleration or measured throughput improvement is claimed.
+- P50/P95/P99 values are upper bounds from fixed log2 buckets, not exact quantiles.
+- Existing BRK1/BRK2/WSM1/NXR1/MED1 protocol identities are unchanged.
+
+### Release metadata and validation
+
+CMake, Conan and the root vcpkg manifest advance to 1.10.0 in this candidate. The external vcpkg registry and Homebrew formula remain pinned to their last verified immutable source/archive baseline until the exact v1.10.0 archive checksums and registry update are prepared. No v1.10.0 tag, GitHub Release or external package upload is claimed.
+
+---
+
+## v1.9.0 (published 2026-11-26)
 Date: 2026-11-26
 
 ### Highlights
@@ -20,7 +45,7 @@ Date: 2026-11-26
 
 ### Release metadata
 
-CMake, Conan and the root vcpkg manifest advance to 1.9.0. The external vcpkg registry and Homebrew formula remain pinned to the last verified source archive until exact 1.9.0 source checksums are available. No 1.9.0 tag, GitHub Release or external package upload is claimed by this candidate.
+CMake, Conan and the root vcpkg manifest advanced to 1.9.0. The v1.9.0 tag and GitHub Release were published on 2026-11-26. The external vcpkg registry and Homebrew formula remain pinned to the last verified source/archive baseline until exact 1.9.0 source checksums and registry updates are completed; GitHub Release publication does not imply external package uploads.
 
 ---
 

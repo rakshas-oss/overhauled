@@ -13,6 +13,8 @@ Overhauled owns the C++ execution plane: BRK1/BRK2 listener, session admission, 
 - Requested backend, NUMA node, or locality intent is not evidence of applied placement. Responses report only observed execution and successful affinity.
 - Never accept peer-supplied precompiled Wasmtime artifacts for deserialization; compile verified source modules locally.
 
+- The standalone `Overhauled::crawler_metrics` C++ library is available for caller-supplied normalized page observations. It is CPU-only, constant-memory, independent of BRK framing, and not automatically wired to the YuKKi-OS crawler; it does not accept raw HTML or imply accelerator dispatch.
+
 ## Verified starting point
 
 - The broker supports BRK1/BRK2 framing and bounded per-connection in-flight requests.

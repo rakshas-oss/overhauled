@@ -1,21 +1,30 @@
-# Overhauled v1.9.0 (release candidate)
+# Overhauled v1.10.0 (release candidate)
 
-> **Published v1.5.0:** adds optional native Wasmtime runtime composition on top of the v1.4.0 BRK2 locality codec baseline. v1.5.1 corrects the Wasmtime v51 C API integration and its composition test.
+> **Published v1.9.0:** adds bounded broker sessions, strict loopback-only listener enforcement for mTLS-sidecar deployments and optional fsync-backed replay-nonce journaling. v1.10.0 adds a standalone CPU-side crawler metrics library.
 
 > **Route workloads by topology, not guesswork.**
 >
 > Turn GPU interconnect awareness into higher throughput, better tail latency, and more effective use of accelerator infrastructure.
 
-> **Release status:** v1.9.0 is the next minor release candidate after published v1.8.0 (2026-11-24). The 1.8.0 GitHub Release is published; the 1.9.0 tag and release assets await validation.
+> **Release status:** v1.10.0 is the next minor release candidate after published v1.9.0 (2026-11-26). The v1.9.0 GitHub Release is published; the v1.10.0 tag and release assets await candidate validation.
 
 Overhauled is a C++17 placement and execution library with an interoperable broker service. It provides topology-aware GPU scheduling and broker dispatch for CPU, GPU, and optional NPU execution.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
-[![Release](https://img.shields.io/badge/Release-v1.9.0--rc-blueviolet)](#)
+[![Release](https://img.shields.io/badge/Release-v1.10.0--rc-blueviolet)](#)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2FBRK2-orange)](#)
 
-## What's new in v1.9.0 (release candidate)
+## What's new in v1.10.0 (release candidate)
+
+- **Constant-memory crawler metrics:** add the standalone C++17 `Overhauled::crawler_metrics` library with public header `crawler_metrics.h`. It accepts normalized `PageObservation` values and accumulates page success/failure counts, bytes, links, fetch/extraction duration statistics, and bounded histogram percentile upper bounds.
+- **Shard-friendly aggregation:** keep one unsynchronized fixed-memory accumulator per worker/NUMA shard and merge at a barrier. Counter overflow and self-merge are rejected without partial mutation.
+- **YuKKi-OS crawler pairing:** designed to consume normalized records emitted by the YuKKi-OS v6.21 crawler. Integration is caller-driven; no raw HTML enters Overhauled and no BRK operation is added.
+- **CPU-only semantics:** the metrics library is a deterministic CPU reduction component. It does not add GPU/NPU crawler dispatch, execute crawler network requests, or imply measured crawler throughput.
+
+See [Crawler metric aggregation](docs/CRAWLER_METRICS.md) for the observation contract, examples and limitations.
+
+## What's new in v1.9.0 (published 2026-11-26)
 
 - **Bounded broker sessions:** cap accepted client sessions at 1,024 and expose `--max-clients`. The implementation remains one blocking I/O thread per admitted client; this is a hard thread ceiling, not an event-driven I/O pool.
 - **Private broker listener:** add `--bind-address` and `--require-mtls-proxy`. Strict proxy mode rejects any non-loopback listener address so the plaintext broker socket cannot be exposed remotely behind the TLS terminator.
