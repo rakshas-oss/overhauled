@@ -114,6 +114,18 @@ bool read_response(int socket_fd,
 int main() {
     using namespace nvlink::broker;
 
+    BrokerServerConfig invalid_proxy_config;
+    invalid_proxy_config.require_mtls_proxy = true;
+    invalid_proxy_config.bind_address = "0.0.0.0";
+    bool rejected_public_plaintext_listener = false;
+    try {
+        BrokerServer invalid_proxy_server(invalid_proxy_config);
+    } catch (const std::invalid_argument&) {
+        rejected_public_plaintext_listener = true;
+    }
+    require(rejected_public_plaintext_listener,
+            "mTLS proxy mode accepted a public plaintext listener");
+
     BrokerServerConfig invalid_address_config;
     invalid_address_config.bind_address = "not-an-ip";
     bool rejected_invalid_bind_address = false;
