@@ -1,8 +1,9 @@
 # NumPy (BSD-3-Clause), used by the Python examples and analysis scripts.
-numpy>=1.21,<3
+numpy>=1.22,<3
 # PyTorch (BSD-3-Clause), used by the TensorRT example and benchmark.
-torch>=1.12,<3
+torch>=2.10.0,<3
 # ONNX (Apache-2.0), required by torch.onnx.export in the example client.
-onnx>=1.12,<2
+onnx>=1.17.0,<2
 # Conan (MIT), needed to run the package recipe.
 conan>=2,<3
+protobuf>=5.29.6 # transitive dependency pinned by Aikido Autofix to remediate a vulnerability
