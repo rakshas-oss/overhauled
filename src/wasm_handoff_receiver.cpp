@@ -4,9 +4,22 @@
 #include <openssl/evp.h>
 
 #include <algorithm>
+#include <cerrno>
+#include <cstring>
+#include <fstream>
 #include <limits>
 #include <memory>
 #include <stdexcept>
+#include <utility>
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#include <sys/stat.h>
+#else
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 namespace nvlink::broker::wasm_handoff {
 namespace {
@@ -87,8 +100,145 @@ bool TrustStore::verify(const std::string& key_id, const std::string& issuer,
                          message, message_size) == 1;
 }
 
-ReplayGuard::ReplayGuard(std::size_t capacity) : capacity_(capacity) {
+namespace {
+constexpr std::uint64_t kReplayJournalMaximumBytes = 64U * 1024U * 1024U;
+
+std::string replay_hex_encode(const std::string& value) {
+    static constexpr char hex[] = "0123456789abcdef";
+    std::string encoded;
+    encoded.reserve(value.size() * 2);
+    for (unsigned char byte : value) {
+        encoded.push_back(hex[byte >> 4]);
+        encoded.push_back(hex[byte & 0x0f]);
+    }
+    return encoded;
+}
+
+bool replay_hex_decode(const std::string& encoded, std::string* value) {
+    if (!value || (encoded.size() % 2) != 0) return false;
+    auto nibble = [](char ch) -> int {
+        if (ch >= '0' && ch <= '9') return ch - '0';
+        if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
+        return -1;
+    };
+    std::string decoded;
+    decoded.reserve(encoded.size() / 2);
+    for (std::size_t i = 0; i < encoded.size(); i += 2) {
+        const int high = nibble(encoded[i]);
+        const int low = nibble(encoded[i + 1]);
+        if (high < 0 || low < 0) return false;
+        decoded.push_back(static_cast<char>((high << 4) | low));
+    }
+    *value = std::move(decoded);
+    return true;
+}
+
+#ifdef _WIN32
+using ReplayStat = struct _stat64;
+
+int replay_open_read(const char* path) {
+    return ::_open(path, _O_RDONLY | _O_BINARY);
+}
+int replay_open_append(const char* path) {
+    return ::_open(path, _O_WRONLY | _O_CREAT | _O_APPEND | _O_BINARY,
+                   _S_IREAD | _S_IWRITE);
+}
+int replay_fstat(int fd, ReplayStat* metadata) { return ::_fstat64(fd, metadata); }
+int replay_close(int fd) { return ::_close(fd); }
+int replay_sync(int fd) { return ::_commit(fd); }
+#else
+using ReplayStat = struct stat;
+
+int replay_open_read(const char* path) { return ::open(path, O_RDONLY); }
+int replay_open_append(const char* path) {
+    return ::open(path, O_WRONLY | O_CREAT | O_APPEND, 0600);
+}
+int replay_fstat(int fd, ReplayStat* metadata) { return ::fstat(fd, metadata); }
+int replay_close(int fd) { return ::close(fd); }
+int replay_sync(int fd) { return ::fsync(fd); }
+#endif
+
+bool replay_write_all(int fd, const char* data, std::size_t size) {
+    std::size_t written = 0;
+    while (written < size) {
+#ifdef _WIN32
+        const unsigned int remaining = static_cast<unsigned int>(
+            std::min<std::size_t>(size - written, std::numeric_limits<unsigned int>::max()));
+        const int count = ::_write(fd, data + written, remaining);
+#else
+        const ssize_t count = ::write(fd, data + written, size - written);
+#endif
+        if (count < 0) {
+            if (errno == EINTR) continue;
+            return false;
+        }
+        if (count == 0) return false;
+        written += static_cast<std::size_t>(count);
+    }
+    return true;
+}
+} // namespace
+
+ReplayGuard::ReplayGuard(std::size_t capacity, std::string journal_path)
+    : capacity_(capacity), journal_path_(std::move(journal_path)) {
     if (capacity_ == 0) throw std::invalid_argument("replay capacity must be positive");
+    if (journal_path_.empty()) return;
+
+    const int fd = replay_open_read(journal_path_.c_str());
+    if (fd < 0) {
+        if (errno == ENOENT) return;
+        throw std::runtime_error(std::string("could not open replay journal: ") +
+                                 std::strerror(errno));
+    }
+    ReplayStat metadata {};
+    if (replay_fstat(fd, &metadata) != 0) {
+        const int saved_errno = errno;
+        replay_close(fd);
+        throw std::runtime_error(std::string("could not stat replay journal: ") +
+                                 std::strerror(saved_errno));
+    }
+    replay_close(fd);
+    if (metadata.st_size < 0 ||
+        static_cast<std::uint64_t>(metadata.st_size) > kReplayJournalMaximumBytes)
+        throw std::runtime_error("replay journal exceeds the 64 MiB safety limit");
+
+    std::ifstream input(journal_path_, std::ios::binary);
+    if (!input) throw std::runtime_error("could not read replay journal");
+    const auto now = std::chrono::system_clock::now();
+    std::string line;
+    while (std::getline(input, line)) {
+        const auto separator = line.find('\t');
+        if (separator == std::string::npos || separator == 0 || separator + 1 >= line.size())
+            throw std::runtime_error("replay journal contains a malformed record");
+        std::uint64_t expiry_seconds = 0;
+        try {
+            std::size_t parsed = 0;
+            expiry_seconds = std::stoull(line.substr(0, separator), &parsed);
+            if (parsed != separator) throw std::runtime_error("invalid expiry field");
+        } catch (...) {
+            throw std::runtime_error("replay journal contains an invalid expiry field");
+        }
+        std::string key;
+        if (!replay_hex_decode(line.substr(separator + 1), &key) || key.empty())
+            throw std::runtime_error("replay journal contains an invalid key encoding");
+        const auto expiry = std::chrono::system_clock::time_point(
+            std::chrono::seconds(expiry_seconds));
+        if (expiry <= now) continue;
+        if (entries_.find(key) == entries_.end() && entries_.size() >= capacity_)
+            throw std::runtime_error("unexpired replay journal entries exceed configured capacity");
+        entries_[std::move(key)] = expiry;
+    }
+    if (input.bad() || (!input.eof() && input.fail()))
+        throw std::runtime_error("failed while reading replay journal");
+    std::ifstream verify(journal_path_, std::ios::binary | std::ios::ate);
+    const auto file_size = verify.tellg();
+    if (file_size > 0) {
+        verify.seekg(-1, std::ios::end);
+        char final_byte = 0;
+        verify.get(final_byte);
+        if (final_byte != '\n')
+            throw std::runtime_error("replay journal ends with an incomplete record");
+    }
 }
 
 bool ReplayGuard::consume(const std::string& sender, const std::string& audience,
@@ -104,6 +254,26 @@ bool ReplayGuard::consume(const std::string& sender, const std::string& audience
         else ++it;
     }
     if (entries_.find(key) != entries_.end() || entries_.size() >= capacity_) return false;
+
+    if (!journal_path_.empty()) {
+        const auto expiry_seconds = std::chrono::duration_cast<std::chrono::seconds>(
+            expires_at.time_since_epoch()).count();
+        if (expiry_seconds <= 0) return false;
+        const std::string record = std::to_string(expiry_seconds) + "\t" +
+            replay_hex_encode(key) + "\n";
+        const int fd = replay_open_append(journal_path_.c_str());
+        if (fd < 0) return false;
+        ReplayStat metadata {};
+        const bool within_limit = replay_fstat(fd, &metadata) == 0 &&
+            metadata.st_size >= 0 &&
+            static_cast<std::uint64_t>(metadata.st_size) + record.size() <=
+                kReplayJournalMaximumBytes;
+        const bool written = within_limit &&
+            replay_write_all(fd, record.data(), record.size()) && replay_sync(fd) == 0;
+        const int close_result = replay_close(fd);
+        if (!written || close_result != 0) return false;
+    }
+
     entries_.emplace(key, expires_at);
     return true;
 }

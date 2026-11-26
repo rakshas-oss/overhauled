@@ -79,8 +79,13 @@ task-level isolation or wire a new network listener into the broker.
   equivalent protected channel), bind that peer identity to the signed
   envelope sender, apply frame bounds before allocating/parsing the JSON
   envelope, and map signed decisions/receipts to the shared schema.
-- **Process-local replay and staging:** `ReplayGuard`, prepared bytes and the
-  active receipt map live in one process. Multi-process or restart-safe
+- **Replay journal (optional):** construct `ReplayGuard(capacity, journal_path)`
+  to append accepted nonces to a private journal file (0600 on POSIX) and fsync each record before
+  returning success. The journal is restored on process restart, is limited to
+  64 MiB, and is intended for a single broker process. Do not share one journal
+  across concurrent broker processes.
+- **Process-local staging and activation:** prepared bytes, session metadata
+  and the active receipt map still live in memory. Multi-process or restart-safe
   deployments require shared durable replay storage and durable staging.
 - **No tenant sandbox claim:** the currently shared-Store Wasmtime embedding
   is not an untrusted multi-tenant isolation boundary. Run trusted artifacts
@@ -95,3 +100,12 @@ task-level isolation or wire a new network listener into the broker.
 Do not advertise an authenticated network handoff endpoint or general
 untrusted-code sandbox until the corresponding transport and runtime
 integration requirements are implemented and tested.
+
+
+The optional replay journal prevents a previously accepted signed nonce from
+being accepted again after a broker process restart, provided the same journal
+file is mounted and retained. It does not persist partially transferred module
+bytes, prepared sessions, active-release metadata, or runtime state. A clean
+restart-safe handoff still requires a transactional staging store and durable
+activation state machine. Journal write, sync, or capacity errors fail closed:
+`consume` returns false and the caller must not acknowledge acceptance.

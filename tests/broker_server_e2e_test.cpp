@@ -114,6 +114,40 @@ bool read_response(int socket_fd,
 int main() {
     using namespace nvlink::broker;
 
+    BrokerServerConfig invalid_proxy_config;
+    invalid_proxy_config.require_mtls_proxy = true;
+    invalid_proxy_config.bind_address = "0.0.0.0";
+    bool rejected_public_plaintext_listener = false;
+    try {
+        BrokerServer invalid_proxy_server(invalid_proxy_config);
+    } catch (const std::invalid_argument&) {
+        rejected_public_plaintext_listener = true;
+    }
+    require(rejected_public_plaintext_listener,
+            "mTLS proxy mode accepted a public plaintext listener");
+
+    BrokerServerConfig invalid_address_config;
+    invalid_address_config.bind_address = "not-an-ip";
+    bool rejected_invalid_bind_address = false;
+    try {
+        BrokerServer invalid_address_server(invalid_address_config);
+    } catch (const std::invalid_argument&) {
+        rejected_invalid_bind_address = true;
+    }
+    require(rejected_invalid_bind_address,
+            "broker accepted a non-numeric bind address");
+
+    BrokerServerConfig invalid_config;
+    invalid_config.max_clients = kMaximumBrokerClientSessions + 1;
+    bool rejected_oversized_client_budget = false;
+    try {
+        BrokerServer invalid_server(invalid_config);
+    } catch (const std::invalid_argument&) {
+        rejected_oversized_client_budget = true;
+    }
+    require(rejected_oversized_client_budget,
+            "broker accepted a client budget above its hard session-thread ceiling");
+
     BrokerServerConfig config;
     config.port = 19090;
     config.service_config.force_cpu_fallback = true;

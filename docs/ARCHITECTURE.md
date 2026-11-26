@@ -81,8 +81,7 @@ digests; signs prepare decisions and activation receipts; and delegates
 compile-only validation and atomic runtime promotion to configured callbacks.
 It is not wired into the ordinary BRK1/BRK2 listener yet. Network integrations
 must authenticate the peer (mTLS 1.3 or equivalent) and bind its identity to
-the signed sender before calling the API. The process-local replay guard and
-staging map are not restart- or multi-process durable.
+the signed sender before calling the API. The optional ReplayGuard journal can persist consumed nonces across a single-process restart. Prepared staging bytes, active receipts and runtime state remain process-local; the journal is not shared safely across multiple broker processes.
 
 Handoff admission is bounded by concurrent sessions, total staged bytes,
 module and chunk sizes, global/per-sender message rate, global/per-sender
@@ -187,7 +186,7 @@ TensorRT is a separate optional `gpu_runtime_server` target; it is not an automa
 
 The server uses per-client sessions and five isolated worker classes. The scheduler decomposes the broker process's allowed CPU set into a validated machine → NUMA → LLC/CPU-group hierarchy, then creates per-class ordered leaf queues and dedicated worker pools. Workers prefer their home group, then sibling CPU groups, then remote NUMA domains; Linux affinity is best-effort and remains bounded by the process cpuset. Optional elastic workers are topology-local and serve RealtimeSpatial, Throughput and Inference only; Control and ExactCpu remain dedicated. The configured worker budget is capped at 16,384 total threads, including at most 4,096 elastic workers. Queue memory remains protected by process-wide outstanding-request and in-flight-memory budgets. Defaults are 128 clients, 32 in-flight requests per client, 4,096 derived process-wide outstanding requests, 64 MiB in-flight request memory, and a 5-second socket timeout.
 
-The listener binds to all interfaces (`0.0.0.0`). Restrict ingress with firewall rules or a private network. Shutdown closes the listener and active client sockets and drains/stops worker activity according to the server lifecycle.
+The listener defaults to all IPv4 interfaces (`0.0.0.0`) for compatibility. Set `--bind-address 127.0.0.1` when placing an mTLS terminator such as stunnel in front of it; the terminator can then forward decrypted traffic only to the loopback broker socket. Do not expose the plaintext broker port. Restrict any non-loopback listener with firewall rules or a private network. Shutdown closes the listener and active client sockets and drains/stops worker activity according to the server lifecycle.
 
 The broker has stdout/stderr startup and shutdown diagnostics. It does not currently expose a built-in HTTP health endpoint or metrics endpoint; monitoring must be supplied by the process supervisor, host telemetry, or the authenticated proxy layer.
 

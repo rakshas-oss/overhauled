@@ -11,8 +11,16 @@
 
 namespace nvlink::broker {
 
+// The listener uses one blocking session-I/O thread per admitted client.
+// Keep the total thread count bounded even if an operator misconfigures it.
+inline constexpr std::size_t kMaximumBrokerClientSessions = 1024;
+
 struct BrokerServerConfig {
     int port = 9090;
+    // Bind to loopback when using an external mTLS terminator (for example stunnel).
+    std::string bind_address = "0.0.0.0";
+    // Require the plaintext broker listener to remain loopback-only behind an mTLS terminator.
+    bool require_mtls_proxy = false;
     int socket_timeout_ms = 5000;
     std::size_t max_clients = 128;
     std::size_t max_inflight_per_client = 32;

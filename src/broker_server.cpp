@@ -167,8 +167,21 @@ public:
         if (config_.port < 1 || config_.port > 65535) {
             throw std::invalid_argument("broker server port must be in range 1..65535");
         }
+        in_addr parsed_bind_address{};
+        if (::inet_pton(AF_INET, config_.bind_address.c_str(), &parsed_bind_address) != 1) {
+            throw std::invalid_argument("bind_address must be a numeric IPv4 address");
+        }
+        if (config_.require_mtls_proxy &&
+            (ntohl(parsed_bind_address.s_addr) & 0xff000000U) != 0x7f000000U) {
+            throw std::invalid_argument(
+                "mTLS proxy mode requires a loopback bind address in 127.0.0.0/8");
+        }
         if (config_.max_inflight_per_client == 0 || config_.max_clients == 0) {
             throw std::invalid_argument("client and in-flight limits must be greater than zero");
+        }
+        if (config_.max_clients > kMaximumBrokerClientSessions) {
+            throw std::invalid_argument(
+                "max_clients exceeds the hard 1024-session I/O thread ceiling");
         }
         if (config_.socket_timeout_ms <= 0) {
             throw std::invalid_argument("socket_timeout_ms must be greater than zero");
@@ -347,7 +360,11 @@ private:
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_port = htons(static_cast<uint16_t>(config_.port));
-        addr.sin_addr.s_addr = htonl(INADDR_ANY);
+        if (::inet_pton(AF_INET, config_.bind_address.c_str(), &addr.sin_addr) != 1) {
+            close_socket(listener_socket_);
+            listener_socket_ = kInvalidSocket;
+            throw std::invalid_argument("bind_address must be a numeric IPv4 address");
+        }
 
         if (::bind(listener_socket_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
             const int saved_errno = errno;

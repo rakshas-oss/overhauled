@@ -84,7 +84,11 @@ private:
 
 class ReplayGuard {
 public:
-    explicit ReplayGuard(std::size_t capacity = 65536);
+    // An optional append-only journal makes accepted nonces survive process
+    // restarts. An empty path retains the in-memory-only mode for tests and
+    // deployments that explicitly accept process-local replay state.
+    explicit ReplayGuard(std::size_t capacity = 65536,
+                         std::string journal_path = {});
     bool consume(const std::string& sender, const std::string& audience,
                  const std::string& nonce,
                  std::chrono::system_clock::time_point expires_at,
@@ -92,6 +96,7 @@ public:
                      std::chrono::system_clock::now());
 private:
     std::size_t capacity_;
+    std::string journal_path_;
     std::mutex mutex_;
     std::map<std::string, std::chrono::system_clock::time_point> entries_;
 };

@@ -26,12 +26,12 @@ void signal_handler(int) {
 
 void print_usage(const char* argv0) {
     std::cout
-        << "Usage: " << argv0 << " [port] [--cpu-only] [--default-backend cpu|gpu|npu]\n"
+        << "Usage: " << argv0 << " [port] [--bind-address IPV4] [--cpu-only] [--default-backend cpu|gpu|npu]\n"
         << "       [--gpu-offload-threshold BYTES] [--npu-enabled] [--npu-simulated]\n"
         << "       [--workers TOTAL] [--workers-control N] [--workers-realtime N]\n"
         << "       [--workers-throughput N] [--workers-exact-cpu N] [--workers-inference N]\n"
         << "       [--workers-elastic N] [--elastic-realtime-max N] [--elastic-throughput-max N]\n"
-        << "       [--elastic-inference-max N] [--max-outstanding N] [--max-inflight-bytes N]\n"
+        << "       [--elastic-inference-max N] [--max-clients N] [--max-outstanding N] [--max-inflight-bytes N]\n"
         << "       [--npu-ethosu-bundle FILE] [--ethosu-device /dev/dri/renderD*]\n"
         << "  --npu-ethosu-bundle: execute a Vela-compiled YU85BND1 model via mainline DRM.\n"
         << "  --workers TOTAL: total broker worker budget (5..16384); reserved classes are allocated first.\n"
@@ -43,6 +43,9 @@ void print_usage(const char* argv0) {
         << "  --elastic-inference-max N: maximum concurrent Inference elastic workers.\n"
         << "  Control and ExactCpu never borrow elastic workers.\n"
         << "  --workers-control/realtime/exact-cpu/inference N: dedicated class pool sizes.\n"
+        << "  --bind-address IPV4: IPv4 listener address (use 127.0.0.1 behind an mTLS proxy).\n"
+        << "  --require-mtls-proxy: require loopback bind so remote clients cannot reach the plaintext broker.\n"
+        << "  --max-clients N: concurrent broker sessions (1..1024; one bounded I/O thread per session).\n"
         << "  --max-outstanding N: process-wide outstanding request cap (0 derives from client limits, max 65536).\n"
         << "  --max-inflight-bytes N: queued plus executing request and metadata memory budget (default 64 MiB).\n"
         << "  --npu-simulated: enable the CPU-emulated NPU executor for\n"
@@ -63,6 +66,14 @@ int main(int argc, char** argv) {
     std::string ethosu_device;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
+        if (arg == "--bind-address" && i + 1 < argc) {
+            config.bind_address = argv[++i];
+            continue;
+        }
+        if (arg == "--require-mtls-proxy") {
+            config.require_mtls_proxy = true;
+            continue;
+        }
         if (arg == "--cpu-only") {
             config.service_config.force_cpu_fallback = true;
             continue;
@@ -99,6 +110,10 @@ int main(int argc, char** argv) {
         }
         if (arg == "--workers-exact-cpu" && i + 1 < argc) {
             config.exact_cpu_worker_threads = std::stoull(argv[++i]);
+            continue;
+        }
+        if (arg == "--max-clients" && i + 1 < argc) {
+            config.max_clients = std::stoull(argv[++i]);
             continue;
         }
         if (arg == "--max-outstanding" && i + 1 < argc) {
