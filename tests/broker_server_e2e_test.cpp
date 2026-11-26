@@ -114,6 +114,17 @@ bool read_response(int socket_fd,
 int main() {
     using namespace nvlink::broker;
 
+    BrokerServerConfig invalid_config;
+    invalid_config.max_clients = kMaximumBrokerClientSessions + 1;
+    bool rejected_oversized_client_budget = false;
+    try {
+        BrokerServer invalid_server(invalid_config);
+    } catch (const std::invalid_argument&) {
+        rejected_oversized_client_budget = true;
+    }
+    require(rejected_oversized_client_budget,
+            "broker accepted a client budget above its hard session-thread ceiling");
+
     BrokerServerConfig config;
     config.port = 19090;
     config.service_config.force_cpu_fallback = true;
