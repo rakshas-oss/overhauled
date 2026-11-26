@@ -11,9 +11,15 @@
 #include <memory>
 #include <stdexcept>
 #include <utility>
-#include <sys/stat.h>
+#ifdef _WIN32
 #include <fcntl.h>
+#include <io.h>
+#include <sys/stat.h>
+#else
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
+#endif
 
 namespace nvlink::broker::wasm_handoff {
 namespace {
@@ -127,10 +133,41 @@ bool replay_hex_decode(const std::string& encoded, std::string* value) {
     return true;
 }
 
+#ifdef _WIN32
+using ReplayStat = struct _stat64;
+
+int replay_open_read(const char* path) {
+    return ::_open(path, _O_RDONLY | _O_BINARY);
+}
+int replay_open_append(const char* path) {
+    return ::_open(path, _O_WRONLY | _O_CREAT | _O_APPEND | _O_BINARY,
+                   _S_IREAD | _S_IWRITE);
+}
+int replay_fstat(int fd, ReplayStat* metadata) { return ::_fstat64(fd, metadata); }
+int replay_close(int fd) { return ::_close(fd); }
+int replay_sync(int fd) { return ::_commit(fd); }
+#else
+using ReplayStat = struct stat;
+
+int replay_open_read(const char* path) { return ::open(path, O_RDONLY); }
+int replay_open_append(const char* path) {
+    return ::open(path, O_WRONLY | O_CREAT | O_APPEND, 0600);
+}
+int replay_fstat(int fd, ReplayStat* metadata) { return ::fstat(fd, metadata); }
+int replay_close(int fd) { return ::close(fd); }
+int replay_sync(int fd) { return ::fsync(fd); }
+#endif
+
 bool replay_write_all(int fd, const char* data, std::size_t size) {
     std::size_t written = 0;
     while (written < size) {
+#ifdef _WIN32
+        const unsigned int remaining = static_cast<unsigned int>(
+            std::min<std::size_t>(size - written, std::numeric_limits<unsigned int>::max()));
+        const int count = ::_write(fd, data + written, remaining);
+#else
         const ssize_t count = ::write(fd, data + written, size - written);
+#endif
         if (count < 0) {
             if (errno == EINTR) continue;
             return false;
@@ -147,20 +184,20 @@ ReplayGuard::ReplayGuard(std::size_t capacity, std::string journal_path)
     if (capacity_ == 0) throw std::invalid_argument("replay capacity must be positive");
     if (journal_path_.empty()) return;
 
-    const int fd = ::open(journal_path_.c_str(), O_RDONLY);
+    const int fd = replay_open_read(journal_path_.c_str());
     if (fd < 0) {
         if (errno == ENOENT) return;
         throw std::runtime_error(std::string("could not open replay journal: ") +
                                  std::strerror(errno));
     }
-    struct stat metadata {};
-    if (::fstat(fd, &metadata) != 0) {
+    ReplayStat metadata {};
+    if (replay_fstat(fd, &metadata) != 0) {
         const int saved_errno = errno;
-        ::close(fd);
+        replay_close(fd);
         throw std::runtime_error(std::string("could not stat replay journal: ") +
                                  std::strerror(saved_errno));
     }
-    ::close(fd);
+    replay_close(fd);
     if (metadata.st_size < 0 ||
         static_cast<std::uint64_t>(metadata.st_size) > kReplayJournalMaximumBytes)
         throw std::runtime_error("replay journal exceeds the 64 MiB safety limit");
@@ -224,16 +261,16 @@ bool ReplayGuard::consume(const std::string& sender, const std::string& audience
         if (expiry_seconds <= 0) return false;
         const std::string record = std::to_string(expiry_seconds) + "\t" +
             replay_hex_encode(key) + "\n";
-        const int fd = ::open(journal_path_.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0600);
+        const int fd = replay_open_append(journal_path_.c_str());
         if (fd < 0) return false;
-        struct stat metadata {};
-        const bool within_limit = ::fstat(fd, &metadata) == 0 &&
+        ReplayStat metadata {};
+        const bool within_limit = replay_fstat(fd, &metadata) == 0 &&
             metadata.st_size >= 0 &&
             static_cast<std::uint64_t>(metadata.st_size) + record.size() <=
                 kReplayJournalMaximumBytes;
         const bool written = within_limit &&
-            replay_write_all(fd, record.data(), record.size()) && ::fsync(fd) == 0;
-        const int close_result = ::close(fd);
+            replay_write_all(fd, record.data(), record.size()) && replay_sync(fd) == 0;
+        const int close_result = replay_close(fd);
         if (!written || close_result != 0) return false;
     }
 
