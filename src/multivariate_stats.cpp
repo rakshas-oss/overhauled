@@ -47,7 +47,10 @@ bool MultivariateAccumulator::observe(
             const double dy = y - pair.mean_y;
             pair.mean_x += dx / next_count;
             pair.mean_y += dy / next_count;
-            pair.co_moment += dx * (y - pair.mean_y);
+            const double dy_after = y - pair.mean_y;
+            pair.co_moment += dx * dy_after;
+            pair.m2_x += dx * (x - pair.mean_x);
+            pair.m2_y += dy * dy_after;
             ++pair.count;
         }
     }
@@ -79,6 +82,8 @@ bool MultivariateAccumulator::merge(const MultivariateAccumulator& other) noexce
             const double dx = source.mean_x - target.mean_x;
             const double dy = source.mean_y - target.mean_y;
             target.co_moment += source.co_moment + dx * dy * a * b / n;
+            target.m2_x += source.m2_x + dx * dx * a * b / n;
+            target.m2_y += source.m2_y + dy * dy * a * b / n;
             target.mean_x += dx * b / n;
             target.mean_y += dy * b / n;
             target.count = combined;
@@ -97,13 +102,12 @@ MultivariateSummary MultivariateAccumulator::snapshot() const noexcept {
             result.pair_counts[index] = pair.count;
             if (pair.count == 0) continue;
             result.covariance[index] = pair.co_moment / static_cast<double>(pair.count);
-            const auto& x_variance = pairs_[i * kMaxDimensions + i];
-            const auto& y_variance = pairs_[j * kMaxDimensions + j];
-            if (x_variance.count != 0 && y_variance.count != 0
-                && x_variance.co_moment > 0.0 && y_variance.co_moment > 0.0) {
+            // Use variances from this exact pair's jointly-present samples;
+            // marginal diagonal counts may differ under pairwise deletion.
+            if (pair.m2_x > 0.0 && pair.m2_y > 0.0) {
                 const double denominator = std::sqrt(
-                    x_variance.co_moment / static_cast<double>(x_variance.count)
-                    * y_variance.co_moment / static_cast<double>(y_variance.count));
+                    pair.m2_x / static_cast<double>(pair.count)
+                    * pair.m2_y / static_cast<double>(pair.count));
                 result.correlation[index] = result.covariance[index] / denominator;
             }
         }
