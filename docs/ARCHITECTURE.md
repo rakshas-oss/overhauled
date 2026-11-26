@@ -1,5 +1,20 @@
 # Architecture and Runtime Decision Model
 
+## Crawler metric aggregation library
+
+The standalone `Overhauled::crawler_metrics` C++17 target aggregates
+normalized `PageObservation` records emitted by external callers, including
+YuKKi-OS crawler reports. It is deliberately outside the broker request path:
+it does not fetch URLs, parse HTML, receive page bodies, add BRK1/BRK2
+operations or dispatch crawler reductions to GPU/NPU.
+
+The fixed-memory `MetricAccumulator` is unsynchronized by design. Keep one
+accumulator per worker or NUMA shard and merge at a synchronization barrier.
+It records page success/failure, document bytes, links, fetch/extraction
+durations and fixed 64-bucket log2 histograms. P50/P95/P99 values are bucket
+upper bounds, not exact quantiles. Integer overflow and self-merge are
+rejected without partial mutation. See [Crawler metric aggregation](CRAWLER_METRICS.md).
+
 ## 1. System boundary
 
 Overhauled is the broker execution plane. It accepts bounded binary broker frames, validates optional YuKKi worker directives, admits requests into nested CPU-group/NUMA worker-class queue shards, applies process-cpuset-bounded CPU-group affinity where supported, optionally borrows bounded elastic worker capacity for eligible classes, selects an execution backend, and returns structured results and telemetry. YuKKi-OS owns workload semantics, class selection, spatial resolution, logical affinity keys, deadlines, and advisory preferred-NUMA hints; Overhauled owns local queue shards, dedicated and elastic worker admission, Linux process-allowed CPU discovery/worker affinity, GPU topology, accelerator placement, and execution. This repository does not embed YuKKi-OS. It can optionally link the Wasmtime C API when the native runtime feature is enabled; that runtime remains an independent broker-side component.
