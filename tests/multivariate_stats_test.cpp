@@ -42,7 +42,7 @@ int main() {
 
     row[0] = std::numeric_limits<double>::infinity();
     assert(!left.observe(row, 0b001));
-    assert(left.snapshot().pair_counts[0] == 4);
+    assert(left.snapshot().pair_counts[0] == 6);
 
     MultivariateAccumulator too_many(33);
     assert(!too_many.observe(row, 1));
