@@ -1,4 +1,30 @@
-## v1.8.0 (release candidate; not published)
+## v1.9.0 (release candidate; not published)
+Date: 2026-11-26
+
+### Highlights
+
+- Bound broker client sessions to a hard ceiling of 1,024 and expose `--max-clients`; each admitted session still owns one blocking I/O thread.
+- Add a configurable IPv4 listener address and `--require-mtls-proxy`, which rejects non-loopback bind addresses to keep the plaintext broker listener behind a local TLS terminator.
+- Provide an stunnel mTLS 1.3 client/server profile with peer-certificate verification, server-chain/hostname checks and loopback forwarding.
+- Add optional append-only ReplayGuard journaling; accepted nonces are fsync'd before success and recovered across a single-process restart. The journal has a 64 MiB cap and fails closed on corruption or persistence errors.
+- Implement platform-specific journal file I/O and add tests for listener limits, strict binding and replay after restart.
+
+### Compatibility, security and limitations
+
+- Preserve BRK1/BRK2, WSM1, NXR1 and MED1 wire identities; no framing change is introduced.
+- TLS is terminated by the documented sidecar; there is no native TLS broker listener in this candidate.
+- The transport certificate is not yet bound to the signed deployment-sender identity.
+- The optional journal persists accepted nonces only. Prepared artifact bytes, active-release metadata and runtime state remain process-local; multi-process/restart-safe deployment still needs a transactional staging and activation store.
+- Socket I/O remains thread-per-client with an enforced 1,024-session ceiling, not the planned fixed event-driven I/O worker pool.
+- Untrusted stream access remains separate from executable-artifact publisher authorization and retains its own resource limits.
+
+### Release metadata
+
+CMake, Conan and the root vcpkg manifest advance to 1.9.0. The external vcpkg registry and Homebrew formula remain pinned to the last verified source archive until exact 1.9.0 source checksums are available. No 1.9.0 tag, GitHub Release or external package upload is claimed by this candidate.
+
+---
+
+## v1.8.0 (published 2026-11-24)
 Date: 2026-11-23
 
 ### Highlights
@@ -16,11 +42,11 @@ Date: 2026-11-23
 
 ### Release metadata
 
-CMake, Conan and the root vcpkg manifest advance to 1.8.0. The vcpkg registry port and Homebrew formula remain pinned to the latest published release until a 1.8.0 tag exists and exact archive checksums can be calculated. No tag, GitHub Release or external package publication is claimed.
+CMake, Conan and the root vcpkg manifest were advanced to 1.8.0. The 1.8.0 Git tag and GitHub Release were published on 2026-11-24. The vcpkg registry port and Homebrew formula remain on their last verified source/archive baseline until exact source checksums are computed and those registries are updated; GitHub Release publication does not itself prove external package publication.
 
 ---
 
-## v1.7.0 (release candidate; not published)
+## v1.7.0 (published 2026-11-22)
 Date: 2026-11-22
 
 ### Highlights
@@ -40,7 +66,7 @@ Date: 2026-11-22
 
 ### Release metadata and validation
 
-The CMake, Conan and root vcpkg manifest versions are advanced to 1.7.0 in this candidate. The vcpkg registry port and Homebrew formula remain pinned to the published 1.6.0 archive until a 1.7.0 tag exists and its exact archive checksums can be computed. No 1.7.0 tag, GitHub Release or external package publication is claimed. Run the release gate in VERSIONING.md on the exact candidate before tagging.
+The 1.7.0 Git tag and GitHub Release were published on 2026-11-22. External package-manager registry publication is separate and is not implied by the GitHub Release.
 
 ---
 ## v1.6.0 (published 2026-11-22)
