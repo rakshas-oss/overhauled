@@ -46,6 +46,13 @@ int main() {
 
     MultivariateAccumulator too_many(33);
     assert(!too_many.observe(row, 1));
+
+    MultivariateAccumulator overflow(1);
+    row[0] = 1.0e308;
+    assert(overflow.observe(row, 1));
+    row[0] = -1.0e308;
+    assert(!overflow.observe(row, 1));
+    assert(overflow.snapshot().pair_counts[0] == 1);
     left.reset();
     assert(left.snapshot().pair_counts[xy] == 0);
     return 0;
