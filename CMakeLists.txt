@@ -31,6 +31,12 @@ find_package(Threads REQUIRED)
 
 add_library(crawler_metrics src/crawler_metrics.cpp)
 add_library(Overhauled::crawler_metrics ALIAS crawler_metrics)
+
+add_library(multivariate_stats src/multivariate_stats.cpp)
+add_library(Overhauled::multivariate_stats ALIAS multivariate_stats)
+target_include_directories(multivariate_stats PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_include_directories(crawler_metrics PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
@@ -112,7 +118,7 @@ if(HAS_CUBLAS)
     target_link_libraries(adi_server PUBLIC CUDA::cublas)
 endif()
 
-set(OVERHAULED_INSTALL_TARGETS crawler_metrics nvlink_placement adi_server)
+set(OVERHAULED_INSTALL_TARGETS crawler_metrics multivariate_stats nvlink_placement adi_server)
 if(BUILD_BROKER)
     add_library(broker_service
         src/broker_protocol.cpp src/brk2_protocol.cpp src/broker_service.cpp
@@ -219,6 +225,9 @@ if(BUILD_TESTING AND BUILD_BROKER AND ENABLE_WASM_HANDOFF)
 endif()
 
 if(BUILD_TESTING AND BUILD_BROKER)
+    add_executable(multivariate_stats_test tests/multivariate_stats_test.cpp)
+    target_link_libraries(multivariate_stats_test PRIVATE multivariate_stats)
+    add_test(NAME multivariate_stats_test COMMAND multivariate_stats_test)
     foreach(test_name IN ITEMS brk2_protocol brk_conformance broker_protocol broker_service backend_dispatch broker_server_e2e broker_async_latency_benchmark worker_topology worker_scheduler geospatial_frame media_stream wasm_sandbox)
         add_executable(${test_name}_test tests/${test_name}_test.cpp)
         target_link_libraries(${test_name}_test PRIVATE broker_service Threads::Threads)
