@@ -10,6 +10,7 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
+#include <utility>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
