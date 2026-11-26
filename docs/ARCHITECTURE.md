@@ -81,8 +81,7 @@ digests; signs prepare decisions and activation receipts; and delegates
 compile-only validation and atomic runtime promotion to configured callbacks.
 It is not wired into the ordinary BRK1/BRK2 listener yet. Network integrations
 must authenticate the peer (mTLS 1.3 or equivalent) and bind its identity to
-the signed sender before calling the API. The process-local replay guard and
-staging map are not restart- or multi-process durable.
+the signed sender before calling the API. The optional ReplayGuard journal can persist consumed nonces across a single-process restart. Prepared staging bytes, active receipts and runtime state remain process-local; the journal is not shared safely across multiple broker processes.
 
 Handoff admission is bounded by concurrent sessions, total staged bytes,
 module and chunk sizes, global/per-sender message rate, global/per-sender
