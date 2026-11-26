@@ -31,6 +31,9 @@ int main() {
     summary = left.snapshot();
     assert(summary.pair_counts[xy] == 4);
     assert(std::fabs(summary.correlation[xy] - 1.0) < 1e-9);
+    const auto xz = 2;
+    assert(summary.pair_counts[xz] == 3);
+    assert(std::fabs(summary.correlation[xz] - 1.0) < 1e-9);
     assert(!left.merge(left));
 
     row[0] = std::numeric_limits<double>::infinity();
