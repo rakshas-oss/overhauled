@@ -4,6 +4,11 @@ Overhauled is a C++17 CMake library and optional broker service. Its primary
 package-manager target is the CMake package, not a prebuilt platform-specific
 binary.
 
+> **Release state (2026-11-26):** v1.9.0 is the latest published GitHub release;
+> v1.10.0 is a release candidate. CMake, Conan and the root vcpkg manifest
+> carry candidate version metadata; external registry/formula updates remain
+> tied to immutable source archives and verified checksums.
+
 ## Recommended channels
 
 | Channel | Intended use | Current state |
