@@ -2,52 +2,58 @@
 
 ## Release state
 
-- **Latest published version:** 1.8.0 (2026-11-24).
-- **Next minor release candidate:** 1.9.0 (not tagged or published).
-- **CMake project version:** 1.9.0 in this candidate.
-- **Conan recipe version:** 1.9.0 in this candidate.
-- **Root vcpkg manifest:** 1.9.0 in this candidate.
-- **Published vcpkg registry baseline and Homebrew formula:** remain pinned to the last verified source/archive baseline pending exact source checksums and registry updates.
+- **Latest published GitHub release:** v1.9.0 (2026-11-26).
+- **Next minor release candidate:** v1.10.0 (not tagged or published).
+- **CMake project version:** 1.10.0 in this candidate.
+- **Conan recipe version:** 1.10.0 in this candidate.
+- **Root vcpkg manifest:** 1.10.0 in this candidate.
+- **Published vcpkg registry baseline and Homebrew formula:** remain pinned to the last verified immutable source/archive baseline (1.6.0); no 1.10.0 external registry or formula update is claimed.
 - **Package identity:** OverhauledTensorRuntime / nvlink_placement.
+- **External package uploads:** no Conan remote upload, vcpkg registry publication, Homebrew update, Debian/RPM repository or other package-manager publication is implied by GitHub release metadata.
 
-No 1.9.0 tag, GitHub Release, Homebrew update, vcpkg registry entry, or external package upload is claimed by this candidate.
+The v1.10.0 version metadata is a candidate only. Do not create a tag or publish archives until the release gate below passes on the exact candidate commit.
 
 ## Version assessment
 
-The published 1.8.0 release added explicit BRK2 GPU preference behavior. The additive broker-session and replay-hardening changes merged in Overhauled PR #93 justify advancing the independent CMake/Conan/vcpkg project version to 1.9.0:
+The published v1.9.0 release added bounded broker client sessions, strict loopback binding for mTLS-proxy deployments, a TLS 1.3 sidecar profile and optional fsync-backed replay-nonce journaling.
 
-- Enforce a hard cap of 1,024 broker client sessions and expose the operator-facing `--max-clients` bound.
-- Add numeric IPv4 `--bind-address` and `--require-mtls-proxy`; strict mode refuses a public plaintext listener and requires loopback binding.
-- Add an mTLS 1.3 stunnel deployment profile for client and server sides, preserving existing BRK1/BRK2 protocol framing.
-- Add an optional single-process append-only replay journal; fsync accepted nonces before success and restore them on restart, with a 64 MiB file ceiling and fail-closed error handling.
-- Keep default CPU-only builds and existing protocol contracts unchanged.
+The additive public C++ crawler-metrics library merged in Overhauled PR #95 justifies advancing the project version to v1.10.0:
 
-The security boundary remains limited: the stunnel peer certificate is not yet bound to the signed handoff sender, prepared artifacts and activation metadata remain in memory, and session I/O is still thread-per-client within its explicit ceiling. The journal is not a distributed replay database and does not make artifact staging restart-safe.
+- Add the standalone `crawler_metrics` CMake library and `Overhauled::crawler_metrics` alias target.
+- Install the public `crawler_metrics.h` header and export the library through the existing CMake package installation.
+- Aggregate page success/failure counts, document bytes, link totals, fetch/extraction duration count/min/max/mean/population standard deviation, and bounded P50/P95/P99 histogram upper bounds.
+- Support one fixed-memory accumulator per worker or NUMA shard and merge at a barrier without a shared hot lock.
+- Reject integer overflow and self-merge without mutating the accumulator.
+- Pair with YuKKi-OS v6.21.0 crawler reports through caller-side normalized `PageObservation` mapping.
+
+This is an embeddable CPU-side reduction library. It does not fetch URLs, parse HTML, receive raw page bodies, define a BRK1/BRK2 message, wire itself automatically to YuKKi-OS, or dispatch metrics reductions to GPU/NPU. Histogram percentile values are bucket upper bounds, not exact sample quantiles.
 
 ## Compatibility and security boundaries
 
-- The handoff application contract is separate from WSM1 task/lifecycle messages; existing BRK1, BRK2, NXR1, MED1 and WSM1 framing identities are preserved.
-- The receiver API is not wired into the ordinary BRK1/BRK2 TCP listener. The listener must not be exposed directly to untrusted networks.
-- A deployment integration must provide mTLS 1.3 or an equivalent authenticated protected channel, bind the authenticated transport peer to the signed sender, and enforce frame limits before decoding.
-- Replay and staged artifact state are process-local and in-memory. Restart-safe or multi-process deployments require durable shared replay and staging/activation services.
-- The current Wasmtime C API composition runtime shares a Store/resource domain. It is not a multi-tenant sandbox; restrict it to operator-authorized artifacts or an independent process-isolation boundary.
-- Application rate and memory budgets do not stop volumetric network DDoS. Apply firewall, reverse-proxy or provider edge controls where the service is exposed.
-- Untrusted stream access does not require a WASM publisher key. Keep stream trust independent from executable-artifact trust.
+- Existing BRK1, BRK2, WSM1, NXR1 and MED1 identities are preserved; v1.10.0 does not add a wire operation.
+- The crawler metrics API accepts numeric observations only. Keep raw HTML and network fetching in the YuKKi-OS host-side crawler boundary.
+- Keep one accumulator per worker/NUMA shard and merge at a controlled barrier; the accumulator is not internally synchronized.
+- Application broker-session, replay-journal and rate/memory limits do not replace upstream network-edge controls.
+- The ordinary broker listener is still separate from the authenticated WASM handoff receiver API. The stunnel sidecar is external TLS termination, not native TLS, and its certificate identity is not yet bound to signed sender authorization.
+- The optional replay journal persists accepted nonces, not staged artifacts, prepared deployments or active runtime state. The current session I/O architecture remains thread-per-client within its configured ceiling.
+- The optional Wasmtime C API composition runtime shares a Store/resource domain; it is not a multi-tenant sandbox.
+- CUDA, TensorRT, Ethos-U85 and NVLink hardware features remain separately gated. A CPU-only metrics build does not validate physical accelerator hardware.
+- The external vcpkg registry and Homebrew formula must remain pinned to the last archive whose exact checksums and downstream validation are available; changing the root vcpkg manifest does not publish or register a new port.
 
-## Release gate for 1.9.0
+## Release gate for 1.10.0
 
 Before tagging or publishing:
 
-1. Run the complete Overhauled CI suite on the exact candidate: default CPU-only build/tests, OpenSSL-enabled handoff tests, Wasmtime compile/runtime composition, paired YuKKi interoperability, BRK2 conformance, ASan/UBSan, package-consumer smoke tests and Conan package validation.
-2. Verify the 1,024-session ceiling, `--max-clients` argument parsing, numeric bind validation and refusal of public listener bindings in strict mTLS-proxy mode.
-3. Verify the replay journal across restart, duplicate nonce rejection, malformed/torn-journal fail-closed behavior, 64 MiB capacity and restrictive POSIX file permissions.
-4. Validate stunnel configuration with test certificates and confirm TLS 1.3, server hostname validation, client-certificate verification and loopback forwarding.
-5. Confirm paired YuKKi-OS BRK1/BRK2 interoperability and preserve all existing untrusted stream paths and independent stream flood limits.
-6. Do not claim native TLS, transport-certificate-to-signed-sender binding, fixed event-driven I/O, durable artifact staging or restart-safe activation; those remain follow-up capabilities.
-7. After required CI passes and the release commit is approved, create the 1.9.0 tag/GitHub Release. Only then compute exact source archive SHA-256/SHA-512 and update Homebrew/vcpkg registry recipes. Verify external package publication independently.
+1. Run the complete Overhauled CI suite on the exact candidate: default CPU-only build/tests, Crawler Metrics CTest, OpenSSL-enabled handoff tests, Wasmtime compile/runtime composition, paired YuKKi interoperability, BRK2 conformance, sanitizers and supported package-consumer smoke tests.
+2. Verify the public CMake target and installed header with a downstream consumer; verify the Conan recipe using `conan create . --build=missing`.
+3. Confirm aggregation correctness for success/failure status, byte/link totals, zero and boundary durations, fixed histogram bounds, worker-shard merging, self-merge rejection and integer overflow without partial mutation.
+4. Verify that no raw HTML or page body is accepted by the metrics library and that no new BRK operation, implicit crawler-to-broker route, GPU/NPU crawler dispatch or performance claim is introduced.
+5. Run paired YuKKi-OS/Overhauled interoperability checks and preserve BRK1/BRK2/WSM1/NXR1/MED1 compatibility, bounded session admission, strict mTLS-proxy listener policy and replay-journal restart/replay/corruption/capacity behavior.
+6. Only after all required checks pass and the release commit is approved, create the v1.10.0 tag and GitHub Release. Then calculate exact immutable source archive SHA256/SHA512 values and submit separate updates for the Homebrew formula and vcpkg registry. Verify Conan remote and other external package publication independently.
 
 ## Published release history
 
+- v1.9.0 — published 2026-11-26; bounded broker sessions, strict mTLS-proxy loopback binding and optional durable replay-nonce journal.
 - v1.8.0 — published 2026-11-24; explicit BRK2 GPU preference for bounded workloads while preserving forced-CPU/exact-CPU constraints.
 - v1.7.0 — published 2026-11-22; authenticated WASM receiver state machine, bounded admission and stream-flood controls.
 - v1.6.0 — published 2026-11-22; opt-in authenticated-WASM receiver primitives and Wasmtime v51 C API correction. The receiver's full state machine, signed decisions/receipts, runtime bridge and bounded rate controls were added after that release by PR #86.
