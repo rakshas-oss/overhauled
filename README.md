@@ -1,6 +1,6 @@
 # Overhauled v1.10.0 (release candidate)
 
-> **Published v1.5.0:** adds optional native Wasmtime runtime composition on top of the v1.4.0 BRK2 locality codec baseline. v1.5.1 corrects the Wasmtime v51 C API integration and its composition test.
+> **Published v1.9.0:** adds bounded broker sessions, strict loopback-only listener enforcement for mTLS-sidecar deployments and optional fsync-backed replay-nonce journaling. v1.10.0 adds a standalone CPU-side crawler metrics library.
 
 > **Route workloads by topology, not guesswork.**
 >
