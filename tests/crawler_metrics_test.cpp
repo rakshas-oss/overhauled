@@ -33,6 +33,8 @@ int main() {
     assert(second.observe(PageObservation{100, 7, 16, 32, 200}));
     assert(second.observe(PageObservation{50, 1, 2, 4, 429}));
 
+    assert(!first.merge(first));
+    assert(first.snapshot().pages_total == 3);
     assert(first.merge(second));
     const auto merged = first.snapshot();
     assert(merged.pages_total == 5);
