@@ -8,9 +8,9 @@ binary.
 
 | Channel | Intended use | Current state |
 |---|---|---|
-| vcpkg Git registry | C++ library and broker, CPU-only baseline | The published registry baseline and port recipe remain pinned to 1.6.0. A 1.7.0 entry must wait for the immutable release archive and its exact SHA512; automated vcpkg validation remains paused because the port's CMake export layout is not CI-validated. |
-| Homebrew formula | macOS/Linux developer installation | The formula remains pinned to the published 1.6.0 source archive and checksum. Update it to 1.7.0 only after the immutable tag archive's SHA256 is calculated; automated Homebrew validation remains paused because of the known macOS `std::chrono` mismatch. |
-| Conan | Existing Conan consumers | The Conan 2 recipe version is advanced to 1.7.0 in this release candidate. Run `conan create . --build=missing` against the candidate; no remote upload is claimed. |
+| vcpkg Git registry | C++ library and broker, CPU-only baseline | The published registry port remains pinned to the last verified immutable source/archive baseline (1.6.0). The root vcpkg manifest is 1.10.0 in the candidate, but no 1.10.0 registry port or baseline update is included. Automated vcpkg validation remains paused because the port's CMake export layout is not CI-validated. |
+| Homebrew formula | macOS/Linux developer installation | The checked-in formula remains pinned to its last verified immutable source archive (1.6.0). Do not advance it to 1.10.0 until the immutable tag archive SHA256 is calculated and the known macOS `std::chrono` build issue is resolved; automated Homebrew validation remains paused. |
+| Conan | Existing Conan consumers | The Conan 2 recipe version is 1.10.0 in this release candidate. Run `conan create . --build=missing` against the candidate; no remote upload is claimed. |
 | Conan Center Index | Public curated Conan package | Not submitted; CCI reviews project maturity, usage and maintenance. An upstream PR is a separate contribution |
 | Debian/RPM | System package installation | CPack emits native packages when built on Linux; no hosted apt/dnf repository is currently published |
 
@@ -54,7 +54,9 @@ portable package validation.
 
 The repository-hosted Git registry provides a versioned port for `nvlink-placement`.
 Consumers configure the repository as an additional Git registry and pin the
-registry baseline to a commit that contains the port and versions database.
+registry baseline to a commit that contains the port and versions database. The
+root `vcpkg.json` manifest is a separate local manifest; bumping it does not
+publish a new registry port.
 
 A consumer's `vcpkg-configuration.json` should include an entry like this,
 The registry files were merged in commit `fd69f5af7b60a6c542f198edc78d87aa20c41d94`; use that immutable commit as the registry baseline:
@@ -92,8 +94,8 @@ CMake files are not yet relocated to vcpkg's canonical share directory.
 
 ## Homebrew
 
-The checked-in formula still targets the immutable 1.6.0 source tag with CUDA and TensorRT
-disabled by default. It will remain on that release until the 1.7.0 tag and its exact source checksum are available. Its automated macOS installation check is currently
+The checked-in formula still targets its verified immutable 1.6.0 source tag with CUDA and TensorRT
+disabled by default. It remains pinned there; the 1.10.0 candidate is not an update to the formula. Its automated macOS installation check is currently
 paused because the broker server does not compile on the current macOS SDK;
 the failure is a C++ chrono type mismatch, not missing NVLink hardware.
 Do not treat the formula as a verified macOS installation until that build
@@ -134,7 +136,8 @@ The manual DEB/RPM workflow can attach locally built packages to the GitHub Rele
 
 The vcpkg and Homebrew recipes must use checksums calculated from the exact
 immutable release source archive they advertise. The currently published
-recipes remain pinned to 1.6.0. For 1.7.0, wait until the immutable tag exists,
-calculate the exact SHA256/SHA512 values, and update the Homebrew formula and
-vcpkg port/version database together. Never use placeholders, reuse a previous
-release checksum, or point an old checksum at a new tag.
+external recipes remain pinned to the verified 1.6.0 baseline. For v1.10.0,
+wait until the immutable tag and source archive exist, calculate exact
+SHA256/SHA512 values, then update the Homebrew formula and vcpkg port/version
+database together in a separate package-registry change. Never use placeholders,
+reuse a previous release checksum, or point an old checksum at a new tag.
