@@ -1,3 +1,7 @@
+> **Release status:** the standalone metrics library is included in the v1.10.0
+> release candidate. The latest published Overhauled baseline is v1.9.0
+> (2026-11-26). The v1.10.0 tag and release are pending CI validation.
+
 # Crawler metric aggregation
 
 Overhauled provides a constant-memory C++ accumulator for page observations
