@@ -1,4 +1,24 @@
-## v1.11.0 (release candidate; not published)
+## v1.11.1 (patch release candidate; not published)
+Date: 2026-11-26
+
+### Highlights
+
+- Synchronize CMake project, Conan recipe and root vcpkg manifest metadata on 1.11.1.
+- Correct the stale release-state documentation to distinguish the published v1.11.0 GitHub Release from the new 1.11.1 candidate.
+
+### Compatibility and limitations
+
+- This is a metadata/documentation-only patch candidate; no C++ implementation, public header, dependency or protocol change is included.
+- Existing BRK1/BRK2/WSM1/NXR1/MED1 wire identities remain unchanged.
+- The external vcpkg registry and Homebrew formula remain pinned to the verified 1.6.0 source archive. No Conan remote upload, registry update or Homebrew publication is implied.
+
+### Release gate
+
+Run the normal native, package-consumer, paired YuKKi interoperability, BRK2 and sanitizer CI on the exact candidate commit. Do not tag or publish v1.11.1 until the required checks pass.
+
+---
+
+## v1.11.0 (published 2026-11-26)
 Date: 2026-11-26
 
 ### Highlights
@@ -18,7 +38,7 @@ Date: 2026-11-26
 
 ### Release metadata and validation
 
-CMake, Conan and the root vcpkg manifest advance to 1.11.0 in this candidate. The published vcpkg registry port and Homebrew formula remain pinned to the verified 1.6.0 source archive until the immutable v1.11.0 tag, exact source checksums, export-layout validation and platform checks are complete. No v1.11.0 tag, GitHub Release, Conan upload or external registry publication is claimed.
+CMake, Conan and the root vcpkg manifest were advanced to 1.11.0 for the published GitHub Release. The v1.11.0 tag and GitHub Release were published on 2026-11-26; the release record has no attached binary assets. The published vcpkg registry port and Homebrew formula remain pinned to the verified 1.6.0 source archive. No Conan remote upload or external registry publication is claimed.
 
 ---
 

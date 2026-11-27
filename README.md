@@ -1,18 +1,18 @@
-# Overhauled v1.11.0 (release candidate)
+# Overhauled v1.11.1 (patch release candidate)
 
-> **Published v1.10.0:** adds the standalone CPU-side crawler metrics library for normalized YuKKi-OS page observations. v1.11.0 adds fixed-memory pairwise multivariate stream statistics.
+> **Published v1.11.0:** adds fixed-memory pairwise multivariate stream statistics for normalized numeric observations. v1.11.1 is a release-metadata and documentation maintenance candidate.
 
 > **Route workloads by topology, not guesswork.**
 >
 > Turn GPU interconnect awareness into higher throughput, better tail latency, and more effective use of accelerator infrastructure.
 
-> **Release status:** v1.10.0 is the latest published GitHub Release (2026-11-26). v1.11.0 is the next minor release candidate; its tag and release assets are not published.
+> **Release status:** v1.11.0 is the latest published GitHub Release (2026-11-26); it has no attached binary assets. v1.11.1 is the next patch release candidate; its tag and release assets are not published.
 
 Overhauled is a C++17 placement and execution library with an interoperable broker service. It provides topology-aware GPU scheduling and broker dispatch for CPU, GPU, and optional NPU execution.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
-[![Release](https://img.shields.io/badge/Release-v1.11.0--rc-blueviolet)](#)
+[![Release](https://img.shields.io/badge/Release-v1.11.1--rc-blueviolet)](#)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2FBRK2-orange)](#)
 
 ## What's new in v1.10.0 (published 2026-11-26)
@@ -24,7 +24,13 @@ Overhauled is a C++17 placement and execution library with an interoperable brok
 
 See [Crawler metric aggregation](docs/CRAWLER_METRICS.md) for the observation contract, examples and limitations.
 
-## What's new in v1.11.0 (release candidate)
+## What's new in v1.11.1 (patch release candidate)
+
+- **Version metadata synchronization:** advance the CMake project, Conan recipe and root vcpkg manifest together to 1.11.1.
+- **Scope:** release metadata and documentation only. No runtime implementation, public API, dependency set, or BRK1/BRK2/WSM1/NXR1/MED1 wire behavior changes are included.
+- **Package boundary:** the vcpkg registry port and Homebrew formula remain pinned to the separately verified 1.6.0 source archive. No external registry, Conan remote or Homebrew publication is implied.
+
+## What's new in v1.11.0 (published 2026-11-26)
 
 - **Bounded multivariate stream statistics:** add the standalone C++17 Overhauled::multivariate_stats library for online pairwise covariance and Pearson correlation over up to 32 normalized dimensions.
 - **Missing-data semantics:** pairwise deletion preserves missing dimensions instead of coercing them to zero. Each matrix cell has its own pairwise sample count, which consumers must inspect before interpreting covariance or correlation values.
