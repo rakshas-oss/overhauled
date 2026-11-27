@@ -1,19 +1,55 @@
 # Overhauled v1.11.1
 
-> **Published v1.11.1:** release-metadata and documentation maintenance update. The previous v1.11.0 release added fixed-memory pairwise multivariate stream statistics for normalized numeric observations.
-
-> **Route workloads by topology, not guesswork.**
+> **Broker-side execution and placement for heterogeneous systems.**
 >
-> Turn GPU interconnect awareness into higher throughput, better tail latency, and more effective use of accelerator infrastructure.
+> Overhauled is a C++17 library and broker service for admitting work, scheduling CPU workers, and selecting eligible CPU, GPU, or NPU execution paths. It is designed to work on CPU-only hosts as well as appropriately configured accelerator systems.
 
-> **Release status:** v1.11.1 is the latest published GitHub Release (2026-11-27). No binary assets are attached; use the GitHub source archive or clone the tag. This does not imply publication to an external package registry.
-
-Overhauled is a C++17 placement and execution library with an interoperable broker service. It provides topology-aware GPU scheduling and broker dispatch for CPU, GPU, and optional NPU execution.
+> **Latest release:** [v1.11.1](https://github.com/rakshas-oss/overhauled/releases/tag/v1.11.1) · Published 2026-11-27. The GitHub Release has no attached binary assets. A GitHub tag does not mean that a package has been published to an external registry.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
 [![Release](https://img.shields.io/badge/Release-v1.11.1-blueviolet)](https://github.com/rakshas-oss/overhauled/releases/tag/v1.11.1)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2FBRK2-orange)](#)
+
+## Who this is for
+
+- **C++ and systems developers** embedding placement, worker-fabric, or numeric aggregation components in native applications.
+- **Infrastructure operators** running a bounded broker service for workloads arriving over BRK1 or BRK2.
+- **Accelerator engineers** integrating eligible GPU workloads or the opt-in Linux Ethos-U85 DRM path, while retaining a CPU-only operating mode.
+- **YuKKi-OS integrators** connecting a control plane's workload directives to broker-side admission, scheduling, and execution.
+
+## What Overhauled provides
+
+- **Broker and protocol:** BRK1 compatibility and BRK2 framing, bounded request handling, validation, admission limits, and response telemetry.
+- **CPU worker fabric:** isolated workload classes, queueing, Linux CPU/NUMA discovery and affinity where supported, plus bounded worker elasticity.
+- **Backend selection:** CPU-first policy with optional CUDA/TensorRT integration and opt-in Ethos-U85 support. A device preference is a request, not a guarantee; the broker response identifies the backend actually selected.
+- **Reusable C++ components:** standalone fixed-memory crawler metrics and pairwise multivariate statistics libraries.
+
+## Where it fits in the ecosystem
+
+Overhauled is the broker/execution tier, not the distributed control plane. [YuKKi-OS](https://github.com/rakshas-oss/YuKKi-OS) owns peer coordination, workload semantics, stream and spatial processing, and host-side WebAssembly composition. Overhauled receives compatible broker work and owns local admission, worker scheduling, CPU/NUMA placement, and backend dispatch. The repositories are complementary; neither README should imply that the other project's capabilities are automatically enabled by using this one.
+
+## Choose a starting point
+
+- **Build and run without accelerator dependencies:** [CPU-only broker quick start](#quick-start-cpu-only-broker).
+- **Embed the native libraries:** [Library guide](docs/LIBRARY.md).
+- **Connect YuKKi-OS:** [interoperability guide](docs/YUKKI_INTEROP.md) and [broker protocol](docs/BROKER_PROTOCOL.md).
+- **Enable physical Ethos-U85 execution:** [hardware requirements and bundle format](docs/ETHOSU_U85_BUNDLE.md).
+- **Operate a deployment:** [operations runbook](OPERATIONS_RUNBOOK.md) and [deployment guide](DEPLOYMENT_GUIDE.md).
+
+## Important deployment boundaries
+
+The default CPU-only build is the baseline for development and CI. GPU and NPU paths require their respective build options, runtime dependencies, compatible hardware, and model inputs. The Ethos-U85 executor is an opt-in Linux DRM path; simulated NPU mode is conformance emulation, not hardware acceleration. BRK framing is not transport authentication: deploy the broker on a trusted network or behind an authenticated protected transport. Review the deployment and security documentation before exposing a service.
+
+## Release and package distribution
+
+The current GitHub release is v1.11.1. No binary assets are attached to that release. The vcpkg port and Homebrew formula are separately maintained and pinned to their documented source version; do not infer that the latest GitHub tag has been published to vcpkg, Homebrew, Conan, or another registry. See [package managers](#package-managers) and [publishing](docs/PUBLISHING.md).
+
+## What's new in v1.11.1 (published 2026-11-27)
+
+- **Version metadata synchronization:** advance the CMake project, Conan recipe and root vcpkg manifest together to 1.11.1.
+- **Scope:** release metadata and documentation only. No runtime implementation, public API, dependency set, or BRK1/BRK2/WSM1/NXR1/MED1 wire behavior changes are included.
+- **Package boundary:** the vcpkg registry port and Homebrew formula remain pinned to the separately verified 1.6.0 source archive. No external registry, Conan remote or Homebrew publication is implied.
 
 ## What's new in v1.10.0 (published 2026-11-26)
 
@@ -23,12 +59,6 @@ Overhauled is a C++17 placement and execution library with an interoperable brok
 - **CPU-only semantics:** the metrics library is a deterministic CPU reduction component. It does not add GPU/NPU crawler dispatch, execute crawler network requests, or imply measured crawler throughput.
 
 See [Crawler metric aggregation](docs/CRAWLER_METRICS.md) for the observation contract, examples and limitations.
-
-## What's new in v1.11.1 (published 2026-11-27)
-
-- **Version metadata synchronization:** advance the CMake project, Conan recipe and root vcpkg manifest together to 1.11.1.
-- **Scope:** release metadata and documentation only. No runtime implementation, public API, dependency set, or BRK1/BRK2/WSM1/NXR1/MED1 wire behavior changes are included.
-- **Package boundary:** the vcpkg registry port and Homebrew formula remain pinned to the separately verified 1.6.0 source archive. No external registry, Conan remote or Homebrew publication is implied.
 
 ## What's new in v1.11.0 (published 2026-11-26)
 
