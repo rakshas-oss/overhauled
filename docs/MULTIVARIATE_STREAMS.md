@@ -1,3 +1,7 @@
+> **Release status:** the multivariate_stats library is part of the v1.11.0
+> release candidate. The latest published Overhauled baseline is v1.10.0
+> (2026-11-26); no v1.11.0 tag or release has been published.
+
 # Multivariate stream aggregation
 
 Overhauled exposes `Overhauled::multivariate_stats`, a CPU-only C++17

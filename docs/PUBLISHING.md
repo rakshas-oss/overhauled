@@ -1,141 +1,72 @@
 # Overhauled package publishing
 
-This guide distinguishes a tested package recipe from an actual registry
-publication. The v1.6.0 GitHub Release is published; external package-manager
-registries are independent distributions.
+This guide distinguishes a published GitHub source release from independent package-manager channels. The latest published GitHub Release is v1.10.0 (2026-11-26); v1.11.0 is the current release candidate.
 
 ## Current distribution status
 
-| Channel | Status | Intended package |
+| Channel | Current state | Package |
 |---|---|---|
-| vcpkg Git registry | v1.6.0 port and version baseline prepared in this repository; overlay build validation pending | `nvlink-placement` |
-| Homebrew | v1.6.0 CPU-only formula prepared; no dedicated third-party tap has been created | `nvlink-placement` |
-| Conan | Conan recipe is checked in and versioned 1.6.0; no remote upload is claimed | `nvlink_placement/1.6.0` |
-| Conan Center Index | Not submitted; inclusion review and CLA are required | `nvlink_placement` |
-| Debian/RPM | CPack supports local DEB/RPM generation on Linux; no hosted apt/dnf repository is configured | `OverhauledTensorRuntime` |
+| GitHub Releases | v1.10.0 published; v1.11.0 candidate | Source and release artifacts |
+| CMake package | Project version 1.11.0 candidate | OverhauledTensorRuntime |
+| Conan | Recipe version 1.11.0 candidate; no remote upload claimed | nvlink_placement/1.11.0 |
+| Root vcpkg manifest | Version 1.11.0 candidate only | nvlink-placement |
+| vcpkg Git registry | Port and baseline remain pinned to verified 1.6.0 archive; 1.11.0 registry update not prepared | nvlink-placement |
+| Homebrew | Formula remains pinned to verified 1.6.0 source archive; no dedicated maintained tap | nvlink-placement |
+| Conan Center Index | Not submitted; review and CLA required | nvlink_placement |
+| Debian/RPM | CPack can generate local packages on Linux; no hosted apt/dnf repository | OverhauledTensorRuntime |
 
-The v1.6.0 source archive is immutable and pinned in the vcpkg and Homebrew
-recipes:
-
-- SHA512: `bc809690c6cb092da7c84f53a06a40899a227b5ad1ffb08b6d4dac3965a6e12219509b05badd2e3cc44e3d006c41464a0e9044f49bcbc7dc33628dcd22437311`
-- SHA256: `399d29709086482db582de3ad4ecb1f1312925f415b238a036878e1f9863881d`
-
-Source: `https://github.com/rakshas-oss/overhauled/archive/refs/tags/1.6.0.tar.gz`.
+The v1.11.0 candidate metadata is not a release. Do not upload or advertise packages until the candidate passes CI, receives an approved immutable tag and has verified release checksums.
 
 ## vcpkg Git registry
 
-This repository contains a Git-based vcpkg registry:
-- `ports/nvlink-placement/` contains the 1.6.0 port.
-- `versions/n-/nvlink-placement.json` records the exact port tree.
-- `versions/baseline.json` selects 1.6.0 as the default baseline.
+The repository-hosted registry is independent of the root vcpkg manifest. The current registry port and baseline remain pinned to the last verified 1.6.0 archive. Updating root vcpkg.json to 1.11.0 does not change or publish that registry port.
 
-For a quick local overlay install before configuring a registry:
+A consumer's vcpkg-configuration.json should pin the registry to an immutable commit containing the port and version database. Do not substitute the main branch as a reproducible baseline. The registry port intentionally builds CPU-only and does not enable CUDA, TensorRT, Wasmtime or optional OpenSSL handoff.
 
-```sh
-vcpkg install nvlink-placement --overlay-ports=/path/to/overhauled/ports/nvlink-placement
-```
+Before updating the registry for v1.11.0:
 
-For a consumer project, add this additional registry to its
-`vcpkg-configuration.json`. Replace `REGISTRY_BASELINE_COMMIT` with the
-merge commit that introduces the registry files:
-
-```json
-{
-  "default-registry": {
-    "kind": "git",
-    "repository": "https://github.com/microsoft/vcpkg",
-    "baseline": "YOUR_VCPKG_BASELINE_COMMIT"
-  },
-  "registries": [
-    {
-      "kind": "git",
-      "repository": "https://github.com/rakshas-oss/overhauled",
-      "reference": "main",
-      "baseline": "REGISTRY_BASELINE_COMMIT",
-      "packages": ["nvlink-placement"]
-    }
-  ]
-}
-```
-
-Then run:
-
-```sh
-vcpkg install nvlink-placement
-```
-
-The registry port deliberately builds the CPU-only portable configuration.
-It does not enable CUDA, TensorRT, Wasmtime, or the optional OpenSSL WASM
-handoff receiver. Windows triplets are excluded because mainline Windows/MSVC
-is not a supported build target.
+1. Create and validate the immutable v1.11.0 source tag and GitHub Release.
+2. Run the .github/workflows/release-source-digests.yml workflow with release_tag=v1.11.0 and preserve the generated SHA512/SHA256 values.
+3. Verify the vcpkg port's CMake export/relocation layout and build an installed downstream consumer.
+4. Update the port file, version database and baseline together in a separate reviewed change; never reuse the 1.6.0 checksum.
 
 ## Homebrew
 
-The formula uses the immutable 1.6.0 source archive, builds shared libraries,
-and disables optional CUDA/TensorRT/Wasmtime/handoff dependencies. There is no
-official Homebrew Core acceptance or maintained third-party tap yet.
+The checked-in formula remains pinned to the immutable 1.6.0 source archive and its verified digest. Automated macOS installation checks remain paused because the broker server has a known macOS SDK std::chrono build mismatch. Do not update the formula to v1.11.0 until the build issue is fixed and the exact source archive SHA256 is verified.
 
-Install the checked-in formula directly:
-
-```sh
-brew install https://raw.githubusercontent.com/rakshas-oss/overhauled/main/nvlink-placement.rb
-```
-
-For discoverable tap-based installation, create and maintain a separate
-`homebrew-<tap>` repository and copy the formula into its root. Homebrew Core
-submission is a separate review and must pass the official build/test matrix.
+There is no dedicated maintained third-party tap or Homebrew Core acceptance. A checked-in formula does not mean it is published in a tap.
 
 ## Conan
 
-The checked-in recipe builds the CPU-only default without enabling the optional
-WASM handoff receiver. Test locally:
+The checked-in Conan 2 recipe has candidate version 1.11.0. Validate it with:
 
-```sh
+~~~sh
 conan profile detect --force
 conan create . --build=missing
-```
+~~~
 
-To upload to an organisation's Conan remote, first configure credentials and
-the remote in the user's Conan client, then:
-
-```sh
-conan upload nvlink_placement/1.6.0 --remote=<remote-name> --confirm
-```
-
-This repository does not contain remote credentials. Uploading to a private
-Conan remote is separate from submitting a recipe to Conan Center Index. CCI
-requires review, including its inclusion criteria and contributor agreement;
-a checked-in recipe does not mean acceptance or publication.
+No Conan remote upload is claimed. Configure the intended remote and credentials separately and publish only the validated candidate after release approval. Conan Center Index submission is separate and requires its own review and contributor agreement.
 
 ## Debian and RPM
 
-The CMake project enables CPack DEB and RPM generators on Linux. Build local
-packages with:
+The CMake project enables CPack DEB/RPM generators on Linux. Build local packages with:
 
-```sh
+~~~sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-  -DBUILD_BROKER=ON -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF \
+  -DBUILD_BROKER=ON -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=ON \
   -DENABLE_CUDA=OFF -DENABLE_TENSORRT=OFF \
   -DENABLE_WASM_RUNTIME=OFF -DENABLE_WASM_HANDOFF=OFF
 cmake --build build --parallel
+ctest --test-dir build --output-on-failure
 cpack --config build/CPackConfig.cmake -G DEB -B packages
 cpack --config build/CPackConfig.cmake -G RPM -B packages
-```
+~~~
 
-These packages can be installed locally with `apt install ./package.deb` or
-`dnf install ./package.rpm`. This is not the same as an indexed apt/dnf
-repository; signed repository metadata and hosting still need to be configured.
+These are local artifacts, not indexed apt/dnf repositories. Hosted repositories require signed metadata, publication infrastructure and maintenance.
 
 ## Security and release boundaries
 
-- The 1.6.0 release is a GitHub source release. Package recipes must continue
-  to use its immutable tag and verified checksum.
-- Default Conan/vcpkg/Homebrew packages do not enable
-  `ENABLE_WASM_HANDOFF`. That feature requires OpenSSL Crypto and separate
-  feature-specific CI validation.
-- The handoff implementation remains receiver primitives, not a network-facing
-  authenticated BRK2 service.
-- No package registry credentials belong in source control. Use each registry's
-  supported secret, token or trusted-publishing mechanism.
-- Do not advertise a package as published until it appears in the registry and
-  a clean consumer installation has succeeded.
+- Package-manager validation defaults to CPU-only and does not establish physical NVLink, CUDA, TensorRT or Ethos-U85 functionality.
+- Windows/MSVC native build is not a supported target. Portable package-consumer validation is restricted to the supported Linux/macOS lanes.
+- No package registry credentials belong in source control. Use each registry's secrets, API tokens or trusted-publishing mechanisms.
+- Do not advertise a package as published until it appears in the registry and a clean consumer installation succeeds.
