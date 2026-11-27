@@ -27,7 +27,7 @@
 
 ## Where it fits in the ecosystem
 
-Overhauled is the broker/execution tier, not the distributed control plane. [YuKKi-OS](https://github.com/rakshas-oss/YuKKi-OS) owns peer coordination, workload semantics, stream and spatial processing, and host-side WebAssembly composition. Overhauled receives compatible broker work and owns local admission, worker scheduling, CPU/NUMA placement, and backend dispatch. The repositories are complementary; neither README should imply that the other project's capabilities are automatically enabled by using this one.
+Overhauled is the broker/execution tier, not the distributed control plane. [YuKKi-OS](https://github.com/rakshas-oss/YuKKi-OS) owns peer coordination, workload semantics, stream and spatial processing, and host-side WebAssembly composition. Overhauled receives compatible broker work and owns local admission, worker scheduling, CPU/NUMA placement, and backend dispatch. The integration is explicit: configure compatible BRK endpoints and protocol settings on both sides; building or running one repository does not automatically launch the other.
 
 ## Choose a starting point
 
