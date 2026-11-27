@@ -1,18 +1,18 @@
-# Overhauled v1.11.1 (patch release candidate)
+# Overhauled v1.11.1
 
-> **Published v1.11.0:** adds fixed-memory pairwise multivariate stream statistics for normalized numeric observations. v1.11.1 is a release-metadata and documentation maintenance candidate.
+> **Published v1.11.1:** release-metadata and documentation maintenance update. The previous v1.11.0 release added fixed-memory pairwise multivariate stream statistics for normalized numeric observations.
 
 > **Route workloads by topology, not guesswork.**
 >
 > Turn GPU interconnect awareness into higher throughput, better tail latency, and more effective use of accelerator infrastructure.
 
-> **Release status:** v1.11.0 is the latest published GitHub Release (2026-11-26); it has no attached binary assets. v1.11.1 is the next patch release candidate; its tag and release assets are not published.
+> **Release status:** v1.11.1 is the latest published GitHub Release (2026-11-27). No binary assets are attached; use the GitHub source archive or clone the tag. This does not imply publication to an external package registry.
 
 Overhauled is a C++17 placement and execution library with an interoperable broker service. It provides topology-aware GPU scheduling and broker dispatch for CPU, GPU, and optional NPU execution.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
-[![Release](https://img.shields.io/badge/Release-v1.11.1--rc-blueviolet)](#)
+[![Release](https://img.shields.io/badge/Release-v1.11.1-blueviolet)](https://github.com/rakshas-oss/overhauled/releases/tag/v1.11.1)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2FBRK2-orange)](#)
 
 ## What's new in v1.10.0 (published 2026-11-26)
@@ -24,7 +24,7 @@ Overhauled is a C++17 placement and execution library with an interoperable brok
 
 See [Crawler metric aggregation](docs/CRAWLER_METRICS.md) for the observation contract, examples and limitations.
 
-## What's new in v1.11.1 (patch release candidate)
+## What's new in v1.11.1 (published 2026-11-27)
 
 - **Version metadata synchronization:** advance the CMake project, Conan recipe and root vcpkg manifest together to 1.11.1.
 - **Scope:** release metadata and documentation only. No runtime implementation, public API, dependency set, or BRK1/BRK2/WSM1/NXR1/MED1 wire behavior changes are included.
