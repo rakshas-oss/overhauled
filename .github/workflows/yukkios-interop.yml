@@ -92,6 +92,7 @@ jobs:
   paired-release-gate:
     name: Paired repository release gate
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: always()
     needs: [yukkios-interop]
     steps:

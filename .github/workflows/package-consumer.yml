@@ -22,8 +22,17 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - name: Select supported installed-library package components
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            echo "BUILD_BROKER=OFF" >> "$GITHUB_ENV"
+            echo "macOS validates the portable library package; the broker executable is validated on Linux."
+          else
+            echo "BUILD_BROKER=ON" >> "$GITHUB_ENV"
+          fi
       - name: Configure CPU-only package
-        run: cmake -S . -B build -DENABLE_CUDA=OFF -DENABLE_NVLINK_HARDWARE_TESTS=OFF -DENABLE_TENSORRT=OFF -DBUILD_BROKER=ON -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=install
+        run: cmake -S . -B build -DENABLE_CUDA=OFF -DENABLE_NVLINK_HARDWARE_TESTS=OFF -DENABLE_TENSORRT=OFF -DBUILD_BROKER=${{ env.BUILD_BROKER }} -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=install
       - name: Build and install
         run: |
           cmake --build build --config Release --parallel
