@@ -51,15 +51,6 @@ The current GitHub release is v1.11.1. No binary assets are attached to that rel
 - **Scope:** release metadata and documentation only. No runtime implementation, public API, dependency set, or BRK1/BRK2/WSM1/NXR1/MED1 wire behavior changes are included.
 - **Package boundary:** the vcpkg registry port and Homebrew formula remain pinned to the separately verified 1.6.0 source archive. No external registry, Conan remote or Homebrew publication is implied.
 
-## What's new in v1.10.0 (published 2026-11-26)
-
-- **Constant-memory crawler metrics:** add the standalone C++17 `Overhauled::crawler_metrics` library with public header `crawler_metrics.h`. It accepts normalized `PageObservation` values and accumulates page success/failure counts, bytes, links, fetch/extraction duration statistics, and bounded histogram percentile upper bounds.
-- **Shard-friendly aggregation:** keep one unsynchronized fixed-memory accumulator per worker/NUMA shard and merge at a barrier. Counter overflow and self-merge are rejected without partial mutation.
-- **YuKKi-OS crawler pairing:** designed to consume normalized records emitted by the YuKKi-OS v6.21 crawler. Integration is caller-driven; no raw HTML enters Overhauled and no BRK operation is added.
-- **CPU-only semantics:** the metrics library is a deterministic CPU reduction component. It does not add GPU/NPU crawler dispatch, execute crawler network requests, or imply measured crawler throughput.
-
-See [Crawler metric aggregation](docs/CRAWLER_METRICS.md) for the observation contract, examples and limitations.
-
 ## What's new in v1.11.0 (published 2026-11-26)
 
 - **Bounded multivariate stream statistics:** add the standalone C++17 Overhauled::multivariate_stats library for online pairwise covariance and Pearson correlation over up to 32 normalized dimensions.
@@ -69,6 +60,15 @@ See [Crawler metric aggregation](docs/CRAWLER_METRICS.md) for the observation co
 - **CPU-only boundary:** this is a numeric aggregation library, not a network listener, document parser, broker operation or automatic YuKKi-OS adapter. It does not imply GPU/NPU execution or a measured performance gain.
 
 See Multivariate stream aggregation (docs/MULTIVARIATE_STREAMS.md) for the exact data contract and tests.
+
+## What's new in v1.10.0 (published 2026-11-26)
+
+- **Constant-memory crawler metrics:** add the standalone C++17 `Overhauled::crawler_metrics` library with public header `crawler_metrics.h`. It accepts normalized `PageObservation` values and accumulates page success/failure counts, bytes, links, fetch/extraction duration statistics, and bounded histogram percentile upper bounds.
+- **Shard-friendly aggregation:** keep one unsynchronized fixed-memory accumulator per worker/NUMA shard and merge at a barrier. Counter overflow and self-merge are rejected without partial mutation.
+- **YuKKi-OS crawler pairing:** designed to consume normalized records emitted by the YuKKi-OS v6.21 crawler. Integration is caller-driven; no raw HTML enters Overhauled and no BRK operation is added.
+- **CPU-only semantics:** the metrics library is a deterministic CPU reduction component. It does not add GPU/NPU crawler dispatch, execute crawler network requests, or imply measured crawler throughput.
+
+See [Crawler metric aggregation](docs/CRAWLER_METRICS.md) for the observation contract, examples and limitations.
 
 ## What's new in v1.9.0 (published 2026-11-26)
 
