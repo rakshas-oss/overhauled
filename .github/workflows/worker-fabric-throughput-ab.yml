@@ -37,7 +37,6 @@ jobs:
       - name: Prepare baseline and merged source trees
         env:
           BASE_SHA: accd334bd6964213cb6eb9c1eed295901b83b5e6
-          
         run: |
           mkdir -p /tmp/worker-fabric-src
           MERGED_SHA="$(git rev-parse origin/main)"

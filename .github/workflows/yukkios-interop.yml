@@ -28,13 +28,10 @@ jobs:
       - name: Checkout Overhauled
         uses: actions/checkout@v7
         with:
-          persist-credentials: false
-        with:
           path: overhauled
+          persist-credentials: false
       - name: Checkout paired YuKKi-OS revision
         uses: actions/checkout@v7
-        with:
-          persist-credentials: false
         with:
           repository: rakshas-oss/YuKKi-OS
           ref: ${{ inputs.yukkios_ref || 'main' }}
