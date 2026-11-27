@@ -6,16 +6,21 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: worker-fabric-throughput-ab-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   benchmark:
     name: Release broker A-B benchmark
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Install build dependencies
         run: |
@@ -32,9 +37,12 @@ jobs:
       - name: Prepare baseline and merged source trees
         env:
           BASE_SHA: accd334bd6964213cb6eb9c1eed295901b83b5e6
-          MERGED_SHA: bbacdbf654d1932a534c3e42ed31fde98b23b2f6
+          
         run: |
           mkdir -p /tmp/worker-fabric-src
+          MERGED_SHA="$(git rev-parse origin/main)"
+          echo "Baseline: $BASE_SHA"
+          echo "Merged main: $MERGED_SHA"
           git worktree add /tmp/worker-fabric-src/baseline "$BASE_SHA"
           git worktree add /tmp/worker-fabric-src/merged "$MERGED_SHA"
 
@@ -231,7 +239,7 @@ jobs:
           cat benchmark-results/summary.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload benchmark report and raw trials
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: worker-fabric-throughput-ab
           path: |

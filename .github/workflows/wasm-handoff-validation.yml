@@ -5,23 +5,21 @@ on:
     branches: ["main"]
     paths:
       - "CMakeLists.txt"
-      - "include/wasm_handoff_receiver.h"
-      - "src/wasm_handoff_receiver.cpp"
-      - "include/wasm_composition.h"
-      - "src/wasm_composition.cpp"
-      - "protocol/wasm-handoff-v1.schema.json"
-      - "tests/wasm_handoff_receiver_test.cpp"
+      - "cmake/**"
+      - "include/**"
+      - "src/**"
+      - "protocol/**"
+      - "tests/**"
       - ".github/workflows/wasm-handoff-validation.yml"
   pull_request:
     branches: ["main"]
     paths:
       - "CMakeLists.txt"
-      - "include/wasm_handoff_receiver.h"
-      - "src/wasm_handoff_receiver.cpp"
-      - "include/wasm_composition.h"
-      - "src/wasm_composition.cpp"
-      - "protocol/wasm-handoff-v1.schema.json"
-      - "tests/wasm_handoff_receiver_test.cpp"
+      - "cmake/**"
+      - "include/**"
+      - "src/**"
+      - "protocol/**"
+      - "tests/**"
       - ".github/workflows/wasm-handoff-validation.yml"
   workflow_dispatch:
 
@@ -32,10 +30,12 @@ jobs:
   receiver-conformance:
     name: Compile and test authenticated WASM receiver (CPU-only)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Install native build prerequisites
         run: |
@@ -56,4 +56,4 @@ jobs:
         run: cmake --build build --target wasm_handoff_receiver_test --parallel 2
 
       - name: Run receiver conformance tests
-        run: ctest --test-dir build --output-on-failure -R wasm_handoff_receiver_test
+        run: ctest --test-dir build --output-on-failure --timeout 180 -R wasm_handoff_receiver_test

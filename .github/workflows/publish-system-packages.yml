@@ -7,7 +7,7 @@ on:
         description: Existing immutable Overhauled release tag
         required: true
         type: string
-        default: "1.6.0"
+        default: "v1.11.0"
       publish_confirmation:
         description: Type publish to attach packages to the GitHub Release
         required: true
@@ -21,21 +21,27 @@ jobs:
   build-system-packages:
     if: ${{ inputs.publish_confirmation == 'publish' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: write
     steps:
       - name: Checkout exact release tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_tag }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Verify release tag and version
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          git describe --tags --exact-match HEAD
-          grep -F "project(OverhauledTensorRuntime VERSION $RELEASE_TAG" CMakeLists.txt
+          actual_tag="$(git describe --tags --exact-match HEAD)"
+          test "$actual_tag" = "$RELEASE_TAG"
+          expected_version="${RELEASE_TAG#v}"
+          actual_version="$(sed -n 's/^project(OverhauledTensorRuntime VERSION \([^ ]*\).*/\1/p' CMakeLists.txt)"
+          test "$actual_version" = "$expected_version"
+          echo "Verified immutable tag $actual_tag at project version $actual_version."
 
       - name: Install package generators
         run: |
