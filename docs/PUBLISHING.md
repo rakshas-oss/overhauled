@@ -17,6 +17,12 @@ This guide distinguishes a published GitHub source release from independent pack
 
 The v1.11.0 candidate metadata is not a release. Do not upload or advertise packages until the candidate passes CI, receives an approved immutable tag and has verified release checksums.
 
+The vcpkg registry port and Homebrew formula remain pinned to this verified archive:
+
+- Source: https://github.com/rakshas-oss/overhauled/archive/refs/tags/1.6.0.tar.gz
+- SHA512 (vcpkg): bc809690c6cb092da7c84f53a06a40899a227b5ad1ffb08b6d4dac3965a6e12219509b05badd2e3cc44e3d006c41464a0e9044f49bcbc7dc33628dcd22437311
+- SHA256 (Homebrew): 399d29709086482db582de3ad4ecb1f1312925f415b238a036878e1f9863881d
+
 ## vcpkg Git registry
 
 The repository-hosted registry is independent of the root vcpkg manifest. The current registry port and baseline remain pinned to the last verified 1.6.0 archive. Updating root vcpkg.json to 1.11.0 does not change or publish that registry port.
