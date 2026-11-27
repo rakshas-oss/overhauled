@@ -1,5 +1,5 @@
 ## v1.11.0 (release candidate; not published)
-Date: 2026-11-27
+Date: 2026-11-26
 
 ### Highlights
 
