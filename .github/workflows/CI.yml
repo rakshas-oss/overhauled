@@ -2,17 +2,28 @@ name: Overhauled CI
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: overhauled-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify-asan:
     name: Verify Overhauled (C++ ASan & UBSan)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Install Dependencies
         run: |
@@ -34,7 +45,7 @@ jobs:
         run: cmake --build build-asan --parallel $(nproc)
 
       - name: Run CTest Conformance Suite
-        run: ctest --test-dir build-asan --output-on-failure
+        run: ctest --test-dir build-asan --output-on-failure --timeout 180
 
       - name: Validate dataset-driven BRK2 benchmark adapter
         run: |
@@ -44,9 +55,12 @@ jobs:
   wasm-runtime-composition:
     name: Wasmtime compile and runtime composition
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Install build dependencies
         run: |
@@ -82,14 +96,17 @@ jobs:
       - name: Run Wasmtime composition smoke test
         env:
           LD_LIBRARY_PATH: ${{ runner.temp }}/wasmtime/lib:${{ env.LD_LIBRARY_PATH }}
-        run: ctest --test-dir build-wasm --output-on-failure -R 'wasm_(composition|handoff_runtime_bridge)_test'
+        run: ctest --test-dir build-wasm --output-on-failure --timeout 180 -R 'wasm_(composition|handoff_runtime_bridge)_test'
 
   wasm-handoff-receiver:
     name: OpenSSL-enabled authenticated WASM handoff
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Install build dependencies
         run: |
@@ -113,4 +130,4 @@ jobs:
         run: cmake --build build-handoff --parallel 2
 
       - name: Run handoff receiver and broker tests
-        run: ctest --test-dir build-handoff --output-on-failure
+        run: ctest --test-dir build-handoff --output-on-failure --timeout 180
