@@ -1,5 +1,17 @@
 # Overhauled: Tensor Schema Integration
 
+> **Historical integration example:** this document describes an earlier
+> TensorRT/ONNX server prototype and its ADI tensor packet examples. It is not
+> the current broker protocol contract, current worker scheduler configuration
+> or proof that every build enables TensorRT. For the maintained architecture,
+> see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and for current build and
+> deployment flags see [docs/SYSADMIN_HOWTO.md](docs/SYSADMIN_HOWTO.md).
+> TensorRT and CUDA remain optional system-provided dependencies; CPU-only
+> builds and CPU fallback remain supported. Do not use historical
+> gpu_runtime_server examples as a replacement for the current broker
+> invocation or a blanket claim of GPU/NPU execution.
+
+
 ## Overview
 
 This branch implements **end-to-end TensorRT tensor schema execution** on top of the ADI-GPU fractional lane architecture. The server can now:
