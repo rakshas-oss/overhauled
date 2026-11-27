@@ -1,6 +1,6 @@
-> **Release status:** the standalone metrics library is included in the v1.10.0
-> release candidate. The latest published Overhauled baseline is v1.9.0
-> (2026-11-26). The v1.10.0 tag and release are pending CI validation.
+> **Release status:** the standalone metrics library shipped in the published
+> v1.10.0 GitHub Release (2026-11-26). v1.11.0 is the current release candidate
+> and adds a separate pairwise multivariate statistics library.
 
 # Crawler metric aggregation
 

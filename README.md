@@ -1,21 +1,21 @@
-# Overhauled v1.10.0 (release candidate)
+# Overhauled v1.11.0 (release candidate)
 
-> **Published v1.9.0:** adds bounded broker sessions, strict loopback-only listener enforcement for mTLS-sidecar deployments and optional fsync-backed replay-nonce journaling. v1.10.0 adds a standalone CPU-side crawler metrics library.
+> **Published v1.10.0:** adds the standalone CPU-side crawler metrics library for normalized YuKKi-OS page observations. v1.11.0 adds fixed-memory pairwise multivariate stream statistics.
 
 > **Route workloads by topology, not guesswork.**
 >
 > Turn GPU interconnect awareness into higher throughput, better tail latency, and more effective use of accelerator infrastructure.
 
-> **Release status:** v1.10.0 is the next minor release candidate after published v1.9.0 (2026-11-26). The v1.9.0 GitHub Release is published; the v1.10.0 tag and release assets await candidate validation.
+> **Release status:** v1.10.0 is the latest published GitHub Release (2026-11-26). v1.11.0 is the next minor release candidate; its tag and release assets are not published.
 
 Overhauled is a C++17 placement and execution library with an interoperable broker service. It provides topology-aware GPU scheduling and broker dispatch for CPU, GPU, and optional NPU execution.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
-[![Release](https://img.shields.io/badge/Release-v1.10.0--rc-blueviolet)](#)
+[![Release](https://img.shields.io/badge/Release-v1.11.0--rc-blueviolet)](#)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2FBRK2-orange)](#)
 
-## What's new in v1.10.0 (release candidate)
+## What's new in v1.10.0 (published 2026-11-26)
 
 - **Constant-memory crawler metrics:** add the standalone C++17 `Overhauled::crawler_metrics` library with public header `crawler_metrics.h`. It accepts normalized `PageObservation` values and accumulates page success/failure counts, bytes, links, fetch/extraction duration statistics, and bounded histogram percentile upper bounds.
 - **Shard-friendly aggregation:** keep one unsynchronized fixed-memory accumulator per worker/NUMA shard and merge at a barrier. Counter overflow and self-merge are rejected without partial mutation.
@@ -23,6 +23,16 @@ Overhauled is a C++17 placement and execution library with an interoperable brok
 - **CPU-only semantics:** the metrics library is a deterministic CPU reduction component. It does not add GPU/NPU crawler dispatch, execute crawler network requests, or imply measured crawler throughput.
 
 See [Crawler metric aggregation](docs/CRAWLER_METRICS.md) for the observation contract, examples and limitations.
+
+## What's new in v1.11.0 (release candidate)
+
+- **Bounded multivariate stream statistics:** add the standalone C++17 Overhauled::multivariate_stats library for online pairwise covariance and Pearson correlation over up to 32 normalized dimensions.
+- **Missing-data semantics:** pairwise deletion preserves missing dimensions instead of coercing them to zero. Each matrix cell has its own pairwise sample count, which consumers must inspect before interpreting covariance or correlation values.
+- **Fixed-memory shard reduction:** keep one accumulator per worker or NUMA shard and merge at an application-controlled barrier; no shared hot lock or stream-length-proportional sample storage is required.
+- **Transactional validation:** reject invalid dimensions, non-finite present values, invalid masks and counter/numerical overflow without partially mutating accumulator state.
+- **CPU-only boundary:** this is a numeric aggregation library, not a network listener, document parser, broker operation or automatic YuKKi-OS adapter. It does not imply GPU/NPU execution or a measured performance gain.
+
+See Multivariate stream aggregation (docs/MULTIVARIATE_STREAMS.md) for the exact data contract and tests.
 
 ## What's new in v1.9.0 (published 2026-11-26)
 
@@ -51,13 +61,7 @@ The mTLS proxy protects the broker connection in transit, but its verified certi
 
 ## YuKKi-OS crawler metric integration
 
-Overhauled provides the standalone C++ Overhauled::crawler_metrics library
-for constant-memory aggregation of normalized page observations from YuKKi-OS.
-It tracks success/failure counts, document bytes, links, fetch/extraction
-duration summaries and bounded approximate P50/P95/P99 buckets. Keep one
-accumulator per worker or NUMA shard and merge them at a barrier to avoid a
-shared hot lock. This is a CPU reduction library; it does not yet add a BRK
-message type or GPU/NPU crawler dispatch. See docs/CRAWLER_METRICS.md.
+Overhauled provides two standalone CPU-side aggregation libraries: crawler_metrics for bounded page-report summaries and multivariate_stats for fixed-memory pairwise covariance/correlation over numeric observations. They are caller-driven libraries, not broker operations or automatic YuKKi-OS routes. See docs/CRAWLER_METRICS.md and docs/MULTIVARIATE_STREAMS.md.
 
 ## Package managers
 
