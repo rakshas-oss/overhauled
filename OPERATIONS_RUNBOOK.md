@@ -1,4 +1,23 @@
-# Production Operations Runbook
+# Production Operations Runbook (Historical Reference)
+
+> **Status:** This runbook contains legacy deployment examples and operational
+> assumptions from an earlier GPU-server iteration. Some commands, service
+> paths, metric names, incident thresholds, example contacts, dates and
+> throughput figures may not describe the current broker. Do not apply them
+> blindly to a current deployment. For supported build flags, current worker
+> topology, mTLS sidecar boundaries, resource limits and release-specific
+> procedures, use [docs/SYSADMIN_HOWTO.md](docs/SYSADMIN_HOWTO.md),
+> [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
+> [docs/SECURITY_HARDENING_NOTES.md](docs/SECURITY_HARDENING_NOTES.md).
+>
+> In particular, this file's historical TensorRT gpu_runtime_server examples
+> are not the default broker executable or a general guarantee of GPU/NPU
+> dispatch. Hardware acceleration is optional and capability-dependent; CPU
+> fallback remains a supported execution path. Verify every configuration
+> against the exact release tag and the installed host/toolchain before use.
+
+## Quick Start
+
 
 ## Quick Start
 
@@ -451,5 +470,5 @@ Post-mortem meeting: Wednesday 10:00 AM UTC
 
 ---
 
-**Last Updated**: August 20, 2024
+**Last Updated**: Historical document; current procedures are maintained in docs/SYSADMIN_HOWTO.md
 **Document Owner**: GPU Infrastructure Team

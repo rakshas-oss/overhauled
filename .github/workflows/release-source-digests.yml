@@ -1,39 +1,61 @@
 name: Release Source Digests
 
 on:
-  pull_request:
-    branches: ["main"]
-    paths:
-      - ".github/workflows/release-source-digests.yml"
-      - "nvlink-placement.rb"
-      - "vcpkg-portfile.cmake"
-      - "ports/**"
-      - "versions/**"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing immutable Overhauled release tag whose archive checksums should be calculated"
+        required: true
+        type: string
+        default: "v1.11.0"
 
 permissions:
   contents: read
 
+concurrency:
+  group: release-source-digests-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
 jobs:
   source-digests:
-    name: Compute immutable v1.6.0 source archive digests
+    name: Calculate immutable source archive digests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
-      - name: Download the exact tagged source archive
+      - name: Download exact tagged source archive
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          curl --fail --location --retry 3 \
-            https://github.com/rakshas-oss/overhauled/archive/refs/tags/1.6.0.tar.gz \
-            --output overhauled-1.6.0.tar.gz
-
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          curl --fail --location --retry 3 --retry-all-errors             "https://github.com/rakshas-oss/overhauled/archive/refs/tags/$RELEASE_TAG.tar.gz"             --output "overhauled-$RELEASE_TAG.tar.gz"
+      - name: Verify archive release metadata
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          mkdir extracted
+          tar -xzf "overhauled-$RELEASE_TAG.tar.gz" -C extracted
+          cmake_version="$(grep -m1 -oE 'VERSION [0-9]+\.[0-9]+\.[0-9]+' extracted/*/CMakeLists.txt | awk '{print $2}')"
+          expected="${RELEASE_TAG#v}"
+          test "$cmake_version" = "$expected"
       - name: Calculate vcpkg and Homebrew checksums
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          sha512=$(sha512sum overhauled-1.6.0.tar.gz | cut -d ' ' -f 1)
-          sha256=$(sha256sum overhauled-1.6.0.tar.gz | cut -d ' ' -f 1)
+          set -euo pipefail
+          archive="overhauled-$RELEASE_TAG.tar.gz"
+          sha512="$(sha512sum "$archive" | cut -d ' ' -f 1)"
+          sha256="$(sha256sum "$archive" | cut -d ' ' -f 1)"
           {
             printf '%s\n\n' '## Immutable source archive checksums'
-            printf '%s\n' '- Source: https://github.com/rakshas-oss/overhauled/archive/refs/tags/1.6.0.tar.gz'
+            printf '%s\n' "- Source: https://github.com/rakshas-oss/overhauled/archive/refs/tags/$RELEASE_TAG.tar.gz"
             printf '%s\n' "- SHA512 (vcpkg): $sha512"
             printf '%s\n' "- SHA256 (Homebrew): $sha256"
+            printf '%s\n' "The registry port and formula must be updated in a separate reviewed change."
           } >> "$GITHUB_STEP_SUMMARY"
           echo "SHA512=$sha512"
           echo "SHA256=$sha256"

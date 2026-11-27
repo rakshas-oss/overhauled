@@ -15,6 +15,22 @@ durations and fixed 64-bucket log2 histograms. P50/P95/P99 values are bucket
 upper bounds, not exact quantiles. Integer overflow and self-merge are
 rejected without partial mutation. See [Crawler metric aggregation](CRAWLER_METRICS.md).
 
+## Multivariate stream aggregation library
+
+The standalone Overhauled::multivariate_stats C++17 target maintains bounded
+online pairwise covariance and Pearson correlation for up to 32 normalized
+dimensions. Each pair has its own sample count and co-moment; absent values
+are omitted for that pair rather than treated as zero. Snapshots therefore
+carry pair counts so consumers can interpret cells with different sample
+sizes.
+
+Use one fixed-memory accumulator per worker or NUMA shard, then merge at a
+controlled barrier. The library does not provide internal synchronization,
+ingest untrusted streams, establish source provenance, add a BRK operation or
+dispatch calculations to GPU/NPU. The YuKKi-OS NDJSON decoder and application
+admission/backpressure remain outside this C++ library. See
+[Multivariate stream aggregation](MULTIVARIATE_STREAMS.md).
+
 ## 1. System boundary
 
 Overhauled is the broker execution plane. It accepts bounded binary broker frames, validates optional YuKKi worker directives, admits requests into nested CPU-group/NUMA worker-class queue shards, applies process-cpuset-bounded CPU-group affinity where supported, optionally borrows bounded elastic worker capacity for eligible classes, selects an execution backend, and returns structured results and telemetry. YuKKi-OS owns workload semantics, class selection, spatial resolution, logical affinity keys, deadlines, and advisory preferred-NUMA hints; Overhauled owns local queue shards, dedicated and elastic worker admission, Linux process-allowed CPU discovery/worker affinity, GPU topology, accelerator placement, and execution. This repository does not embed YuKKi-OS. It can optionally link the Wasmtime C API when the native runtime feature is enabled; that runtime remains an independent broker-side component.

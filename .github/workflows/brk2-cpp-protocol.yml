@@ -17,8 +17,11 @@ jobs:
   brk2-cpp:
     name: BRK2 C++ codec and mutation tests
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Configure CPU-only broker and tests
         run: >-
           cmake -S . -B build
@@ -31,5 +34,5 @@ jobs:
       - name: Build all CPU-only broker and test targets
         run: cmake --build build --parallel 2
       - name: Run complete C++ test suite
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --output-on-failure --timeout 180
 

@@ -17,23 +17,26 @@ permissions:
 
 concurrency:
   group: paired-yukkios-interop-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   yukkios-interop:
     name: Paired YuKKi-OS BRK1/BRK2 interoperability
     runs-on: ubuntu-latest
+    timeout-minutes: 55
     steps:
       - name: Checkout Overhauled
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: overhauled
+          persist-credentials: false
       - name: Checkout paired YuKKi-OS revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: rakshas-oss/YuKKi-OS
           ref: ${{ inputs.yukkios_ref || 'main' }}
           path: yukkios
+          persist-credentials: false
       - name: Record paired revisions
         run: |
           echo "Overhauled: $(git -C overhauled rev-parse HEAD)"
@@ -80,7 +83,7 @@ jobs:
           OVERHAULED_WIRE_MODE=brk2 cargo test --locked --test test_overhauled_live -- --nocapture
       - name: Upload broker logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: overhauled-yukkios-live-interop
           path: /tmp/overhauled-broker.log
@@ -89,6 +92,7 @@ jobs:
   paired-release-gate:
     name: Paired repository release gate
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: always()
     needs: [yukkios-interop]
     steps:

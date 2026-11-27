@@ -24,13 +24,20 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: conan-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   conan-package:
     name: Build Conan 2 package
     runs-on: ubuntu-latest
+    timeout-minutes: 50
     steps:
       - name: Checkout Overhauled
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Install Conan in an isolated virtual environment
         run: |

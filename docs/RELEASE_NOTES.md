@@ -1,4 +1,28 @@
-## v1.10.0 (release candidate; not published)
+## v1.11.0 (release candidate; not published)
+Date: 2026-11-26
+
+### Highlights
+
+- Add the standalone C++17 multivariate_stats library and Overhauled::multivariate_stats CMake target with the public multivariate_stats.h header.
+- Compute online pairwise covariance and Pearson correlation for up to 32 dimensions using fixed-size accumulator state.
+- Preserve missing observations through pairwise deletion and expose per-pair sample counts; missing values are not converted to zero.
+- Support independent worker/NUMA shard accumulators and controlled merges without a shared hot lock.
+- Reject invalid dimensions, masks, non-finite present values and overflow without partial mutation.
+
+### Compatibility and limitations
+
+- The component accepts normalized numeric observations only; it does not ingest sockets, parse raw crawler data, authenticate sources or add a broker protocol operation.
+- Pair counts can differ between matrix cells and must be considered by consumers.
+- The library is CPU-only. No GPU/NPU dispatch, automatic YuKKi-OS integration or performance improvement is claimed.
+- Existing BRK1/BRK2/WSM1/NXR1/MED1 protocol identities are unchanged.
+
+### Release metadata and validation
+
+CMake, Conan and the root vcpkg manifest advance to 1.11.0 in this candidate. The published vcpkg registry port and Homebrew formula remain pinned to the verified 1.6.0 source archive until the immutable v1.11.0 tag, exact source checksums, export-layout validation and platform checks are complete. No v1.11.0 tag, GitHub Release, Conan upload or external registry publication is claimed.
+
+---
+
+## v1.10.0 (published 2026-11-26)
 Date: 2026-11-26
 
 ### Highlights
@@ -19,7 +43,7 @@ Date: 2026-11-26
 
 ### Release metadata and validation
 
-CMake, Conan and the root vcpkg manifest advance to 1.10.0 in this candidate. The external vcpkg registry and Homebrew formula remain pinned to their last verified immutable source/archive baseline until the exact v1.10.0 archive checksums and registry update are prepared. No v1.10.0 tag, GitHub Release or external package upload is claimed.
+CMake, Conan and the root vcpkg manifest were advanced to 1.10.0 for the published GitHub Release. The external vcpkg registry and Homebrew formula remain pinned to the last verified immutable source/archive baseline (1.6.0); no 1.10.0 external registry, formula or Conan remote publication is implied.
 
 ---
 

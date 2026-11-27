@@ -99,13 +99,13 @@ cd overhauled
 git fetch --tags origin
 ```
 
-For the currently published GitHub release baseline, check out the v1.9.0 tag:
+For the currently published GitHub release baseline, check out the v1.10.0 tag:
 
 ```bash
-git checkout 1.6.0
+git checkout v1.10.0
 ```
 
-`v1.9.0` is the latest published GitHub release baseline (2026-11-26). The `1.10.0` CMake/Conan/root-vcpkg version metadata is a release candidate on its review branch; no `v1.10.0` tag or GitHub Release has been published. Use the published `v1.9.0` tag for a reproducible stable build; use the reviewed `release/1.10.0-crawler-metrics` branch only when intentionally validating the next candidate.
+`v1.10.0` is the latest published GitHub release baseline (2026-11-26). The `1.11.0` CMake/Conan/root-vcpkg version metadata is a release candidate on its review branch; no `v1.11.0` tag or GitHub Release has been published. Use the published `v1.10.0` tag for a reproducible stable build; use the reviewed `chore/release-1.11.0-docs` branch only when intentionally validating the next candidate.
 
 If the tag has not yet been created, use the reviewed release commit or the intended branch supplied by your release process. Do not assume an open pull request is already part of `main` or a published release.
 
