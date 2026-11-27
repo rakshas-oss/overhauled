@@ -1,6 +1,6 @@
-> **Release status:** the multivariate_stats library is part of the v1.11.0
-> release candidate. The latest published Overhauled baseline is v1.10.0
-> (2026-11-26); no v1.11.0 tag or release has been published.
+> **Release status:** the multivariate_stats library is part of the published
+> v1.11.0 release (2026-11-26). v1.11.1 is a metadata/documentation-only patch
+> candidate; it does not change the library implementation or protocol.
 
 # Multivariate stream aggregation
 

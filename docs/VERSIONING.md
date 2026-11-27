@@ -2,16 +2,16 @@
 
 ## Release state
 
-- **Latest published GitHub release:** v1.10.0 (2026-11-26).
-- **Next minor release candidate:** v1.11.0 (not tagged or published).
-- **CMake project version:** 1.11.0 in this candidate.
-- **Conan recipe version:** 1.11.0 in this candidate.
-- **Root vcpkg manifest:** 1.11.0 in this candidate.
-- **Published vcpkg registry baseline and Homebrew formula:** remain pinned to the last verified immutable source/archive baseline (1.6.0); no 1.11.0 registry port or formula update is included.
+- **Latest published GitHub release:** v1.11.0 (published 2026-11-27T01:29:05Z; 2026-11-26 in Toronto). The release has no attached binary assets.
+- **Next patch release candidate:** v1.11.1 (not tagged or published).
+- **CMake project version:** 1.11.1 in this candidate.
+- **Conan recipe version:** 1.11.1 in this candidate.
+- **Root vcpkg manifest:** 1.11.1 in this candidate.
+- **Published vcpkg registry baseline and Homebrew formula:** remain pinned to the last verified immutable source/archive baseline (1.6.0); no 1.11.1 registry port or formula update is included.
 - **Package identity:** OverhauledTensorRuntime / nvlink_placement.
 - **External package uploads:** no Conan remote upload, vcpkg registry publication, Homebrew update, Debian/RPM repository or other package-manager publication is implied by GitHub release metadata.
 
-The v1.11.0 metadata is a candidate only. Do not create a tag, publish archives, or upload a package until the release gate below passes on the exact candidate commit.
+The v1.11.0 metadata is published. The v1.11.1 patch candidate is a user-requested version-metadata and documentation refresh only; it does not change runtime code, public headers, dependencies or protocol behavior. Do not tag, publish archives or upload a package until the exact candidate passes the release gate below.
 
 ## Version assessment
 
@@ -28,6 +28,8 @@ The additive public C++ multivariate_stats library justifies advancing the proje
 
 This is a CPU-only numeric reduction library. It does not ingest network streams, authenticate a source, parse crawler content, open sockets, define a BRK1/BRK2 operation, automatically connect to YuKKi-OS, or dispatch aggregation to GPU/NPU. Callers must preserve source identity, sequence and timestamp where needed and must enforce tenant admission, bounded queues and backpressure before forwarding normalized observations.
 
+The v1.11.1 patch candidate synchronizes the CMake, Conan and root vcpkg project-version fields after the v1.11.0 release. No implementation changes have landed in Overhauled since the v1.11.0 tag; this increment is explicitly metadata/documentation-only and exists to keep the paired release line aligned with YuKKi-OS v6.22.1 candidate metadata.
+
 ## Compatibility and security boundaries
 
 - Existing BRK1, BRK2, WSM1, NXR1 and MED1 identities are preserved; v1.11.0 does not add a wire operation.
@@ -41,7 +43,7 @@ This is a CPU-only numeric reduction library. It does not ingest network streams
 - CUDA, TensorRT, Ethos-U85 and NVLink hardware features remain separately gated. A CPU-only multivariate statistics build does not validate physical accelerator hardware.
 - The external vcpkg registry and Homebrew formula must remain pinned to the last archive whose exact checksums and downstream validation are available; changing the root vcpkg manifest does not publish or register a new port.
 
-## Release gate for 1.11.0
+## Release gate for 1.11.1
 
 Before tagging or publishing:
 
@@ -50,10 +52,11 @@ Before tagging or publishing:
 3. Confirm multivariate correctness for complete and missing dimensions, unequal pair counts, zero variance, insufficient samples, maximum dimension count, shard merge, invalid masks and overflow rollback.
 4. Verify that no raw HTML or page body is accepted by multivariate_stats and that no new BRK operation, implicit observation-to-broker route, GPU/NPU aggregation dispatch or performance claim is introduced.
 5. Preserve BRK1/BRK2/WSM1/NXR1/MED1 compatibility, bounded session admission, strict mTLS-proxy listener policy and replay-journal restart/replay/corruption/capacity behavior.
-6. Only after all required checks pass and the release commit is approved, create the v1.11.0 tag and GitHub Release. Then calculate exact immutable source archive SHA256/SHA512 values and submit separate updates for the Homebrew formula and vcpkg registry. Verify Conan remote and other external package publication independently.
+6. Only after all required checks pass and the release commit is approved, create the v1.11.1 tag and GitHub Release. Then calculate exact immutable source archive SHA256/SHA512 values and submit separate updates for the Homebrew formula and vcpkg registry. Verify Conan remote and other external package publication independently.
 
 ## Published release history
 
+- v1.11.0 — published 2026-11-26; fixed-memory pairwise multivariate stream statistics. The GitHub Release has no attached binary assets.
 - v1.10.0 — published 2026-11-26; constant-memory CPU crawler-metrics library and installed CMake target.
 - v1.9.0 — published 2026-11-26; bounded broker sessions, strict mTLS-proxy loopback binding and optional durable replay-nonce journal.
 - v1.8.0 — published 2026-11-24; explicit BRK2 GPU preference for bounded workloads while preserving forced-CPU/exact-CPU constraints.
