@@ -8,7 +8,7 @@ This guide distinguishes a published GitHub source release from independent pack
 |---|---|---|
 | GitHub Releases | v1.11.0 published; v1.11.1 candidate | Tag/source archive; no attached binary assets |
 | CMake package | Project version 1.11.1 candidate | OverhauledTensorRuntime |
-| Conan | Recipe version 1.11.1 candidate; no remote upload claimed | nvlink_placement/1.11.0 |
+| Conan | Recipe version 1.11.1 candidate; no remote upload claimed | nvlink_placement/1.11.1 |
 | Root vcpkg manifest | Version 1.11.1 candidate only | nvlink-placement |
 | vcpkg Git registry | Port and baseline remain pinned to verified 1.6.0 archive; 1.11.1 registry update not prepared | nvlink-placement |
 | Homebrew | Formula remains pinned to verified 1.6.0 source archive; no dedicated maintained tap | nvlink-placement |
