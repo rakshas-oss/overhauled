@@ -26,6 +26,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: wasm-handoff-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   receiver-conformance:
     name: Compile and test authenticated WASM receiver (CPU-only)

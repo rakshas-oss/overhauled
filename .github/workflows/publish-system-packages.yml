@@ -17,6 +17,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: system-packages-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
 jobs:
   build-system-packages:
     if: ${{ inputs.publish_confirmation == 'publish' }}
