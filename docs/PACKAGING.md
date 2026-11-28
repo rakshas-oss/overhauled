@@ -100,7 +100,7 @@ CMake files are not yet relocated to vcpkg's canonical share directory.
 ## Homebrew
 
 The checked-in formula still targets its verified immutable 1.6.0 source tag with CUDA and TensorRT
-disabled by default. It remains pinned there; the 1.11.1 candidate is not an update to the formula. Its automated macOS installation check is currently
+disabled by default. It remains pinned there; the 1.11.2 candidate is not an update to the formula. Its automated macOS installation check is currently
 paused because the broker server does not compile on the current macOS SDK;
 the failure is a C++ chrono type mismatch, not missing NVLink hardware.
 Do not treat the formula as a verified macOS installation until that build
@@ -141,7 +141,7 @@ The manual DEB/RPM workflow can attach locally built packages to the GitHub Rele
 
 The vcpkg and Homebrew recipes must use checksums calculated from the exact
 immutable release source archive they advertise. The currently published
-external recipes remain pinned to the verified 1.6.0 baseline. For v1.11.1,
+external recipes remain pinned to the verified 1.6.0 baseline. For v1.11.2,
 wait until the immutable tag and source archive exist, calculate exact
 SHA256/SHA512 values, then update the Homebrew formula and vcpkg port/version
 database together in a separate package-registry change. Never use placeholders,
