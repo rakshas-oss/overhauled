@@ -4,18 +4,18 @@ Overhauled is a C++17 CMake library and optional broker service. Its primary
 package-manager target is the CMake package, not a prebuilt platform-specific
 binary.
 
-> **Release state (2026-11-27):** v1.11.0 is the latest published GitHub release;
-> its release record has no attached binary assets. v1.11.1 is a patch candidate.
-> CMake, Conan and the root vcpkg manifest carry 1.11.1 candidate metadata; the
+> **Release state (2026-11-28):** v1.11.1 is the latest published GitHub release;
+> its release record has no attached binary assets. v1.11.2 is a patch candidate.
+> CMake, Conan and the root vcpkg manifest carry 1.11.2 candidate metadata; the
 > vcpkg registry and Homebrew formula remain pinned to the verified 1.6.0 archive.
 
 ## Recommended channels
 
 | Channel | Intended use | Current state |
 |---|---|---|
-| vcpkg Git registry | C++ library and broker, CPU-only baseline | The published registry port remains pinned to the last verified immutable source/archive baseline (1.6.0). The root vcpkg manifest is 1.11.1 in the candidate, but no 1.11.1 registry port or baseline update is included. Automated vcpkg validation remains paused because the port's CMake export layout is not CI-validated. |
-| Homebrew formula | macOS/Linux developer installation | The checked-in formula remains pinned to its last verified immutable source archive (1.6.0). Do not advance it to 1.11.1 until the immutable tag archive SHA256 is calculated and the known macOS `std::chrono` build issue is resolved; automated Homebrew validation remains paused. |
-| Conan | Existing Conan consumers | The Conan 2 recipe version is 1.11.1 in this patch release candidate. Run `conan create . --build=missing` against the candidate; no remote upload is claimed. |
+| vcpkg Git registry | C++ library and broker, CPU-only baseline | The published registry port remains pinned to the last verified immutable source/archive baseline (1.6.0). The root vcpkg manifest is 1.11.2 in the candidate, but no 1.11.2 registry port or baseline update is included. Automated vcpkg validation remains paused because the port's CMake export layout is not CI-validated. |
+| Homebrew formula | macOS/Linux developer installation | The checked-in formula remains pinned to its last verified immutable source archive (1.6.0). Do not advance it to 1.11.2 until the immutable tag archive SHA256 is calculated and the known macOS `std::chrono` build issue is resolved; automated Homebrew validation remains paused. |
+| Conan | Existing Conan consumers | The Conan 2 recipe version is 1.11.2 in this patch release candidate. Run `conan create . --build=missing` against the candidate; no remote upload is claimed. |
 | Conan Center Index | Public curated Conan package | Not submitted; CCI reviews project maturity, usage and maintenance. An upstream PR is a separate contribution |
 | Debian/RPM | System package installation | CPack emits native packages when built on Linux; no hosted apt/dnf repository is currently published |
 
