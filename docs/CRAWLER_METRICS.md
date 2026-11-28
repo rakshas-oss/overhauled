@@ -1,7 +1,7 @@
 > **Release status:** the standalone metrics library shipped in the published
 > v1.10.0 GitHub Release (2026-11-26). The pairwise multivariate statistics
 > library shipped in v1.11.0 (2026-11-26); v1.11.2 is a metadata-only patch
-> candidate and does not change either library.
+> published 2026-11-28 and does not change either library.
 
 # Crawler metric aggregation
 
