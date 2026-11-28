@@ -105,7 +105,7 @@ For the currently published GitHub release baseline, check out the v1.11.0 tag:
 git checkout v1.11.0
 ```
 
-`v1.11.0` is the latest published GitHub release baseline (2026-11-26); its release record has no attached binary assets. The `1.11.1` CMake/Conan/root-vcpkg version metadata is a patch candidate on its review branch; no `v1.11.1` tag or GitHub Release has been published. Use the published `v1.11.0` tag for a reproducible stable source build; use the reviewed `chore/release-1.11.1-doc-sync` branch only when intentionally validating the next candidate.
+`v1.11.1` is the latest published GitHub release baseline (2026-11-27); its release record has no attached binary assets. The `1.11.2` CMake/Conan/root-vcpkg version metadata is a patch candidate on its review branch; no `v1.11.2` tag or GitHub Release has been published. Use the published `v1.11.1` tag for a reproducible stable source build; use the reviewed `release/candidate-1.11.2` branch only when intentionally validating the next candidate.
 
 If the tag has not yet been created, use the reviewed release commit or the intended branch supplied by your release process. Do not assume an open pull request is already part of `main` or a published release.
 
