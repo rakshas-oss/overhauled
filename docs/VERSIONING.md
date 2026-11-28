@@ -2,18 +2,17 @@
 
 ## Release state
 
-- **Latest published GitHub release:** v1.11.1 (published 2026-11-27). The release has no attached binary assets.
-- **Next patch release candidate:** v1.11.2 (not tagged or published).
-- **CMake project version:** 1.11.2 in this candidate.
-- **Conan recipe version:** 1.11.2 in this candidate.
-- **Root vcpkg manifest:** 1.11.2 in this candidate.
+- **Latest published GitHub release:** [v1.11.2](https://github.com/rakshas-oss/overhauled/releases/tag/v1.11.2) (published 2026-11-28). No binary assets are manually attached.
+- **CMake project version:** 1.11.2.
+- **Conan recipe version:** 1.11.2; remote upload is not claimed.
+- **Root vcpkg manifest:** 1.11.2; the external vcpkg registry remains separately pinned to 1.6.0.
 - **Published vcpkg registry baseline and Homebrew formula:** remain pinned to the last verified immutable source/archive baseline (1.6.0); no 1.11.2 registry port or formula update is included.
 - **Package identity:** OverhauledTensorRuntime / nvlink_placement.
 - **External package uploads:** no Conan remote upload, vcpkg registry publication, Homebrew update, Debian/RPM repository or other package-manager publication is implied by GitHub release metadata.
 
 ## Version assessment
 
-The published v1.11.1 release synchronized project metadata. The subsequent audience-focused README updates are documentation-only. Since that tag, no C++ implementation, public header, dependency, or protocol changes have landed in Overhauled. The v1.11.2 patch candidate is therefore a metadata/documentation-only increment:
+The published v1.11.2 release synchronizes CMake, Conan and root vcpkg project metadata and refreshes release-facing documentation. No C++ implementation, public header, dependency, or protocol changes were included relative to v1.11.1. This was a metadata/documentation-only patch:
 
 - Advance the CMake project version, Conan recipe version, and root vcpkg manifest together to 1.11.2.
 - Refresh release/versioning/package documentation so the latest published tag and the next candidate are clearly distinguished.
@@ -35,20 +34,21 @@ This patch increment is not a feature release and does not add a new crawler API
 - CUDA, TensorRT, Ethos-U85 and NVLink hardware features remain separately gated. CPU-only CI does not validate physical accelerator hardware.
 - External vcpkg/Homebrew recipes remain pinned to the verified 1.6.0 source archive until exact source checksums and downstream package validation are available.
 
-## Release gate for 1.11.2
+## Release verification and future distribution process
 
-Before tagging or publishing:
+The v1.11.2 tag and GitHub Release were published on 2026-11-28. No binary assets are manually attached. The CMake, Conan and root vcpkg metadata are versioned at 1.11.2; this does not publish to external package managers. For a future external package update, use the following validation steps:
 
-1. Run the full native Overhauled CI suite on the exact candidate, including compiler warnings, unit/CTest, BRK2 conformance, worker-fabric saturation and paired YuKKi-OS interoperability.
-2. Pass ASan/UBSan validation and package-consumer smoke tests using the candidate CMake install/export surface.
+1. Re-run the native Overhauled CI suite against the exact tagged source, including compiler warnings, unit/CTest, BRK2 conformance, worker-fabric saturation and paired YuKKi-OS interoperability.
+2. Require ASan/UBSan validation and package-consumer smoke tests against the 1.11.2 CMake install/export surface.
 3. Validate the Conan recipe with a local conan create . --build=missing against the candidate metadata; do not upload to a remote.
 4. Validate root vcpkg manifest syntax and ensure the candidate does not silently change the published vcpkg registry baseline or Homebrew formula.
-5. Confirm CMake, Conan and vcpkg version fields all equal 1.11.2.
+5. Confirm CMake, Conan and root vcpkg version fields all equal 1.11.2.
 6. Confirm no runtime implementation, public headers, dependencies, or protocol identities changed.
-7. Only after required checks pass and the release commit is approved, create the v1.11.2 tag and GitHub Release. Calculate source checksums before any later external-registry/formula updates.
+7. For a future external-registry/formula update, calculate checksums from the immutable v1.11.2 source archive and validate downstream consumers before changing the separately maintained registry/formula files.
 
 ## Published release history
 
+- v1.11.2 — published 2026-11-28; CMake, Conan and root vcpkg metadata synchronization plus documentation refresh. No manually attached binary assets; no external registry upload implied.
 - v1.11.1 — published 2026-11-27; metadata synchronization and audience-focused documentation. No binary assets attached; external package registries remain on their separately verified baselines.
 - v1.11.0 — published 2026-11-26; fixed-memory online pairwise covariance and Pearson correlation for up to 32 numeric dimensions, with pairwise sample counts.
 - v1.10.0 — published 2026-11-26; standalone CPU-only crawler_metrics accumulator for normalized page observations.
