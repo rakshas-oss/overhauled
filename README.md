@@ -1,14 +1,14 @@
-# Overhauled v1.11.2 (patch release candidate)
+# Overhauled v1.11.2
 
 > **Broker-side execution and placement for heterogeneous systems.**
 >
 > Overhauled is a C++17 library and broker service for admitting work, scheduling CPU workers, and selecting eligible CPU, GPU, or NPU execution paths. It is designed to work on CPU-only hosts as well as appropriately configured accelerator systems.
 
-> **Latest release:** [v1.11.1](https://github.com/rakshas-oss/overhauled/releases/tag/v1.11.1) · Published 2026-11-27. The GitHub Release has no attached binary assets. A GitHub tag does not mean that a package has been published to an external registry.
+> **Latest published release:** [v1.11.2](https://github.com/rakshas-oss/overhauled/releases/tag/v1.11.2) · Published 2026-11-28. No binary assets are manually attached. External package-manager publication is separate.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
-[![Candidate](https://img.shields.io/badge/Candidate-v1.11.2--rc-blueviolet)](https://github.com/rakshas-oss/overhauled/releases)
+[![Release](https://img.shields.io/badge/Release-v1.11.2-blueviolet)](https://github.com/rakshas-oss/overhauled/releases/tag/v1.11.2)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2FBRK2-orange)](#)
 
 ## Who this is for
@@ -43,12 +43,12 @@ The default CPU-only build is the baseline for development and CI. GPU and NPU p
 
 ## Release and package distribution
 
-The latest published GitHub release is v1.11.1 (2026-11-27); no binary assets are attached. v1.11.2 is a metadata-only patch candidate. The vcpkg port and Homebrew formula remain pinned to their verified 1.6.0 source/archive baseline; do not infer that a GitHub tag has been published to vcpkg, Homebrew, Conan, or another registry. See [package managers](#package-managers) and [publishing](docs/PUBLISHING.md).
+The latest published GitHub release is v1.11.2 (2026-11-28); no binary assets are manually attached. This is a metadata/documentation-only patch. The vcpkg port and Homebrew formula remain pinned to their verified 1.6.0 source/archive baseline; do not infer that a GitHub tag has been published to vcpkg, Homebrew, Conan, or another registry. See [package managers](#package-managers) and [publishing](docs/PUBLISHING.md).
 
-## What's new in v1.11.2 (patch release candidate; not published)
+## What's new in v1.11.2 (published 2026-11-28)
 
-- **Version metadata synchronization:** advance the CMake project, Conan recipe, and root vcpkg manifest from 1.11.1 to 1.11.2.
-- **Scope:** metadata and documentation only. No runtime implementation, public API, dependency, or BRK1/BRK2/WSM1/NXR1/MED1 wire behavior changes are included.
+- **Version metadata synchronization:** align the CMake project, Conan recipe, and root vcpkg manifest at 1.11.2.
+- **Scope:** metadata and documentation only. No runtime implementation, public API, dependency, or BRK1/BRK2/WSM1/NXR1/MED1 wire behavior changed.
 - **Package boundary:** the vcpkg registry port and Homebrew formula remain pinned to the separately verified 1.6.0 source archive. No external registry, Conan remote, or Homebrew publication is implied.
 
 ---
