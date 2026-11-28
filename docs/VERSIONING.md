@@ -15,7 +15,7 @@
 The published v1.11.2 release synchronizes CMake, Conan and root vcpkg project metadata and refreshes release-facing documentation. No C++ implementation, public header, dependency, or protocol changes were included relative to v1.11.1. This was a metadata/documentation-only patch:
 
 - Advance the CMake project version, Conan recipe version, and root vcpkg manifest together to 1.11.2.
-- Refresh release/versioning/package documentation so the latest published tag and the next candidate are clearly distinguished.
+- Refresh release/versioning/package documentation so the latest published tag and any future proposed version are clearly distinguished.
 - Keep the vcpkg Git registry and Homebrew formula pinned to the verified 1.6.0 archive. The root manifest is not itself a registry publication.
 - Preserve all BRK1, BRK2, WSM1, NXR1 and MED1 wire identities and all library behavior.
 
@@ -40,8 +40,8 @@ The v1.11.2 tag and GitHub Release were published on 2026-11-28. No binary asset
 
 1. Re-run the native Overhauled CI suite against the exact tagged source, including compiler warnings, unit/CTest, BRK2 conformance, worker-fabric saturation and paired YuKKi-OS interoperability.
 2. Require ASan/UBSan validation and package-consumer smoke tests against the 1.11.2 CMake install/export surface.
-3. Validate the Conan recipe with a local conan create . --build=missing against the candidate metadata; do not upload to a remote.
-4. Validate root vcpkg manifest syntax and ensure the candidate does not silently change the published vcpkg registry baseline or Homebrew formula.
+3. Validate the Conan recipe with a local conan create . --build=missing against the published 1.11.2 metadata; do not upload to a remote.
+4. Validate root vcpkg manifest syntax and ensure future changes do not silently alter the published vcpkg registry baseline or Homebrew formula.
 5. Confirm CMake, Conan and root vcpkg version fields all equal 1.11.2.
 6. Confirm no runtime implementation, public headers, dependencies, or protocol identities changed.
 7. For a future external-registry/formula update, calculate checksums from the immutable v1.11.2 source archive and validate downstream consumers before changing the separately maintained registry/formula files.
