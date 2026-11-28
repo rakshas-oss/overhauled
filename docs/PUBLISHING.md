@@ -51,7 +51,7 @@ conan profile detect --force
 conan create . --build=missing
 ~~~
 
-No Conan remote upload is claimed. Configure the intended remote and credentials separately and publish only the validated candidate after release approval. Conan Center Index submission is separate and requires its own review and contributor agreement.
+No Conan remote upload is claimed. Configure the intended remote and credentials separately; publish the v1.11.2 package only after local package validation and approval for that remote. Conan Center Index submission is separate and requires its own review and contributor agreement.
 
 ## Debian and RPM
 
