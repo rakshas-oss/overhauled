@@ -25,26 +25,26 @@ The vcpkg registry port and Homebrew formula remain pinned to this verified arch
 
 ## vcpkg Git registry
 
-The repository-hosted registry is independent of the root vcpkg manifest. The current registry port and baseline remain pinned to the last verified 1.6.0 archive. Updating root vcpkg.json to 1.11.1 does not change or publish that registry port.
+The repository-hosted registry is independent of the root vcpkg manifest. The current registry port and baseline remain pinned to the last verified 1.6.0 archive. Updating root vcpkg.json to 1.11.2 does not change or publish that registry port.
 
 A consumer's vcpkg-configuration.json should pin the registry to an immutable commit containing the port and version database. Do not substitute the main branch as a reproducible baseline. The registry port intentionally builds CPU-only and does not enable CUDA, TensorRT, Wasmtime or optional OpenSSL handoff.
 
-Before updating the registry for v1.11.1:
+Before updating the registry for v1.11.2:
 
-1. Create and validate the immutable v1.11.1 source tag and GitHub Release.
-2. Run the .github/workflows/release-source-digests.yml workflow with release_tag=v1.11.1 and preserve the generated SHA512/SHA256 values.
+1. Create and validate the immutable v1.11.2 source tag and GitHub Release.
+2. Run the .github/workflows/release-source-digests.yml workflow with release_tag=v1.11.2 and preserve the generated SHA512/SHA256 values.
 3. Verify the vcpkg port's CMake export/relocation layout and build an installed downstream consumer.
 4. Update the port file, version database and baseline together in a separate reviewed change; never reuse the 1.6.0 checksum.
 
 ## Homebrew
 
-The checked-in formula remains pinned to the immutable 1.6.0 source archive and its verified digest. Automated macOS installation checks remain paused because the broker server has a known macOS SDK std::chrono build mismatch. Do not update the formula to v1.11.1 until the build issue is fixed and the exact source archive SHA256 is verified.
+The checked-in formula remains pinned to the immutable 1.6.0 source archive and its verified digest. Automated macOS installation checks remain paused because the broker server has a known macOS SDK std::chrono build mismatch. Do not update the formula to v1.11.2 until the build issue is fixed and the exact source archive SHA256 is verified.
 
 There is no dedicated maintained third-party tap or Homebrew Core acceptance. A checked-in formula does not mean it is published in a tap.
 
 ## Conan
 
-The checked-in Conan 2 recipe has candidate version 1.11.1. Validate it with:
+The checked-in Conan 2 recipe has candidate version 1.11.2. Validate it with:
 
 ~~~sh
 conan profile detect --force
