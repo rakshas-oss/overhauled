@@ -1,21 +1,21 @@
 # Overhauled package publishing
 
-This guide distinguishes a published GitHub source release from independent package-manager channels. The latest published GitHub Release is v1.11.1 (2026-11-27); its release record has no attached binary assets. v1.11.2 is the current patch release candidate.
+This guide distinguishes a published GitHub source release from independent package-manager channels. The latest published GitHub Release is v1.11.2 (2026-11-28); no binary assets are manually attached. External package-manager channels remain separate.
 
 ## Current distribution status
 
 | Channel | Current state | Package |
 |---|---|---|
-| GitHub Releases | v1.11.1 published; v1.11.2 candidate | Tag/source archive; no attached binary assets |
-| CMake package | Project version 1.11.2 candidate | OverhauledTensorRuntime |
-| Conan | Recipe version 1.11.2 candidate; no remote upload claimed | nvlink_placement/1.11.2 |
-| Root vcpkg manifest | Version 1.11.2 candidate only | nvlink-placement |
+| GitHub Releases | v1.11.2 published (2026-11-28) | Tag/source archive; no attached binary assets |
+| CMake package | Project version 1.11.2 | OverhauledTensorRuntime |
+| Conan | Recipe version 1.11.2; no remote upload claimed | nvlink_placement/1.11.2 |
+| Root vcpkg manifest | Version 1.11.2; registry port remains separate | nvlink-placement |
 | vcpkg Git registry | Port and baseline remain pinned to verified 1.6.0 archive; 1.11.2 registry update not prepared | nvlink-placement |
 | Homebrew | Formula remains pinned to verified 1.6.0 source archive; no dedicated maintained tap | nvlink-placement |
 | Conan Center Index | Not submitted; review and CLA required | nvlink_placement |
 | Debian/RPM | CPack can generate local packages on Linux; no hosted apt/dnf repository | OverhauledTensorRuntime |
 
-The v1.11.2 candidate metadata is not a release. Do not upload or advertise packages until the candidate passes CI, receives an approved immutable tag and has verified release checksums.
+The v1.11.2 GitHub Release is published. This does not publish the package to a Conan remote, vcpkg registry, Homebrew, Debian/RPM repository, or another package channel. Keep external packages unadvertised until their own source checksums and consumer validation are complete.
 
 The vcpkg registry port and Homebrew formula remain pinned to this verified archive:
 
@@ -25,14 +25,14 @@ The vcpkg registry port and Homebrew formula remain pinned to this verified arch
 
 ## vcpkg Git registry
 
-The repository-hosted registry is independent of the root vcpkg manifest. The current registry port and baseline remain pinned to the last verified 1.6.0 archive. Updating root vcpkg.json to 1.11.2 does not change or publish that registry port.
+The repository-hosted registry is independent of the root vcpkg manifest. The current registry port and baseline remain pinned to the last verified 1.6.0 archive. Publishing the v1.11.2 GitHub tag and updating root vcpkg.json to 1.11.2 do not change or publish that registry port.
 
 A consumer's vcpkg-configuration.json should pin the registry to an immutable commit containing the port and version database. Do not substitute the main branch as a reproducible baseline. The registry port intentionally builds CPU-only and does not enable CUDA, TensorRT, Wasmtime or optional OpenSSL handoff.
 
-Before updating the registry for v1.11.2:
+For a future registry update based on the already-published v1.11.2 source:
 
-1. Create and validate the immutable v1.11.2 source tag and GitHub Release.
-2. Run the .github/workflows/release-source-digests.yml workflow with release_tag=v1.11.2 and preserve the generated SHA512/SHA256 values.
+1. Run the .github/workflows/release-source-digests.yml workflow with release_tag=v1.11.2 and preserve the generated SHA512/SHA256 values.
+2. Validate the revised port and versions database on clean CPU-only consumer builds before publishing the registry update.
 3. Verify the vcpkg port's CMake export/relocation layout and build an installed downstream consumer.
 4. Update the port file, version database and baseline together in a separate reviewed change; never reuse the 1.6.0 checksum.
 
@@ -44,7 +44,7 @@ There is no dedicated maintained third-party tap or Homebrew Core acceptance. A 
 
 ## Conan
 
-The checked-in Conan 2 recipe has candidate version 1.11.2. Validate it with:
+The checked-in Conan 2 recipe has version 1.11.2. Validate it with:
 
 ~~~sh
 conan profile detect --force
