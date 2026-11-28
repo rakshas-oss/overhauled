@@ -100,7 +100,7 @@ Date: 2026-11-26
 ### Compatibility, security and limitations
 
 - Preserve BRK1/BRK2, WSM1, NXR1 and MED1 wire identities; no framing change is introduced.
-- TLS is terminated by the documented sidecar; there is no native TLS broker listener in this candidate.
+- TLS is terminated by the documented sidecar; there is no native TLS broker listener in this release.
 - The transport certificate is not yet bound to the signed deployment-sender identity.
 - The optional journal persists accepted nonces only. Prepared artifact bytes, active-release metadata and runtime state remain process-local; multi-process/restart-safe deployment still needs a transactional staging and activation store.
 - Socket I/O remains thread-per-client with an enforced 1,024-session ceiling, not the planned fixed event-driven I/O worker pool.
