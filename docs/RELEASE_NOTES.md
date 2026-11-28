@@ -4,12 +4,12 @@ Date: 2026-11-28
 ### Highlights
 
 - Advance CMake, Conan and root vcpkg project metadata together from 1.11.1 to 1.11.2.
-- Update versioning, package distribution, publishing and feature documentation to distinguish the published v1.11.1 release from this candidate.
+- Refresh versioning, package distribution, publishing and feature documentation to reflect the published v1.11.2 baseline.
 - Preserve the vcpkg registry and Homebrew formula at their separately verified 1.6.0 source/archive baseline.
 
 ### Compatibility and limitations
 
-- This is a metadata/documentation-only patch candidate. No C++ implementation, public header, dependency, or protocol behavior changes are included.
+- This was a metadata/documentation-only patch. No C++ implementation, public header, dependency, or protocol behavior changed.
 - Existing BRK1/BRK2/WSM1/NXR1/MED1 wire identities remain unchanged.
 - No external vcpkg registry, Homebrew formula, Conan remote, Debian/RPM repository, or other package publication is implied.
 - The v1.11.2 tag and GitHub Release were published on 2026-11-28. No binary assets are manually attached; no external package-manager upload is implied.
