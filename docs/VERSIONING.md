@@ -13,7 +13,7 @@
 
 ## Version assessment
 
-The published v1.11.1 release synchronized project metadata and audience-oriented documentation. Since that tag, no C++ implementation, public header, dependency, or protocol changes have landed in Overhauled. The v1.11.2 patch candidate is therefore a metadata/documentation-only increment:
+The published v1.11.1 release synchronized project metadata. The subsequent audience-focused README updates are documentation-only. Since that tag, no C++ implementation, public header, dependency, or protocol changes have landed in Overhauled. The v1.11.2 patch candidate is therefore a metadata/documentation-only increment:
 
 - Advance the CMake project version, Conan recipe version, and root vcpkg manifest together to 1.11.2.
 - Refresh release/versioning/package documentation so the latest published tag and the next candidate are clearly distinguished.
