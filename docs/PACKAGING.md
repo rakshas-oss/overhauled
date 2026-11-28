@@ -141,8 +141,9 @@ The manual DEB/RPM workflow can attach locally built packages to the GitHub Rele
 
 The vcpkg and Homebrew recipes must use checksums calculated from the exact
 immutable release source archive they advertise. The currently published
-external recipes remain pinned to the verified 1.6.0 baseline. For v1.11.2,
-wait until the immutable tag and source archive exist, calculate exact
-SHA256/SHA512 values, then update the Homebrew formula and vcpkg port/version
-database together in a separate package-registry change. Never use placeholders,
-reuse a previous release checksum, or point an old checksum at a new tag.
+external recipes remain pinned to the verified 1.6.0 baseline. The v1.11.2
+tag and source archive are now available. Calculate exact SHA256/SHA512 values
+from that immutable archive, validate downstream consumers, then update the
+Homebrew formula and vcpkg port/version database together in a separate
+package-registry change. Never use placeholders, reuse a previous release
+checksum, or point an old checksum at a new tag.
