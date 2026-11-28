@@ -1,6 +1,6 @@
 > **Release status:** the multivariate_stats library is part of the published
 > v1.11.0 release (2026-11-26). v1.11.2 is a metadata/documentation-only patch
-> candidate; it does not change the library implementation or protocol.
+> published 2026-11-28; it does not change the library implementation or protocol.
 
 # Multivariate stream aggregation
 
