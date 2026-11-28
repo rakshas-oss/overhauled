@@ -1,20 +1,39 @@
-## v1.11.1 (patch release candidate; not published)
-Date: 2026-11-26
+## v1.11.2 (patch release candidate; not published)
+Date: 2026-11-28
 
 ### Highlights
 
-- Synchronize CMake project, Conan recipe and root vcpkg manifest metadata on 1.11.1.
-- Correct the stale release-state documentation to distinguish the published v1.11.0 GitHub Release from the new 1.11.1 candidate.
+- Advance CMake, Conan and root vcpkg project metadata together from 1.11.1 to 1.11.2.
+- Update versioning, package distribution, publishing and feature documentation to distinguish the published v1.11.1 release from this candidate.
+- Preserve the vcpkg registry and Homebrew formula at their separately verified 1.6.0 source/archive baseline.
 
 ### Compatibility and limitations
 
-- This is a metadata/documentation-only patch candidate; no C++ implementation, public header, dependency or protocol change is included.
+- This is a metadata/documentation-only patch candidate. No C++ implementation, public header, dependency, or protocol behavior changes are included.
 - Existing BRK1/BRK2/WSM1/NXR1/MED1 wire identities remain unchanged.
-- The external vcpkg registry and Homebrew formula remain pinned to the verified 1.6.0 source archive. No Conan remote upload, registry update or Homebrew publication is implied.
+- No external vcpkg registry, Homebrew formula, Conan remote, Debian/RPM repository, or other package publication is implied.
+- No v1.11.2 tag or GitHub Release exists until the release gate passes.
 
 ### Release gate
 
-Run the normal native, package-consumer, paired YuKKi interoperability, BRK2 and sanitizer CI on the exact candidate commit. Do not tag or publish v1.11.1 until the required checks pass.
+Run the native, package-consumer, paired YuKKi interoperability, BRK2, worker-fabric, and sanitizer checks on the exact candidate commit. Do not tag or publish v1.11.2 until all required checks pass.
+
+---
+
+## v1.11.1 (published 2026-11-27)
+Date: 2026-11-27
+
+### Highlights
+
+- Synchronize the CMake project, Conan recipe and root vcpkg manifest metadata on 1.11.1.
+- Subsequent README audience and package-boundary wording changes on main were documentation-only and are not a runtime feature of the v1.11.1 tag.
+
+### Compatibility and limitations
+
+- This is a metadata/documentation-only patch; no C++ implementation, public header, dependency or protocol change is included.
+- Existing BRK1/BRK2/WSM1/NXR1/MED1 wire identities remain unchanged.
+- The external vcpkg registry and Homebrew formula remain pinned to the verified 1.6.0 source archive. No Conan remote upload, registry update or Homebrew publication is implied.
+- The v1.11.1 GitHub Release has no attached binary assets.
 
 ---
 
