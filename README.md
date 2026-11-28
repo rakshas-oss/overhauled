@@ -101,7 +101,7 @@ The mTLS proxy protects the broker connection in transit, but its verified certi
 - **Untrusted streams remain available:** NXR1, MED1 and media/stream-relay data paths do not require a WASM publisher key. They remain subject to their own frame, size, connection, rate and backpressure limits.
 - **Independent feature gates:** ENABLE_WASM_HANDOFF=ON enables the receiver API and requires OpenSSL Crypto; ENABLE_WASM_RUNTIME=ON remains a separate optional Wasmtime feature. Neither changes the default build.
 
-**Deployment boundary:** the receiver is not yet wired into the ordinary BRK1/BRK2 TCP listener. A caller must provide an authenticated protected transport (mTLS 1.3 or equivalent), bind transport identity to the signed sender, and provide durable replay/staging where restart-safe guarantees are required. The current shared-Store Wasmtime embedding is not a multi-tenant sandbox, and this release candidate does not claim complete remote deployment through the broker listener.
+**Deployment boundary:** the receiver is not yet wired into the ordinary BRK1/BRK2 TCP listener. A caller must provide an authenticated protected transport (mTLS 1.3 or equivalent), bind transport identity to the signed sender, and provide durable replay/staging where restart-safe guarantees are required. The current shared-Store Wasmtime embedding is not a multi-tenant sandbox, and the v1.8 release did not claim complete remote deployment through the broker listener.
 
 ## YuKKi-OS crawler metric integration
 
