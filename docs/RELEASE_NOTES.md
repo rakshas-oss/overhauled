@@ -1,4 +1,4 @@
-## v1.11.2 (patch release candidate; not published)
+## v1.11.2 (published 2026-11-28)
 Date: 2026-11-28
 
 ### Highlights
@@ -12,11 +12,11 @@ Date: 2026-11-28
 - This is a metadata/documentation-only patch candidate. No C++ implementation, public header, dependency, or protocol behavior changes are included.
 - Existing BRK1/BRK2/WSM1/NXR1/MED1 wire identities remain unchanged.
 - No external vcpkg registry, Homebrew formula, Conan remote, Debian/RPM repository, or other package publication is implied.
-- No v1.11.2 tag or GitHub Release exists until the release gate passes.
+- The v1.11.2 tag and GitHub Release were published on 2026-11-28. No binary assets are manually attached; no external package-manager upload is implied.
 
-### Release gate
+### Release and package boundary
 
-Run the native, package-consumer, paired YuKKi interoperability, BRK2, worker-fabric, and sanitizer checks on the exact candidate commit. Do not tag or publish v1.11.2 until all required checks pass.
+The release is a source/version publication. CMake, Conan and the root vcpkg manifest are versioned at 1.11.2, while the separately maintained vcpkg registry and Homebrew formula remain pinned to their verified 1.6.0 archive. Any external package update requires exact source checksums and its own downstream validation.
 
 ---
 
