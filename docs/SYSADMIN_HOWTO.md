@@ -99,10 +99,10 @@ cd overhauled
 git fetch --tags origin
 ```
 
-For the currently published GitHub release baseline, check out the v1.11.0 tag:
+For the currently published GitHub release baseline, check out the v1.11.1 tag:
 
 ```bash
-git checkout v1.11.0
+git checkout v1.11.1
 ```
 
 `v1.11.1` is the latest published GitHub release baseline (2026-11-27); its release record has no attached binary assets. The `1.11.2` CMake/Conan/root-vcpkg version metadata is a patch candidate on its review branch; no `v1.11.2` tag or GitHub Release has been published. Use the published `v1.11.1` tag for a reproducible stable source build; use the reviewed `release/candidate-1.11.2` branch only when intentionally validating the next candidate.
