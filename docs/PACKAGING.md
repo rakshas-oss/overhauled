@@ -15,7 +15,7 @@ binary.
 |---|---|---|
 | vcpkg Git registry | C++ library and broker, CPU-only baseline | The published registry port remains pinned to the last verified immutable source/archive baseline (1.6.0). The root vcpkg manifest is 1.11.2, but no 1.11.2 registry port or baseline update is included. Automated vcpkg validation remains paused because the port's CMake export layout is not CI-validated. |
 | Homebrew formula | macOS/Linux developer installation | The checked-in formula remains pinned to its last verified immutable source archive (1.6.0). Do not advance it to 1.11.2 until the immutable tag archive SHA256 is calculated and the known macOS `std::chrono` build issue is resolved; automated Homebrew validation remains paused. |
-| Conan | Existing Conan consumers | The Conan 2 recipe version is 1.11.2; no remote upload is implied. Run `conan create . --build=missing` against the candidate; no remote upload is claimed. |
+| Conan | Existing Conan consumers | The Conan 2 recipe version is 1.11.2. Validate it locally with `conan create . --build=missing`; no remote upload is claimed. |
 | Conan Center Index | Public curated Conan package | Not submitted; CCI reviews project maturity, usage and maintenance. An upstream PR is a separate contribution |
 | Debian/RPM | System package installation | CPack emits native packages when built on Linux; no hosted apt/dnf repository is currently published |
 
