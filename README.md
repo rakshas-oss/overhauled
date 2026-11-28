@@ -1,4 +1,4 @@
-# Overhauled v1.11.1
+# Overhauled v1.11.2 (patch release candidate)
 
 > **Broker-side execution and placement for heterogeneous systems.**
 >
@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
-[![Release](https://img.shields.io/badge/Release-v1.11.1-blueviolet)](https://github.com/rakshas-oss/overhauled/releases/tag/v1.11.1)
+[![Candidate](https://img.shields.io/badge/Candidate-v1.11.2--rc-blueviolet)](https://github.com/rakshas-oss/overhauled/releases)
 [![Broker](https://img.shields.io/badge/Protocol-BRK1%2FBRK2-orange)](#)
 
 ## Who this is for
@@ -43,7 +43,15 @@ The default CPU-only build is the baseline for development and CI. GPU and NPU p
 
 ## Release and package distribution
 
-The current GitHub release is v1.11.1. No binary assets are attached to that release. The vcpkg port and Homebrew formula are separately maintained and pinned to their documented source version; do not infer that the latest GitHub tag has been published to vcpkg, Homebrew, Conan, or another registry. See [package managers](#package-managers) and [publishing](docs/PUBLISHING.md).
+The latest published GitHub release is v1.11.1 (2026-11-27); no binary assets are attached. v1.11.2 is a metadata-only patch candidate. The vcpkg port and Homebrew formula remain pinned to their verified 1.6.0 source/archive baseline; do not infer that a GitHub tag has been published to vcpkg, Homebrew, Conan, or another registry. See [package managers](#package-managers) and [publishing](docs/PUBLISHING.md).
+
+## What's new in v1.11.2 (patch release candidate; not published)
+
+- **Version metadata synchronization:** advance the CMake project, Conan recipe, and root vcpkg manifest from 1.11.1 to 1.11.2.
+- **Scope:** metadata and documentation only. No runtime implementation, public API, dependency, or BRK1/BRK2/WSM1/NXR1/MED1 wire behavior changes are included.
+- **Package boundary:** the vcpkg registry port and Homebrew formula remain pinned to the separately verified 1.6.0 source archive. No external registry, Conan remote, or Homebrew publication is implied.
+
+---
 
 ## What's new in v1.11.1 (published 2026-11-27)
 
