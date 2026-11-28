@@ -26,7 +26,7 @@ Date: 2026-11-27
 ### Highlights
 
 - Synchronize the CMake project, Conan recipe and root vcpkg manifest metadata on 1.11.1.
-- Refresh audience-facing README and release documentation to match the published release and explain package distribution boundaries.
+- Subsequent README audience and package-boundary wording changes on main were documentation-only and are not a runtime feature of the v1.11.1 tag.
 
 ### Compatibility and limitations
 
