@@ -1,21 +1,21 @@
 # Overhauled package publishing
 
-This guide distinguishes a published GitHub source release from independent package-manager channels. The latest published GitHub Release is v1.11.0 (2026-11-26); its release record has no attached binary assets. v1.11.1 is the current patch release candidate.
+This guide distinguishes a published GitHub source release from independent package-manager channels. The latest published GitHub Release is v1.11.1 (2026-11-27); its release record has no attached binary assets. v1.11.2 is the current patch release candidate.
 
 ## Current distribution status
 
 | Channel | Current state | Package |
 |---|---|---|
-| GitHub Releases | v1.11.0 published; v1.11.1 candidate | Tag/source archive; no attached binary assets |
-| CMake package | Project version 1.11.1 candidate | OverhauledTensorRuntime |
-| Conan | Recipe version 1.11.1 candidate; no remote upload claimed | nvlink_placement/1.11.1 |
-| Root vcpkg manifest | Version 1.11.1 candidate only | nvlink-placement |
-| vcpkg Git registry | Port and baseline remain pinned to verified 1.6.0 archive; 1.11.1 registry update not prepared | nvlink-placement |
+| GitHub Releases | v1.11.1 published; v1.11.2 candidate | Tag/source archive; no attached binary assets |
+| CMake package | Project version 1.11.2 candidate | OverhauledTensorRuntime |
+| Conan | Recipe version 1.11.2 candidate; no remote upload claimed | nvlink_placement/1.11.2 |
+| Root vcpkg manifest | Version 1.11.2 candidate only | nvlink-placement |
+| vcpkg Git registry | Port and baseline remain pinned to verified 1.6.0 archive; 1.11.2 registry update not prepared | nvlink-placement |
 | Homebrew | Formula remains pinned to verified 1.6.0 source archive; no dedicated maintained tap | nvlink-placement |
 | Conan Center Index | Not submitted; review and CLA required | nvlink_placement |
 | Debian/RPM | CPack can generate local packages on Linux; no hosted apt/dnf repository | OverhauledTensorRuntime |
 
-The v1.11.1 candidate metadata is not a release. Do not upload or advertise packages until the candidate passes CI, receives an approved immutable tag and has verified release checksums.
+The v1.11.2 candidate metadata is not a release. Do not upload or advertise packages until the candidate passes CI, receives an approved immutable tag and has verified release checksums.
 
 The vcpkg registry port and Homebrew formula remain pinned to this verified archive:
 
