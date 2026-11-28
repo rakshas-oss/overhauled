@@ -107,7 +107,7 @@ git checkout v1.11.2
 
 `v1.11.2` is the latest published GitHub release baseline (2026-11-28); no binary assets are manually attached. Use the published `v1.11.2` tag for a reproducible source build. The CMake/Conan/root-vcpkg version fields are 1.11.2; external registry and Homebrew distribution remain on their separately verified 1.6.0 baseline.
 
-If the tag has not yet been created, use the reviewed release commit or the intended branch supplied by your release process. Do not assume an open pull request is already part of `main` or a published release.
+For a future release, use only the approved release tag or reviewed release branch supplied by the release process. Verify that the selected ref is on the intended repository history before building.
 
 ## Standalone crawler metrics library
 
